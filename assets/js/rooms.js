@@ -32,6 +32,14 @@
     c: { img: 'room-c.jpg', mask: 'room-c-mask.webp', edge: 'room-c-edge.webp', fx: 0.5, fy: 0.5, tile: 0.34, glass: { src: 'room-c-glass.webp', x: 899, y: 407 } }
   };
   var SHADE_GAIN = 1.3;
+  /* the heavy per-pixel work is cut into ~10 ms slices (long tasks on a phone freeze taps); between slices the thread goes back to the browser */
+  var yieldMain = function () {
+    if (window.scheduler && window.scheduler.yield) return window.scheduler.yield();
+    return new Promise(function (res) { setTimeout(res, 0); });
+  };
+  var idle = function (fn) { if (window.requestIdleCallback) window.requestIdleCallback(fn, { timeout: 1200 }); else setTimeout(fn, 60); };
+  var SLICE_MS = 10;
+  var STALE = { stale: true };
   var imgCache = {};
   function loadImg(src) {
     if (imgCache[src]) return imgCache[src];
@@ -45,14 +53,14 @@
 
   /* seamless tile without mirror symmetry: the texture is cross-faded with a half-offset copy of itself,
      first across x then across y, with variance-preserving weights so the grain contrast stays even */
-  function seamlessTile(src, tw, th) {
+  function seamlessTile(src, tw, th, isStale) {
     tw = Math.max(8, Math.round(tw)); th = Math.max(8, Math.round(th));
     var c = document.createElement('canvas'); c.width = tw; c.height = th;
     var x = c.getContext('2d');
     x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
     x.drawImage(src, 0, 0, tw, th);
     var img;
-    try { img = x.getImageData(0, 0, tw, th); } catch (e) { return c; }
+    try { img = x.getImageData(0, 0, tw, th); } catch (e) { return Promise.resolve(c); }
     var p = img.data, n = tw * th, mr = 0, mg = 0, mb = 0, i, j, k;
     for (k = 0; k < n; k++) { mr += p[k * 4]; mg += p[k * 4 + 1]; mb += p[k * 4 + 2]; }
     mr /= n; mg /= n; mb /= n;
@@ -68,19 +76,34 @@
       return w;
     }
     var wx = wts(tw), wy = wts(th), hw = tw >> 1, hh = th >> 1;
-    for (j = 0; j < th; j++) for (i = 0; i < tw; i++) {
-      var o = (j * tw + i) * 3, s2 = (j * tw + (i + hw) % tw) * 3, a = wx[i * 2], b = wx[i * 2 + 1];
-      B[o] = A[o] * a + A[s2] * b; B[o + 1] = A[o + 1] * a + A[s2 + 1] * b; B[o + 2] = A[o + 2] * a + A[s2 + 2] * b;
-    }
-    for (j = 0; j < th; j++) {
-      var a2 = wy[j * 2], b2 = wy[j * 2 + 1], js = ((j + hh) % th) * tw;
-      for (i = 0; i < tw; i++) {
-        var o2 = (j * tw + i) * 3, s3 = (js + i) * 3, d = (j * tw + i) * 4;
-        p[d] = mr + B[o2] * a2 + B[s3] * b2; p[d + 1] = mg + B[o2 + 1] * a2 + B[s3 + 1] * b2; p[d + 2] = mb + B[o2 + 2] * a2 + B[s3 + 2] * b2; p[d + 3] = 255;
+    var pass = 0, row = 0;   // pass 0: cross-fade across x, pass 1: across y; one row at a time, many rows per slice
+    function slice() {
+      var t0 = performance.now();
+      while (pass < 2 && performance.now() - t0 < SLICE_MS) {
+        if (pass === 0) {
+          j = row;
+          for (i = 0; i < tw; i++) {
+            var o = (j * tw + i) * 3, s2 = (j * tw + (i + hw) % tw) * 3, a = wx[i * 2], b = wx[i * 2 + 1];
+            B[o] = A[o] * a + A[s2] * b; B[o + 1] = A[o + 1] * a + A[s2 + 1] * b; B[o + 2] = A[o + 2] * a + A[s2 + 2] * b;
+          }
+        } else {
+          j = row;
+          var a2 = wy[j * 2], b2 = wy[j * 2 + 1], js = ((j + hh) % th) * tw;
+          for (i = 0; i < tw; i++) {
+            var o2 = (j * tw + i) * 3, s3 = (js + i) * 3, d = (j * tw + i) * 4;
+            p[d] = mr + B[o2] * a2 + B[s3] * b2; p[d + 1] = mg + B[o2 + 1] * a2 + B[s3 + 1] * b2; p[d + 2] = mb + B[o2 + 2] * a2 + B[s3 + 2] * b2; p[d + 3] = 255;
+          }
+        }
+        if (++row >= th) { row = 0; pass++; }
       }
     }
-    x.putImageData(img, 0, 0);
-    return c;
+    return new Promise(function (resolve, reject) {
+      (function step() {
+        if (isStale && isStale()) { reject(STALE); return; }
+        slice();
+        if (pass < 2) yieldMain().then(step); else { x.putImageData(img, 0, 0); resolve(c); }
+      })();
+    });
   }
 
   function blur3(a, w, h) {
@@ -143,7 +166,7 @@
     return loadImg(f.url || (this.texBase + f.hex + '.webp'));
   };
   Stage.prototype.coated = function (roomId, f) {
-    var self = this, key = roomId + '|' + this.finishKey(f);
+    var self = this, key = roomId + '|' + this.finishKey(f), stale = function () { return self.finish !== f && !self.cache[key]; };   // a newer finish replaced this one while it was being prepared
     if (this.cache[key]) return Promise.resolve(this.cache[key]);
     var R = ROOMS[roomId];
     var glP = R.glass ? loadImg(this.src(R.glass.src)).catch(function () { return null; }) : Promise.resolve(null);
@@ -154,19 +177,23 @@
       var off = document.createElement('canvas'); off.width = W; off.height = H;
       var o = off.getContext('2d');
       var tw = W * R.tile, th = tw * (tex.height || tex.naturalHeight) / (tex.width || tex.naturalWidth);
-      var tile = seamlessTile(tex, tw, th);
-      o.fillStyle = o.createPattern(tile, 'repeat'); o.fillRect(0, 0, W, H);
-      var gl = r[4] ? glassLayer(o, r[4], R.glass) : null;
-      o.globalCompositeOperation = 'multiply'; o.drawImage(mask, 0, 0, W, H);
-      var cp = document.createElement('canvas'); cp.width = W; cp.height = H; cp.getContext('2d').drawImage(off, 0, 0);
-      o.globalCompositeOperation = 'lighter'; o.globalAlpha = SHADE_GAIN - 1; o.drawImage(cp, 0, 0);
-      o.globalAlpha = 1; cp.width = cp.height = 1;
-      o.globalCompositeOperation = 'destination-in'; o.drawImage(mask, 0, 0, W, H);
-      o.globalCompositeOperation = 'source-over'; o.drawImage(edge, 0, 0, W, H);
-      if (gl) o.drawImage(gl, R.glass.x, R.glass.y);
-      self.cache[key] = off; self.order.push(key);
-      while (self.order.length > 5) { var old = self.order.shift(); if (old !== key) delete self.cache[old]; }
-      return off;
+      return seamlessTile(tex, tw, th, stale).then(function (tile) {
+        return yieldMain().then(function () {
+          if (stale()) throw STALE;
+          o.fillStyle = o.createPattern(tile, 'repeat'); o.fillRect(0, 0, W, H);
+          var gl = r[4] ? glassLayer(o, r[4], R.glass) : null;
+          o.globalCompositeOperation = 'multiply'; o.drawImage(mask, 0, 0, W, H);
+          var cp = document.createElement('canvas'); cp.width = W; cp.height = H; cp.getContext('2d').drawImage(off, 0, 0);
+          o.globalCompositeOperation = 'lighter'; o.globalAlpha = SHADE_GAIN - 1; o.drawImage(cp, 0, 0);
+          o.globalAlpha = 1; cp.width = cp.height = 1;
+          o.globalCompositeOperation = 'destination-in'; o.drawImage(mask, 0, 0, W, H);
+          o.globalCompositeOperation = 'source-over'; o.drawImage(edge, 0, 0, W, H);
+          if (gl) o.drawImage(gl, R.glass.x, R.glass.y);
+          self.cache[key] = off; self.order.push(key);
+          while (self.order.length > 5) { var old = self.order.shift(); if (old !== key) delete self.cache[old]; }
+          return off;
+        });
+      });
     });
   };
   Stage.prototype.size = function (max) {
@@ -243,8 +270,9 @@
     tabs.forEach(function (t, i) {
       t.addEventListener('click', function () { self.setRoom(t.getAttribute('data-room-tab')); });
       t.addEventListener('keydown', function (e) {
-        var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (!d) return; e.preventDefault();
-        var n = tabs[(i + d + tabs.length) % tabs.length]; self.setRoom(n.getAttribute('data-room-tab')); n.focus();
+        var k = e.key, to = k === 'Home' ? 0 : k === 'End' ? tabs.length - 1 : k === 'ArrowRight' || k === 'ArrowDown' ? (i + 1) % tabs.length : k === 'ArrowLeft' || k === 'ArrowUp' ? (i - 1 + tabs.length) % tabs.length : -1;
+        if (to < 0) return; e.preventDefault();
+        var n = tabs[to]; self.setRoom(n.getAttribute('data-room-tab')); n.focus();
       });
     });
     var fin = $$('[data-room-finish]', this.scope);
@@ -299,7 +327,7 @@
   if ('IntersectionObserver' in window) {
     $$('[data-rooms]').forEach(function (el) {
       if (el.hasAttribute('data-rooms-manual')) return;
-      new IntersectionObserver(function (es, o) { if (es[0].isIntersecting) { o.disconnect(); if (!NS.rooms.get(el)) NS.rooms.mount(el); } }, { rootMargin: '300px' }).observe(el);
+      new IntersectionObserver(function (es, o) { if (es[0].isIntersecting) { o.disconnect(); idle(function () { if (!NS.rooms.get(el)) NS.rooms.mount(el); }); } }, { rootMargin: '100% 0px 100% 0px' }).observe(el);   // about one screen ahead, then in an idle slot
     });
   } else mountAll();
 })();
