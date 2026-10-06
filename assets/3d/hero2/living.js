@@ -213,7 +213,25 @@ export function createLiving(T, R, opts = {}) {
   const texCache = new Map();
   let env = null, plants = [], wallRect = null;
   let readyRes; const ready = new Promise(r => (readyRes = r));
-  const ctl = { group, U, ready, cubic, get active() { return S.loaded; }, stats: S, load, setFade, update, finalView, finalViewFrom, get wallRect() { return wallRect; }, get views() { return views; }, dispose, sun };
+  const ctl = { group, U, ready, cubic, get active() { return S.loaded; }, stats: S, load, prefetch, setFade, update, finalView, finalViewFrom, get wallRect() { return wallRect; }, get views() { return views; }, dispose, sun };
+
+  /* the room's files into the HTTP cache, no parsing or GPU work: called while the intro plays, so that load() later
+     (end of the intro, or the story's start) only parses and compiles */
+  let pre = null;
+  function prefetch() {
+    if (pre || S.loaded || S.loading) return pre;
+    const get = u => fetch(u).then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+    const files = ['living.json', 'living.glb', 'living-lm-m.webp', hi ? 'living-sun.webp' : 'living-sun-1k.webp', 'living-env.webp'].map(f => ROOMDIR + f);
+    const tex = new Set();
+    for (const k in MAT) {
+      const d = MAT[k];
+      if (d.c) tex.add(texURL(d.c) + '-c.webp');
+      if (d.n && hi) tex.add(texURL(d.n) + '-n.webp');
+      if (d.m) tex.add(texURL(d.m) + '-m.webp');
+    }
+    pre = Promise.all([gltfLoader().catch(() => null), ...files.map(get), ...[...tex].map(get)]).then(() => true);
+    return pre;
+  }
 
   function image(url) {
     return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.decoding = 'async'; im.onload = () => res(im); im.onerror = () => rej(new Error('image ' + url)); im.src = url; });
@@ -347,6 +365,8 @@ export function createLiving(T, R, opts = {}) {
     if (S.loaded || S.loading) return ready;
     S.loading = true;
     const t0 = performance.now();
+    /* a prefetch in flight: let it finish first (a second request for the same file would wait on the cache entry) */
+    if (pre) await Promise.race([pre, new Promise(r => setTimeout(r, 6000))]);
     try {
       const [meta, loader] = await Promise.all([fetch(ROOMDIR + 'living.json').then(r => { if (!r.ok) throw new Error('living.json ' + r.status); return r.json(); }), gltfLoader()]);
       const [gltf, lm, sm, envRT] = await Promise.all([

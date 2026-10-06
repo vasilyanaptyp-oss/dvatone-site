@@ -7,6 +7,7 @@
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
+  document.documentElement.classList.add('dv-js');   // lets CSS hide half-loaded swatch photos (only when this script runs)
 
   /* ---------- shared helpers for generator.js / catalogue.js (window.DVATONE): toast, clipboard, label flash, area parser ---------- */
   var NS = (window.DVATONE = window.DVATONE || {});
@@ -212,9 +213,16 @@
   if ('IntersectionObserver' in window && !reduce) {
     var io = new IntersectionObserver(function (es) {
       es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); } });
-    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.06 });
+    }, { rootMargin: matchMedia('(max-width: 760px)').matches ? '0px 0px 25% 0px' : '0px 0px -8% 0px', threshold: 0.06 });   // phones: start before the block scrolls in, so fast flicks never show faded text
     rv.forEach(function (el) { io.observe(el); });
   } else { rv.forEach(function (el) { el.classList.add('is-in'); }); }
+
+  /* ---------- digital-catalogue strip: a photo appears only once fully loaded (its swatch colour shows meanwhile),
+     so slow phones never see half-painted strips ---------- */
+  $$('.sws img').forEach(function (im) {
+    var ok = function () { im.classList.add('is-ok'); };
+    if (im.complete && im.naturalWidth) ok(); else im.addEventListener('load', ok);   // a failed photo stays hidden: its colour tile remains, never a broken-image icon
+  });
 
   /* ---------- count-up figures ---------- */
   $$('[data-count]').forEach(function (el) {
@@ -547,7 +555,8 @@
   $$('[data-video]').forEach(function (b) {
     b.addEventListener('click', function () {
       var lite = NS.lowData(), v = document.createElement('video');
-      v.src = b.getAttribute('data-video'); v.poster = b.getAttribute('data-poster') || '';
+      v.src = (matchMedia('(max-width: 760px)').matches && b.getAttribute('data-video-m')) || b.getAttribute('data-video');   // phones get the lighter file when there is one
+      v.poster = b.getAttribute('data-poster') || '';
       v.controls = true; v.playsInline = true; v.preload = lite ? 'metadata' : 'auto'; v.autoplay = !lite;
       v.setAttribute('aria-label', b.getAttribute('aria-label')); v.setAttribute('tabindex', '-1');
       var d = document.createElement('div'); d.className = 'vplay is-playing'; d.appendChild(v);
@@ -594,7 +603,7 @@
     var done = $('.done', sw);
     if (done && done.getAttribute('data-bg')) {
       var loadBg = function () {
-        var big = sw.clientWidth * (window.devicePixelRatio || 1) > 800;
+        var big = sw.clientWidth > 600 && sw.clientWidth * (window.devicePixelRatio || 1) > 800;   // phones always take the 720 px picture
         done.style.backgroundImage = 'url(' + (done.getAttribute(big ? 'data-bg' : 'data-bg-m') || done.getAttribute('data-bg')) + ')';
       };
       if ('IntersectionObserver' in window) {

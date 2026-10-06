@@ -49,6 +49,7 @@ uniform float uWet;
 uniform float uVig;
 uniform float uRoom;          /* 0 macro light pool .. 1 room light */
 uniform float uPrimer;        /* bare primer is satin until the coat is on */
+uniform float uBomb;          /* texture bombing on (0 while a spray is still stamping the tile: offsets would show other parts of it) */
 #if ROOM == 1
 ${ROOM_GLSL}
 #elif ROOM == 2
@@ -96,7 +97,7 @@ void main(){
   } else {
     alb = textureLod(uAlb, uv, lod).rgb;
   }
-  { float kT = smoothstep(1.4, 2.6, lod);
+  { float kT = smoothstep(1.4, 2.6, lod) * uBomb;
     if (kT > 0.001) {
       vec3 mean = textureLod(uAlb, vec2(0.5), 16.0).rgb;
       vec3 bc = bombCoat(uv, lod, mean);

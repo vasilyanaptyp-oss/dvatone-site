@@ -13,9 +13,10 @@
    repetition or seams (tiling and blending: a triangle grid of random offsets into the seamless tile, blended with a
    variance-preserving operator) and filtered by its on-screen size (mip-mapped, slightly biased), so at room
    distance it averages into a fine matte mineral surface and never sparkles or crawls.
-   The wall's light is stored with real precision: low-frequency log luminance in 16 bits plus chroma at a quarter
-   resolution (cubic B-spline reconstruction), times a full-resolution 8-bit detail ratio around 1.0 (shadow edges,
-   leaf shadows); the output carries a +-0.5 LSB blue-noise dither, so smooth gradients show no steps. Then the hue-preserving tone
+   The wall's light is stored with real precision: low-frequency log luminance in 16 bits (hi and lo bytes: the GPU's
+   bilinear filtering is linear in each, so the 16 bits survive filtering) plus chroma at a quarter resolution in one
+   lossless image (cubic B-spline reconstruction), times a full-resolution 8-bit detail ratio around 1.0 (shadow
+   edges, leaf shadows); the output carries a +-0.5 LSB blue-noise dither, so smooth gradients show no steps. Then the hue-preserving tone
    curve (identity below 0.55, a long hue-keeping roll-off above that never clips). The photograph itself never moves except a slow push-in.
 
    mountPhoto(el, { room, colors, grain, density, seed, textureUrl, textureSize, drift, poster, maxHeight, view })
@@ -67,7 +68,7 @@ const GLSL = `
 precision highp float;
 varying vec2 vUv;
 uniform sampler2D tBase; uniform sampler2D tLight; uniform sampler2D tDetail; uniform sampler2D tMask; uniform sampler2D tBleed;
-uniform sampler2D tBlue; uniform vec2 uLightPx; uniform vec3 uLightK;
+uniform sampler2D tBlue; uniform vec2 uLightPx; uniform vec3 uLightK; uniform vec2 uChroma;
 uniform sampler2D tCoatA; uniform sampler2D tCoatB;
 uniform vec4 uFit; uniform vec2 uFocus; uniform float uZoom; uniform vec2 uPhotoPx; uniform float uMinify;
 uniform mat3 uH; uniform float uRho0; uniform float uBleedScale;
@@ -101,15 +102,18 @@ vec3 coat( sampler2D t, vec2 uv, float isFlat ) {
   vec3 c3 = textureGrad( t, uv + dvHash2( v3 + 0.37 ), gx, gy ).rgb;
   return max( mu + ( wt.x * ( c1 - mu ) + wt.y * ( c2 - mu ) + wt.z * ( c3 - mu ) ) * inversesqrt( dot( wt, wt ) ), 0.0 );
 }
-/* cubic B-spline reconstruction of a low-resolution texture from 4 bilinear taps (smooth, no ringing) */
-vec4 bspline( sampler2D t, vec2 uv, vec2 size ) {
+/* cubic B-spline reconstruction from 4 bilinear taps (smooth, no ringing) of one half of the light image (w x 2h,
+   rows oy .. oy + h), clamped to its own edge; bilinear filtering of the hi and lo bytes is linear, so it is exact */
+vec4 bsplineHalf( sampler2D t, vec2 uv, vec2 size, float oy ) {
   vec2 sp = uv * size - 0.5, i = floor( sp ), f = sp - i, f2 = f * f, f3 = f2 * f;
   vec2 w0 = ( 1.0 - 3.0 * f + 3.0 * f2 - f3 ) / 6.0, w1 = ( 4.0 - 6.0 * f2 + 3.0 * f3 ) / 6.0;
   vec2 w2 = ( 1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3 ) / 6.0, w3 = f3 / 6.0;
   vec2 g0 = w0 + w1, g1 = w2 + w3;
-  vec2 h0 = ( i - 0.5 + w1 / g0 ) / size, h1 = ( i + 1.5 + w3 / g1 ) / size;
-  return g0.y * ( g0.x * texture( t, h0 ) + g1.x * texture( t, vec2( h1.x, h0.y ) ) )
-       + g1.y * ( g0.x * texture( t, vec2( h0.x, h1.y ) ) + g1.x * texture( t, h1 ) );
+  vec2 h0 = clamp( i - 0.5 + w1 / g0, vec2( 0.5 ), size - 0.5 ), h1 = clamp( i + 1.5 + w3 / g1, vec2( 0.5 ), size - 0.5 );
+  vec2 inv = 1.0 / vec2( size.x, 2.0 * size.y );
+  vec2 a = ( h0 + vec2( 0.0, oy ) ) * inv, b = ( h1 + vec2( 0.0, oy ) ) * inv;
+  return g0.y * ( g0.x * texture( t, a ) + g1.x * texture( t, vec2( b.x, a.y ) ) )
+       + g1.y * ( g0.x * texture( t, vec2( a.x, b.y ) ) + g1.x * texture( t, b ) );
 }
 vec3 catmull( sampler2D t, vec2 uv, vec2 size ) {
   vec2 sp = uv * size, t1 = floor( sp - 0.5 ) + 0.5, f = sp - t1;
@@ -139,9 +143,10 @@ void main() {
   puv = uFocus + ( puv - uFocus ) / uZoom;
   /* the photograph as shown (display-linear); the light on the wall per unit albedo (linear, display exposure) */
   vec3 b = uMinify > 1.02 ? texture( tBase, puv ).rgb : catmull( tBase, puv, uPhotoPx );
-  vec4 lo = bspline( tLight, puv, uLightPx );
+  vec2 hl = bsplineHalf( tLight, puv, uLightPx, uLightPx.y ).rg * 255.0;      /* top half (texture rows h .. 2h) */
+  vec3 ch = uChroma.x + bsplineHalf( tLight, puv, uLightPx, 0.0 ).rgb * uChroma.y;
   float dc = texture( tDetail, puv ).r * 255.0 - 128.0;
-  vec3 lw = exp2( uLightK.x + lo.r * uLightK.y + dc * uLightK.z ) * lo.gba;
+  vec3 lw = exp2( uLightK.x + ( hl.x * 256.0 + hl.y ) / 65535.0 * uLightK.y + dc * uLightK.z ) * ch;
   float m = texture( tMask, puv ).r;
   vec3 bl = texture( tBleed, puv ).rgb; bl = bl * bl * uBleedScale;
   /* the coating on the wall plane (metres), current composition A and the next one B wiping in */
@@ -237,7 +242,7 @@ export function mountPhoto(el, opts = {}) {
     const one = new T.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1); one.needsUpdate = true;
     U = {
       tBase: { value: one }, tLight: { value: one }, tDetail: { value: one }, tMask: { value: one }, tBleed: { value: one }, tCoatA: { value: one }, tCoatB: { value: one },
-      tBlue: { value: one }, uLightPx: { value: new T.Vector2(1, 1) }, uLightK: { value: new T.Vector3(0, 0, 0) },
+      tBlue: { value: one }, uLightPx: { value: new T.Vector2(1, 1) }, uLightK: { value: new T.Vector3(0, 0, 0) }, uChroma: { value: new T.Vector2(0, 1) },
       uFit: { value: new T.Vector4(0, 0, 1, 1) }, uFocus: { value: new T.Vector2(0.5, 0.5) }, uZoom: { value: 1 }, uPhotoPx: { value: new T.Vector2(1920, 1080) },
       uMinify: { value: 1 }, uH: { value: new T.Matrix3() }, uRho0: { value: 0.42 }, uBleedScale: { value: 0 },
       uMetresA: { value: 0.27 }, uMetresB: { value: 0.27 }, uFlatA: { value: 0 }, uFlatB: { value: 0 },
@@ -254,8 +259,11 @@ export function mountPhoto(el, opts = {}) {
     }).catch(() => {});
     vP.catch(() => {});
     coatA = await coatTiles();
+    if (!coatA || stage.destroyed) return;
     useCoat(coatA, 'A');
     const v = await vP;
+    if (stage.destroyed) return;
+    await upload(v);
     if (stage.destroyed) return;
     useView(v);
     /* the other rooms of this orientation load quietly after the first frame: a room switch is then only a crossfade */
@@ -267,36 +275,27 @@ export function mountPhoto(el, opts = {}) {
       t.colorSpace = srgb ? T.SRGBColorSpace : T.NoColorSpace;
       t.wrapS = t.wrapT = T.ClampToEdgeWrapping;
       t.generateMipmaps = !!mip; t.minFilter = mip ? T.LinearMipmapLinearFilter : T.LinearFilter; t.magFilter = T.LinearFilter;
-      t.anisotropy = 1; t.needsUpdate = true; res(t);
+      t.anisotropy = 1; t.needsUpdate = true;
+      const im = t.image;                                    /* decode now, off the main thread, not at the upload */
+      if (im && im.decode) im.decode().then(() => res(t), () => res(t)); else res(t);
     }, undefined, rej));
   }
-  /* low-frequency wall light: top half log2 luminance (hi, lo bytes), bottom half chroma; decoded into a half-float
-     texture (exact bytes: no colour conversion, opaque image) */
-  async function loadLight(url, L) {
-    const blob = await (await fetch(url)).blob();
-    const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
-    const cv = document.createElement('canvas'); cv.width = bmp.width; cv.height = bmp.height;
-    const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(bmp, 0, 0);
-    const px = cx.getImageData(0, 0, bmp.width, bmp.height).data;
-    if (bmp.close) bmp.close();
-    const w = L.w, h = L.h, cs = (L.cmax - L.cmin) / 255, half = T.DataUtils.toHalfFloat, out = new Uint16Array(w * h * 4);
-    for (let y = 0; y < h; y++) {
-      const o0 = (h - 1 - y) * w * 4;
-      for (let x = 0; x < w; x++) {
-        const i = (y * w + x) * 4, j = ((y + h) * w + x) * 4, o = o0 + x * 4;
-        out[o] = half((px[i] * 256 + px[i + 1]) / 65535); out[o + 1] = half(L.cmin + px[j] * cs);
-        out[o + 2] = half(L.cmin + px[j + 1] * cs); out[o + 3] = half(L.cmin + px[j + 2] * cs);
-      }
+  /* a view's maps go to the GPU one per animation frame before it is shown (all at once was a 300 ms long task) */
+  const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
+  async function upload(v) {
+    if (v.uploaded) return;
+    for (const t of [v.light, v.bleed, v.mask, v.detail, v.base]) {
+      await nextFrame();
+      if (stage.destroyed) return;
+      if (R.initTexture) R.initTexture(t);
     }
-    const t = new T.DataTexture(out, w, h, T.RGBAFormat, T.HalfFloatType);
-    t.minFilter = t.magFilter = T.LinearFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = T.ClampToEdgeWrapping; t.needsUpdate = true;
-    return t;
+    v.uploaded = true;
   }
   function loadView(id) {
     if (views.has(id)) return views.get(id);
     const p = (async () => {
       const meta = await viewMeta(id);
-      const [base, light, detail, mask, bleed] = await Promise.all([loadTex(ASSET + id + '.webp', true, true), loadLight(ASSET + id + '-l.webp', meta.light),
+      const [base, light, detail, mask, bleed] = await Promise.all([loadTex(ASSET + id + '.webp', true, true), loadTex(ASSET + id + '-l.webp', false, false),
         loadTex(ASSET + id + '-d.webp', false, true), loadTex(ASSET + id + '-m.webp', false, true), loadTex(ASSET + id + '-b.webp', false, false)]);
       return { id, meta, base, light, detail, mask, bleed };
     })();
@@ -309,6 +308,7 @@ export function mountPhoto(el, opts = {}) {
     U.tBase.value = v.base; U.tLight.value = v.light; U.tDetail.value = v.detail; U.tMask.value = v.mask; U.tBleed.value = v.bleed;
     U.uPhotoPx.value.set(m.w, m.h); U.uRho0.value = m.rho0; U.uBleedScale.value = m.bleedScale;
     U.uLightPx.value.set(m.light.w, m.light.h); U.uLightK.value.set(m.light.lmin, m.light.lmax - m.light.lmin, 1 / m.light.K);
+    U.uChroma.value.set(m.light.cmin, m.light.cmax - m.light.cmin);
     const h = m.Hinv; U.uH.value.set(h[0][0], h[0][1], h[0][2], h[1][0], h[1][1], h[1][2], h[2][0], h[2][1], h[2][2]);
     U.uWipeRange.value.set(0, m.wall.size[0]);
     stage.wrap.setAttribute('aria-label', LABEL[LANG][S.room] || LABEL[LANG].living);
@@ -320,12 +320,41 @@ export function mountPhoto(el, opts = {}) {
     const t = tl.albedo; t.anisotropy = Math.min(8, R.capabilities.getMaxAnisotropy()); t.needsUpdate = true;
     U['tCoat' + which].value = t; U['uMetres' + which].value = tl.metres; U['uFlat' + which].value = tl.flat ? 1 : 0;
   }
+  /* the granule bake's program compiles in parallel before the first bake (KHR_parallel_shader_compile through
+     compileAsync): compiled synchronously at the first bake it froze the main thread for seconds (ANGLE/D3D11). The
+     warm material stays alive, so every later composition change reuses the program */
+  let warmMat = null, warmP = null;
+  function warmBake() {
+    if (warmP) return warmP;
+    warmP = (async () => {
+      if (!R.compileAsync) return;
+      const run0 = baker.run; let cap = null, tiny = null;
+      baker.run = m => { if (!cap) cap = m; };                /* a dry run only captures the bake material */
+      try { tiny = bakeGranules(T, baker, { colors: S.colors, density: S.density, seed: S.seed, size: 4, cells: 4, sparkle: 0 }); }
+      finally { baker.run = run0; }
+      if (tiny) tiny.dispose();
+      if (!cap) return;
+      warmMat = cap;
+      const sc = new T.Scene(), cam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1), g = new T.BufferGeometry();
+      g.setAttribute('position', new T.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
+      g.setAttribute('uv', new T.Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2));
+      const q = new T.Mesh(g, cap); q.frustumCulled = false; sc.add(q);
+      const ta = baker.target(4, 4, { srgb: true }), td = baker.target(4, 4, {}), prev = R.getRenderTarget(), ps = [];
+      try { for (const t of [ta, td]) { R.setRenderTarget(t); ps.push(R.compileAsync(sc, cam)); } }   /* the bake's own variants */
+      finally { R.setRenderTarget(prev); }
+      try { await Promise.all(ps); } catch (e) { /* then it compiles at the first bake */ }
+      ta.dispose(); td.dispose(); g.dispose();
+    })();
+    return warmP;
+  }
   async function coatTiles() {
     if (S.textureUrl) {
       const tex = await new Promise((res, rej) => new T.TextureLoader().load(S.textureUrl, res, undefined, rej));
       tex.colorSpace = T.SRGBColorSpace; tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.generateMipmaps = true; tex.minFilter = T.LinearMipmapLinearFilter;
       return { albedo: tex, metres: S.textureSize, flat: true, dispose() { tex.dispose(); } };
     }
+    await warmBake();
+    if (stage.destroyed) return null;
     const b = bakeGranules(T, baker, { colors: S.colors, density: S.density, seed: S.seed, size: 1024, cells: 128, sparkle: 0 });
     b.metres = b.cells * CELL_M * S.grain;
     return b;
@@ -390,6 +419,7 @@ export function mountPhoto(el, opts = {}) {
     const tok = ++coatTok;
     let tl;
     try { tl = await coatTiles(); } catch (e) { console.warn('[dvatone 3d] texture not loaded:', S.textureUrl); return; }
+    if (!tl) return;
     if (stage.destroyed || tok !== coatTok) { tl.dispose(); return; }
     startWipe(tl);
   }
@@ -414,7 +444,7 @@ export function mountPhoto(el, opts = {}) {
       if (opts.poster !== false && !opts.poster) stage.setPoster(posterOf(name, portrait));
       if (!stage.ready) return;
       let v;
-      try { v = await loadView(viewId(name, portrait)); } catch (e) { console.error('[dvatone 3d]', e); return; }
+      try { v = await loadView(viewId(name, portrait)); await upload(v); } catch (e) { console.error('[dvatone 3d]', e); return; }
       if (stage.destroyed || tok !== roomTok) return;
       if (orientation) { useView(v); stage.invalidate(); return; }
       crossfade(stage, frameNow, () => useView(v), 1.1);
@@ -431,7 +461,7 @@ export function mountPhoto(el, opts = {}) {
   function dispose() {
     for (const p of views.values()) p.then(v => { v.base.dispose(); v.light.dispose(); v.detail.dispose(); v.mask.dispose(); v.bleed.dispose(); }).catch(() => {});
     coatA && coatA.dispose(); coatB && coatB.dispose();
-    mat && mat.dispose(); baker && baker.dispose();
+    mat && mat.dispose(); warmMat && warmMat.dispose(); baker && baker.dispose();
   }
 }
 

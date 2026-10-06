@@ -128,7 +128,7 @@ function mount(el, opts = {}) {
   if (introFirst && tier !== 'low' && posterURL) el.addEventListener('dv3d:fallback', () => stage.setPoster(posterURL), { once: true });
   /* the story's last frame as a still (the furnished room): without WebGL, and on the low tier (before and after
      "Live 3D"), it fades in over the poster or the macro while the track scrolls; the page gets the same events */
-  const SS = { on: false, img: null, raf: 0, p: -1 };
+  const SS = { on: false, img: null, raf: 0, p: -1, cover: false };
   const stillURL = () => new URL(tall ? './hero2/poster-room-m.webp' : './hero2/poster-room.webp', BASE).href;
   function stillTick() {
     SS.raf = 0;
@@ -143,6 +143,8 @@ function mount(el, opts = {}) {
       im.src = stillURL(); stage.wrap.appendChild(im); SS.img = im;
     }
     if (SS.img) SS.img.style.opacity = String(k);
+    const cover = k >= 0.999;                       /* the still covers the live macro (low tier after "Live 3D"): no frames under it */
+    if (cover !== SS.cover) { SS.cover = cover; if (!cover && stage.ready) stage.invalidate(); }
     el.dispatchEvent(new CustomEvent('dv3d:story', { bubbles: true, detail: { progress: p, eased: storyEase(p) } }));
   }
   const stillScroll = () => { if (!SS.raf) SS.raf = requestAnimationFrame(stillTick); };
@@ -184,7 +186,7 @@ function mount(el, opts = {}) {
       uPool: { value: new T.Vector3(0, 0, 17) }, uPoolK: { value: 1 }, uFocus: { value: 80 }, uAper: { value: Q.aper },
       uRelief: { value: 0.11 }, uFade: { value: 0.014 }, uAmb: { value: new T.Color().setRGB(0.035, 0.036, 0.042, T.LinearSRGBColorSpace) },
       uTime: { value: 0 }, uRes: { value: new T.Vector2(st.w, st.h) }, uSteps: { value: Q.steps },
-      uClock: { value: 0 }, uWet: { value: 0 }, uVig: { value: 1 }, uRoom: { value: 0 }, uPrimer: { value: 0 }
+      uClock: { value: 0 }, uWet: { value: 0 }, uVig: { value: 1 }, uRoom: { value: 0 }, uPrimer: { value: 0 }, uBomb: { value: 1 }
     }, room.uniforms);
     /* one shader source, two programs: lean macro, and macro + room for the scroll story (both compiled up front) */
     wallM = new T.ShaderMaterial({ vertexShader: WALL_VERT, fragmentShader: WALL_FRAG, uniforms: U, defines: { ROOM: 0 } });
@@ -200,6 +202,7 @@ function mount(el, opts = {}) {
       living = createLiving(T, R, { tier, fog: room.uniforms.uFog, time: U.uTime });
       scene.add(living.group);
       wallL = new T.ShaderMaterial({ vertexShader: WALL_VERT, fragmentShader: WALL_FRAG, uniforms: Object.assign({}, U, living.U), defines: living.cubic ? { ROOM: 2, DV_CUBIC: 1 } : { ROOM: 2 } });
+      photoModule();                                  /* the photograph's module downloads while the hero compiles */
     }
     const coatP = buildCoatAsync(coatOpts());                 /* worker builds the granules while the room shader compiles */
     if (R.compileAsync) {
@@ -221,7 +224,16 @@ function mount(el, opts = {}) {
     }
     if (living) {
       if (capture) { await prepLiving(); await loadPhoto(); }  /* recordings: deterministic, room and photograph are there from the start */
-      else scheduleLiving();
+      else {
+        /* The photograph is created at once: its WebGL context (about 0.1 s of main thread on a phone) lands in the
+           first, still dark frames of the spray, and its programs compile in parallel while the intro plays, which takes
+           seconds on a cold shader cache. The room's files are fetched into the cache now; the room itself is parsed
+           after the intro or as soon as the story starts. So a visitor who scrolls during the intro still comes to rest
+           on the photograph. */
+        if (photoOK()) loadPhoto();
+        living.prefetch();
+        scheduleLiving();
+      }
     }
   }
 
@@ -246,7 +258,15 @@ function mount(el, opts = {}) {
       try { await Promise.all([pA, pB]); } catch (e) { /* compiled on first use */ }
     }
     RM.busy = false; RM.ready = !!ok && !stage.destroyed;
-    if (RM.ready) { photoModule(); stage.invalidate(); stage.start(); }
+    if (RM.ready) { photoModule(); schedulePhoto(); stage.invalidate(); stage.start(); }
+  }
+  /* the photograph is prepared at idle right after the room: its programs compile in parallel and that can take
+     seconds, so a visitor who flicks through the story in two seconds still comes to rest on the photograph */
+  function schedulePhoto() {
+    if (PH.sched || PH.loading || PH.err) return;
+    PH.sched = true;
+    const go = () => { if (!stage.destroyed && !PH.loading && photoOK()) loadPhoto(); };
+    if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 2000 }); else setTimeout(go, 600);
   }
 
   /* ---------- the photoreal resting frame ----------
@@ -277,6 +297,7 @@ function mount(el, opts = {}) {
     const mod = await photoModule();
     if (!mod || stage.destroyed) return;
     await photoCam();
+    if (stage.destroyed) return;
     try {
       const host = document.createElement('div');
       host.className = 'dv3d__photo'; host.setAttribute('aria-hidden', 'true');
@@ -315,9 +336,9 @@ function mount(el, opts = {}) {
     PH.host.style.transform = 'translate(' + (W / 2 - s * px).toFixed(2) + 'px,' + (H / 2 - s * py).toFixed(2) + 'px) scale(' + (s / (PH.F || 1)).toFixed(5) + ')';
   }
   function photoStep(d, dt, rD) {
+    if (living && !DBG.noPhoto && !PH.loading && !PH.err && ST.p > 0.01 && photoOK()) loadPhoto();   /* the story started before the idle slot */
     if (!living || !RM.use || DBG.noPhoto) { PH.target = 0; }
     else {
-      if (ST.p > 0.55 && !PH.loading && photoOK()) loadPhoto();                      /* fetched when the story nears the room */
       const frac = d / Math.max(rD, 1);
       if (PH.ready && PH.cam && photoOK() && frac >= 0.72) PH.target = 1;
       else if (!PH.ready || frac < 0.66 || !photoOK()) PH.target = 0;               /* hysteresis: no flicker at the edge */
@@ -462,6 +483,25 @@ function mount(el, opts = {}) {
     return d;
   }
   const storyEase = p => { const t = clamp((p - 0.06) / 0.82, 0, 1); return t * t * (3 - 2 * t); };   /* gentle: the middle distances get their time */
+  /* Until the furnished room is in use, the pull-back waits on the coated wall (about 30 cm away, no room in view yet)
+     instead of ending in the simple room, then glides on into the room (about 1.5 s). The page's events keep following
+     the scroll. Only if the room cannot load (or after 20 s of waiting) does the simple room end the story. */
+  const E_HOLD = 0.32;
+  function holdStory(e, dt) {
+    const wait = !!living && !RM.use && !RM.giveUp && !living.stats.failed;
+    if (wait && e > 0) {
+      if (!RM.waitT) RM.waitT = performance.now();
+      else if (performance.now() - RM.waitT > 20000) RM.giveUp = true;
+    }
+    if (wait && !RM.giveUp && e > E_HOLD) { ST.held = true; return (ST.eh = E_HOLD); }
+    if (ST.held) {
+      if (e <= ST.eh) { ST.held = false; return (ST.eh = e); }
+      ST.eh = Math.min(e, ST.eh + Math.max((e - ST.eh) * (1 - Math.exp(-(dt || 0) * 2.2)), (dt || 0) * 0.05));
+      if (ST.eh >= e - 1e-4) ST.held = false;
+      return ST.eh;
+    }
+    return (ST.eh = e);
+  }
 
   function resize(w, h) {
     if (!camera) return;
@@ -514,11 +554,12 @@ function mount(el, opts = {}) {
       ST.p += (ST.target - ST.p) * (1 - Math.exp(-dt * 6.5));
       if (Math.abs(ST.target - ST.p) < 2e-4) ST.p = ST.target;
     } else ST.p = 0;
-    const e = storyEase(ST.p);
+    const e0 = storyEase(ST.p);
     if (Math.abs(ST.p - ST.sent) > 0.002 || (ST.p === 0 && ST.sent !== 0)) {
       ST.sent = ST.p;
-      el.dispatchEvent(new CustomEvent('dv3d:story', { bubbles: true, detail: { progress: ST.p, eased: e } }));
+      el.dispatchEvent(new CustomEvent('dv3d:story', { bubbles: true, detail: { progress: ST.p, eased: e0 } }));
     }
+    const e = holdStory(e0, dt);
     /* the furnished room takes over once it is ready: at once in the macro, with a crossfade inside the story */
     if (living && RM.ready && !RM.use && !RM.switching) {
       if (e <= 0) useRoom(true);
@@ -574,13 +615,16 @@ function mount(el, opts = {}) {
       spray.mesh.visible = !DBG.noSpray && spray.at(I.clock);
     }
     u.uPrimer.value = I.on && !I.over ? 1 - smooth(I.end - 1.2, I.end, I.clock) : 0;
+    /* the tile is complete again: the far-wall bombing comes back over 1.2 s (off while the spray stamps the tile) */
+    u.uBomb.value = I.on || I.cleanup ? 0 : Math.min(1, u.uBomb.value + (dt || 0) / 1.2);
+    if (still) u.uBomb.value = I.on ? 0 : 1;
     if (I.cleanup) {
       I.cleanup = false; I.over = false;
       crossfade(stage, () => { update(stage.t, 0); render(); }, () => { tile.stampAll(); tile.setBase(0); I.base = 0; }, 0.9);
     }
   }
   function render() {
-    if (PH.k >= 1 && PH.ready) { gpu && gpu.end(); return; }          /* the photograph covers: no real-time room */
+    if ((PH.k >= 1 && PH.ready) || SS.cover) { gpu && gpu.end(); return; }   /* the photograph (or the still) covers: nothing to draw */
     R.render(scene, camera); gpu && gpu.end(); I.frames = (I.frames || 0) + 1;
   }
 
@@ -646,7 +690,7 @@ function mount(el, opts = {}) {
     disableTilt() { window.removeEventListener('deviceorientation', onTilt); tilt.on = false; tilt.tx = tilt.ty = 0; },
     stats() {
       return Object.assign({}, stage.stats, { granules: coat ? coat.granules : 0, flights: coat ? coat.fly.count : 0, stamps: tile ? tile.count : 0,
-        tile: Q.px, tier, fpsCap: fpsCap(), frames: I.frames || 0, room: RM.use ? 'furnished' : 'simple', roomMs: living ? living.stats.ms : 0, photo: PH.ready ? +PH.k.toFixed(3) : (PH.err ? 'error' : (PH.loading ? 'loading' : 'off')), light: [Math.round(pool.x), Math.round(pool.y)], intro: I.on ? +I.clock.toFixed(2) : -1, story: +ST.p.toFixed(3), gpuMs: gpu ? +gpu.ms.toFixed(2) : undefined });
+        tile: Q.px, tier, fpsCap: fpsCap(), frames: I.frames || 0, room: RM.use ? 'furnished' : 'simple', roomMs: living ? living.stats.ms : 0, photo: PH.ready ? +PH.k.toFixed(3) : (PH.err ? 'error' : (PH.loading ? 'loading' : 'off')), light: [Math.round(pool.x), Math.round(pool.y)], intro: I.on ? +I.clock.toFixed(2) : -1, story: +ST.p.toFixed(3), storyCam: +(ST.eh || 0).toFixed(3), gpuMs: gpu ? +gpu.ms.toFixed(2) : undefined });
     },
     renderFrame() { if (stage.ready) { update(stage.t, 0); render(); } },
     get debug() { return gpu ? { U, Q, stage, DBG, living, PH, ST, SV } : null; },          /* ?gpu only: internals for profiling */

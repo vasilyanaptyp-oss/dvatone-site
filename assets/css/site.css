@@ -1654,3 +1654,31 @@ input[type=search]::-webkit-search-cancel-button:hover{opacity:1}
 .app__knob:focus-visible{box-shadow:0 0 0 3px var(--copper-hi)}
 .app__vis.is-drag .edge{box-shadow:0 0 30px 4px rgba(220,186,148,.75)}
 .app__vis .app__cap{pointer-events:none}
+
+/* mobile fixes from Artur's Xiaomi recording (06.10): swatch photos fade in only when loaded; quicker, earlier reveals
+   on phones; the live-sky pill no longer covers text on phones */
+.sws__ph{display:block;border-radius:var(--r-1);overflow:hidden}
+.dv-js .sws img{transition:opacity .35s var(--ease)}
+.dv-js .sws img:not(.is-ok){opacity:0}
+@media (max-width:760px){
+  [data-reveal]{transform:translateY(10px);transition:opacity .45s var(--ease),transform .5s var(--ease);transition-delay:0s}
+  .skyctl{display:none}
+}
+
+/* ==== hero2 story end: bright resting frame (hero2 agent, 06.10; hero section only) ====
+   The hero's shade (.hero__shade, the dark gradient that carries the headline) used to stay at full strength to the
+   end of the scroll story, so the room photograph at the end read as a dim brown image (phones: up to 96 % black
+   over the lower half). It now fades out together with the headline (same rate as .hero__body); only a light, local
+   gradient under the room caption and a soft text shadow remain for legibility. */
+.hero-track .hero__shade{opacity:clamp(0,calc(1 - var(--p) * 2.2),1)}
+.hero-track .hero__cap::before{content:"";position:absolute;z-index:-1;left:calc(var(--pad) * -1);right:calc(var(--pad) * -1);
+  bottom:calc(clamp(28px,6vh,56px) * -1);height:calc(100% + clamp(28px,6vh,56px) + 96px);pointer-events:none;
+  background:linear-gradient(0deg,rgba(14,12,10,.6) 0%,rgba(14,12,10,.46) 45%,rgba(14,12,10,0) 100%)}
+.hero-track .hero__cap span,.hero-track .hero__cap a{text-shadow:0 1px 2px rgba(14,12,10,.5),0 0 16px rgba(14,12,10,.45)}
+/* ==== end hero2 story end ==== */
+
+/* video block: the second tile is the client's colour-fan clip (06.10); one tile fills the side column on desktops */
+.vside--one{grid-template-rows:1fr}
+.vside--one>div{display:flex}
+.vside--one .vplay{aspect-ratio:auto;min-height:100%}
+@media (max-width:900px){.vside--one{grid-template-columns:1fr}.vside--one .vplay{aspect-ratio:16/9;min-height:0}}
