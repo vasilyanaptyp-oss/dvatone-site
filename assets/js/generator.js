@@ -7,7 +7,9 @@
        area(state, area)            -> { volume: '4.2', text?: 'optional note' } | Promise   // fills [data-dv-area-result]
        export('passport'|'texture', state, area) -> Promise<{ url, filename }>               // colour passport PDF / 3ds Max texture
      })
-   Events on the root [data-dv-generator]:  dvatone:change  dvatone:commit  dvatone:area  dvatone:export (cancelable)
+   Events on the root [data-dv-generator]:  dvatone:change  dvatone:commit  dvatone:area  dvatone:export (cancelable)  dvatone:recipe (cancelable)
+     preventDefault() on dvatone:export: the listener owns that export (module.export is not called) and calls exportDone / exportFail;
+     preventDefault() on dvatone:recipe: the listener owns the recipe text (nothing is copied).
    Mount points (data attributes):          see the header comment of each block below and GENERATOR_MODULE.md.
 
    ISOLATION: the composition is only ever drawn into [data-dv-canvas] inside a .gen__mat (opaque neutral grey).
@@ -30,13 +32,14 @@
   var L = {
     uk: {
       copiedBtn: 'Скопійовано', copyFail: 'Не вдалося скопіювати автоматично. Виділіть текст і скопіюйте його вручну.',
-      lockBase: 'Зафіксувати основу', unlockBase: 'Зняти фіксацію основи', lockOn: 'Основу зафіксовано', lockOff: 'Фіксацію основи знято',
-      lockedKeep: 'Основа зафіксована. Зніміть фіксацію, щоб змінити її.',
+      lockBase: 'Зафіксувати основний колір', unlockBase: 'Зняти фіксацію', lockOn: 'Основний колір зафіксовано', lockOff: 'Фіксацію знято',
+      lockedKeep: 'Основний колір зафіксовано. Зніміть фіксацію, щоб змінити його.',
       areaErr: 'Вкажіть площу числом більшим за нуль, наприклад 24 або 12,5', areaBig: SHS.areaBig || 'Для площі понад 10 000 м² напишіть нам.',
-      areaNeutral: 'Точний об’єм підтвердимо після запиту. Базова витрата від 200 мл/м².',
-      exportUnavailable: 'Файли підготуємо після вашого запиту: напишіть нам.',
+      areaEstimate: 'Орієнтовно, за базової витрати 200 мл/м². Точний об’єм підтвердимо після вашого запиту.',
+      exportUnavailable: 'Файли підготуємо за вашим запитом.', exportRequest: 'Надіслати запит на файли',
+      reqPassport: 'Прошу підготувати паспорт кольору (PDF) для цієї композиції.', reqTexture: 'Прошу підготувати текстуру у форматі 3ds Max для цієї композиції.',
+      presetOn: 'Застосовано поєднання «{name}»', shuffleOn: 'Нове випадкове поєднання', undoHint: 'Попередню композицію можна повернути.', undoDone: 'Попередню композицію повернуто',
       added: '{label}: додано', removed: '{label}: прибрано',
-      hint: 'Торкніться відтінка, щоб додати або прибрати його. Частку кожного кольору змінюють повзунки.',
       emptyA: 'Нічого не знайдено. У цьому списку лише відтінки каталогу Dvatone: NCS, 5051 і вибрані RAL. Колекцію DV дивіться ', emptyLink: 'у каталозі'
     },
     en: {
@@ -44,14 +47,15 @@
       lockBase: 'Lock the base', unlockBase: 'Unlock the base', lockOn: 'Base locked', lockOff: 'Base unlocked',
       lockedKeep: 'The base is locked. Unlock it to change it.',
       areaErr: 'Please enter an area as a number greater than zero, for example 24 or 12.5', areaBig: SHS.areaBig || 'For areas over 10,000 m² please write to us.',
-      areaNeutral: 'We will confirm the exact volume after your request. Base consumption starts at 200 ml/m².',
-      exportUnavailable: 'We will prepare the files once you send us a request: please write to us.',
+      areaEstimate: 'An estimate at the base rate of 200 ml/m². We will confirm the exact volume after your request.',
+      exportUnavailable: 'We prepare the files on request.', exportRequest: 'Send a request for the files',
+      reqPassport: 'Please prepare the colour passport (PDF) for this composition.', reqTexture: 'Please prepare the 3ds Max texture for this composition.',
+      presetOn: '“{name}” applied', shuffleOn: 'A new random combination', undoHint: 'You can restore the previous composition.', undoDone: 'Previous composition restored',
       added: '{label}: added', removed: '{label}: removed',
-      hint: 'Tap a shade to add or remove it. Use the sliders to change each colour’s share.',
       emptyA: 'Nothing found. This list holds only the Dvatone catalogue shades: NCS, 5051 and selected RAL. The DV collection is ', emptyLink: 'in the catalogue'
     }
   }[lang];
-  var PREFER = { areaErr: 1, areaBig: 1, hint: 1 };
+  var PREFER = { areaErr: 1, areaBig: 1 };
   var tx = function (k) { return (PREFER[k] || T[k] == null || T[k] === '') && L[k] != null ? L[k] : T[k]; };
   var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var normQ = function (s) { return String(s || '').toLowerCase().replace(/[\s#\-\u2013\u2014]/g, '').replace(/^ncs(?!s)/, 'ncss'); };   // "NCS 3020-R90B" finds "NCS S 3020-R90B"
@@ -139,14 +143,16 @@
   };
 
   /* ---------- events ---------- */
+  var CANCELABLE = { 'dvatone:export': 1, 'dvatone:recipe': 1 };   // preventDefault() hands the action to the listener (doExport, the recipe button)
   function emit(name, detail) {
-    var ev = new CustomEvent(name, { bubbles: true, cancelable: name === 'dvatone:export', detail: detail });
+    var ev = new CustomEvent(name, { bubbles: true, cancelable: !!CANCELABLE[name], detail: detail });
     root.dispatchEvent(ev); return ev;
   }
   var copyState = function () { return JSON.parse(JSON.stringify(state)); };
-  var commitT = 0;
+  var commitT = 0, dirty = false;   // dirty: the composition was edited by hand since the last preset / random / reset
   function changed(cause) {
     resetExport();
+    if (cause !== 'area' && cause !== 'preset' && cause !== 'shuffle' && cause !== 'reset') { dirty = cause !== 'undo' && cause !== 'external'; clearUndo(); }
     emit('dvatone:change', { state: copyState(), cause: cause });
     clearTimeout(commitT); commitT = setTimeout(function () { emit('dvatone:commit', { state: copyState(), cause: cause }); roomUpdate(); }, 190);
   }
@@ -207,15 +213,20 @@
   var fill = function (v) { return Math.max(0, Math.min(100, (v - MINSH) / Math.max(1, 100 - MINSH * state.mix.length) * 100)); };
   var ico = {
     pin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.4 5 5.4.7-4 3.7 1 5.4-4.8-2.7-4.8 2.7 1-5.4-4-3.7 5.4-.7z"/></svg>',
+    // padlocks for the main colour: only the body fills when the lock is on (.is-on), the shackle stays a line
+    lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="10.5" width="13" height="9.5" rx="1.5"/><path fill="none" d="M8.5 10.5V7.75a3.5 3.5 0 0 1 7 0v2.75"/></svg>',
+    unlock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="10.5" width="13" height="9.5" rx="1.5"/><path fill="none" d="M8.5 10.5V7.75a3.5 3.5 0 0 1 6.9-.8"/></svg>',
     x: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>'
   };
+  var roleOf = function (i) { return i === 0 ? T.base + (state.lock && T.locked ? ' · ' + T.locked : '') : T.accent; };
   function rowHTML(c, i, withRange) {
-    var lab = labelOf(c.hex), role = i === 0 ? T.base : T.accent;
+    var lab = labelOf(c.hex), role = roleOf(i);
     return '<li class="mixrow' + (i === ui.sel ? ' is-sel' : '') + '" data-i="' + i + '">' +
       '<button type="button" class="mixrow__dot" data-act="select" style="background:#' + c.hex + '" aria-label="' + lab + '"></button>' +
       '<div class="mixrow__name"><b>' + lab + '</b><small>' + role + '<span class="hx"> · #' + c.hex + '</span></small></div>' +
       '<output class="mixrow__pct">' + c.share + '%</output>' +
-      (i === 0 ? '<button type="button" class="mixrow__ico is-on" data-act="lock" data-lock="' + !!state.lock + '" aria-pressed="' + !!state.lock + '" aria-label="' + (state.lock ? tx('unlockBase') : tx('lockBase')) + ': ' + lab + '" title="' + (state.lock ? tx('unlockBase') : tx('lockBase')) + '">' + ico.pin + '</button>' : '<button type="button" class="mixrow__ico" data-act="base" aria-label="' + T.makeBase + ': ' + lab + '" title="' + T.makeBase + '">' + ico.pin + '</button>') +
+      // the main colour carries a padlock that is visibly on or off (aria-pressed holds the state, the name stays the same); accents keep the star "make it the main colour"
+      (i === 0 ? '<button type="button" class="mixrow__ico' + (state.lock ? ' is-on' : '') + '" data-act="lock" data-lock="' + !!state.lock + '" aria-pressed="' + !!state.lock + '" aria-label="' + tx('lockBase') + ': ' + lab + '" title="' + (state.lock ? tx('unlockBase') : tx('lockBase')) + '">' + (state.lock ? ico.lock : ico.unlock) + '</button>' : '<button type="button" class="mixrow__ico" data-act="base" aria-label="' + T.makeBase + ': ' + lab + '" title="' + T.makeBase + '">' + ico.pin + '</button>') +
       '<button type="button" class="mixrow__ico" data-act="remove" aria-label="' + T.remove + ': ' + lab + '" title="' + T.remove + '">' + ico.x + '</button>' +
       (withRange === false ? '' : '<input type="range" class="rng mixrow__rng" min="' + MINSH + '" max="' + (100 - MINSH * (state.mix.length - 1)) + '" step="1" value="' + c.share + '" aria-label="' + T.share + ': ' + lab + '" aria-valuetext="' + c.share + ' %" style="--c:#' + c.hex + ';--v:' + fill(c.share) + '%">') + '</li>';
   }
@@ -243,7 +254,7 @@
   }
   function renderInspectorOnly() {
     var insp = $('[data-dv-inspector]'), s = state.mix[ui.sel]; if (!insp || !s) return; var rr = rgb(s.hex);
-    insp.innerHTML = '<div class="insp__sw" style="background:#' + s.hex + '"></div><div class="insp__t"><b>' + labelOf(s.hex) + '</b><small>' + (ui.sel === 0 ? T.base : T.accent) + '</small></div>' +
+    insp.innerHTML = '<div class="insp__sw" style="background:#' + s.hex + '"></div><div class="insp__t"><b>' + labelOf(s.hex) + '</b><small>' + roleOf(ui.sel) + '</small></div>' +
       '<dl class="insp__dl"><div><dt>HEX</dt><dd>#' + s.hex + '</dd></div><div><dt>RGB</dt><dd>' + rr.join(' ') + '</dd></div><div><dt>' + T.share + '</dt><dd>' + s.share + '%</dd></div></dl>';
   }
   function syncMix() {   // update numbers and fills in place, so a slider that is being dragged is never rebuilt
@@ -366,7 +377,9 @@
     if (areaRes) {
       areaRes.setAttribute('data-state', a == null ? 'empty' : 'filled');
       if (a == null) { if (vBox) vBox.style.display = ''; if (vEl) vEl.textContent = '0'; if (nEl) nEl.textContent = noteDefault; }
-      else if (!(mod && mod.area)) { if (vBox) vBox.style.display = 'none'; if (nEl) nEl.textContent = tx('areaNeutral'); }   // no module attached yet: a neutral line, not an empty figure. The hooks below stay as they were
+      else if (!(mod && mod.area)) {   // no module attached yet: an estimate from the published base rate (200 ml/m², rounded up to 0.1 L), marked as such; the module's figure replaces it
+        if (vBox) vBox.style.display = ''; if (vEl) vEl.textContent = nf(Math.ceil(a * 2 - 1e-9) / 10); if (nEl) nEl.textContent = tx('areaEstimate');
+      }
       else if (vBox) vBox.style.display = '';
     }
     emit('dvatone:area', { area: a, state: copyState() });
@@ -379,16 +392,28 @@
     $$('[data-dv-export="' + kind + '"]').forEach(function (b) { b.setAttribute('data-state', st); });
     var s = $('[data-dv-export-status]'); if (s) { s.setAttribute('data-state', st); if (st === 'idle') updateExportState(); else s.textContent = msg || ''; }
   }
+  var settled = {};   // exportDone / exportFail calls per kind: tells doExport whether a listener settled its export inside the event
   function doExport(kind) {
     var b = $('[data-dv-export="' + kind + '"]');
     if (!b || b.getAttribute('aria-disabled') === 'true') { exportStatus(kind, 'idle', T.exportOff); say(T.exportOff); return; }
-    var detail = { kind: kind, state: copyState(), area: areaNum() }, ev = emit('dvatone:export', detail);
-    if (mod && mod.export) {
+    /* preventDefault() is the one switch: a listener that calls it owns this export (module.export is not called) and reports
+       through exportDone / exportFail; otherwise the module exports, and without a module the line says the files come on request */
+    var detail = { kind: kind, state: copyState(), area: areaNum() }, n0 = settled[kind] || 0, ev = emit('dvatone:export', detail);
+    if (ev.defaultPrevented) {
+      if ((settled[kind] || 0) === n0) exportStatus(kind, 'preparing', T.exportPreparing);   // unless the listener already settled it inside the event
+    } else if (mod && mod.export) {
       exportStatus(kind, 'preparing', T.exportPreparing);
       Promise.resolve().then(function () { return mod.export(kind, detail.state, detail.area); }).then(function (r) { NS.generator.exportDone(kind, r); }, function () { NS.generator.exportFail(kind); });
-    } else if (!ev.defaultPrevented) {
+    } else {
       exportStatus(kind, 'unavailable', tx('exportUnavailable'));   // no module attached yet: a neutral, honest line (no fake "preparing", no red error)
-    } else exportStatus(kind, 'preparing', T.exportPreparing);       // a listener took over and will call exportDone / exportFail
+      var s = $('[data-dv-export-status]');   // ...and a way forward: the contact form, with the request and the recipe in the query (works from / and /en/)
+      if (s) {
+        var ln = document.createElement('a'), sp = document.createElement('span');
+        ln.className = 'link-arrow'; ln.href = 'contacts.html?topic=' + (kind === 'texture' ? 'other' : 'quantity') + '&msg=' + encodeURIComponent(tx(kind === 'texture' ? 'reqTexture' : 'reqPassport') + '\n\n' + recipeText());
+        sp.textContent = tx('exportRequest'); ln.appendChild(sp); ln.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>');
+        s.appendChild(document.createTextNode(' ')); s.appendChild(ln);
+      }
+    }
   }
 
   /* ---------- public interface ---------- */
@@ -406,8 +431,8 @@
       renderAll(); changed((opts && opts.cause) || 'external');
     },
     on: function (name, fn) { root.addEventListener(name, function (e) { fn(e.detail, e); }); },
-    registerEngine: function (name, eng) { if (!eng || typeof eng.render !== 'function') return; engines[name] = eng; engine = eng; paint(); roomUpdate(true); },
-    useEngine: function (name) { if (engines[name]) { engine = engines[name]; paint(); roomUpdate(true); } },
+    registerEngine: function (name, eng) { if (!eng || typeof eng.render !== 'function') return; engines[name] = eng; engine = eng; paint(); },
+    useEngine: function (name) { if (engines[name]) { engine = engines[name]; paint(); } },
     registerModule: function (m) { mod = m || null; root.setAttribute('data-dv-module', mod ? 'attached' : 'none'); runArea(); },
     setAreaResult: function (r, errText) {
       if (!areaRes) return;
@@ -417,10 +442,11 @@
       areaRes.setAttribute('data-state', 'done'); if (v) v.textContent = r.volume != null ? r.volume : '0'; if (n) n.textContent = r.text || '';
     },
     exportDone: function (kind, r) {
+      settled[kind] = (settled[kind] || 0) + 1;
       exportStatus(kind, 'done', T.exportDone);
       if (r && r.url) { var a = document.createElement('a'); a.href = r.url; a.download = r.filename || ''; document.body.appendChild(a); a.click(); a.remove(); }
     },
-    exportFail: function (kind) { exportStatus(kind, 'error', T.exportError); },
+    exportFail: function (kind) { settled[kind] = (settled[kind] || 0) + 1; exportStatus(kind, 'error', T.exportError); },
     recipe: recipeText
   };
   root.setAttribute('data-dv-module', 'none');
@@ -452,13 +478,36 @@
     while (out.length < MIN) out.push(cat[Math.floor(Math.random() * cat.length)].hex);
     return out;
   }
+  /* one step back after a preset, "random" or "reset" replaced the composition ([data-dv-undo] next to them); any later edit drops it */
+  var undoSnap = null, undoBtns = $$('[data-dv-undo]');
+  function clearUndo() { undoSnap = null; (undoBtns || []).forEach(function (b) { b.hidden = true; }); }
+  function offerUndo(before, msg) {   // before: { st, sel } taken just before the replacement; msg: what to say (empty: nothing)
+    var a = before.st, same = a.grain === state.grain && a.density === state.density && a.scale === state.scale && a.seed === state.seed && a.lock === state.lock &&
+      a.mix.length === state.mix.length && a.mix.every(function (c, k) { return c.hex === state.mix[k].hex && c.share === state.mix[k].share; });
+    undoSnap = same ? null : before;
+    undoBtns.forEach(function (b) { b.hidden = !undoSnap; });
+    if (msg) say(undoSnap ? msg.replace(/\.?$/, '.') + ' ' + tx('undoHint') : msg, null, undoSnap ? 4200 : 0);
+  }
+  function undo(btn) {
+    if (!undoSnap) return;
+    var u = undoSnap.st, wasFocus = btn && document.activeElement === btn;
+    state.mix = u.mix; state.grain = u.grain; state.density = u.density; state.scale = u.scale; state.seed = u.seed; state.lock = u.lock;
+    ui.sel = clamp(undoSnap.sel, 0, state.mix.length - 1);
+    renderAll(); changed('undo'); dirty = true; say(tx('undoDone'));
+    if (wasFocus) { var f = btn.parentNode && btn.parentNode.querySelector('[data-dv-random]'); if (f) { try { f.focus({ preventScroll: true }); } catch (e) { f.focus(); } } }   // the button hides: keep focus nearby
+  }
 
   /* ---------- wiring ---------- */
   root.addEventListener('click', function (e) {
     var t = e.target, a = t.closest('[data-act]');
     if (a) {
       var row = a.closest('[data-i]'), i = row ? +row.getAttribute('data-i') : -1, act = a.getAttribute('data-act');
-      if (act === 'select') { ui.sel = i; renderMix(true); renderMeta(); return; }
+      if (act === 'select') {
+        var segFocus = a.classList.contains('pseg') && document.activeElement === a;   // the strip is rebuilt: keep keyboard focus on the same segment
+        ui.sel = i; renderMix(true); renderMeta();
+        if (segFocus) { var sg = $('[data-dv-strip] .pseg[data-i="' + i + '"]'); if (sg) { try { sg.focus({ preventScroll: true }); } catch (e2) { sg.focus(); } } }
+        return;
+      }
       if (act === 'lock') { state.lock = !state.lock; renderAll(true); changed('lock'); say(state.lock ? tx('lockOn') : tx('lockOff')); return; }
       if (act === 'base') { if (makeBase(i)) { renderAll(); changed('mix'); focusAct('select', 0); } return; }
       if (act === 'remove') { var n0 = state.mix.length; removeColour(i); if (state.mix.length < n0) { renderAll(); changed('mix'); focusAct('remove', Math.min(i, state.mix.length - 1)); } return; }
@@ -474,16 +523,23 @@
       renderAll(); changed('mix'); return;
     }
     var pr = t.closest('[data-preset]');
-    if (pr) { var p = G.presets[+pr.getAttribute('data-preset')]; setMix(state.lock && state.mix.length ? lockedCols(p.cols) : p.cols); renderAll(); changed('preset'); return; }
+    if (pr) {
+      var p = G.presets[+pr.getAttribute('data-preset')], bp = { st: copyState(), sel: ui.sel }, dp = dirty;
+      setMix(state.lock && state.mix.length ? lockedCols(p.cols) : p.cols); renderAll(); changed('preset');
+      offerUndo(bp, dp ? fmt(tx('presetOn'), { name: p.name }) : ''); dirty = false; return;   // a toast only when hand-made work was replaced
+    }
     var gr = t.closest('[data-dv-grain]'); if (gr) { state.grain = gr.getAttribute('data-dv-grain'); renderAll(); changed('texture'); return; }
     var sc = t.closest('[data-dv-scale]'); if (sc) { state.scale = sc.getAttribute('data-dv-scale'); renderAll(); changed('scale'); return; }
     var fl = t.closest('[data-dv-filter]');
     if (fl) { ui.filter = fl.getAttribute('data-dv-filter'); $$('[data-dv-filter]').forEach(function (x) { x.setAttribute('aria-pressed', x === fl ? 'true' : 'false'); }); applySearch(); return; }
     if (t.closest('[data-dv-more]')) { pageResults(); return; }
     if (t.closest('[data-dv-random]')) {
-      state.seed = 1 + Math.floor(Math.random() * 90); setMix(randomMix()); renderAll(); changed('shuffle'); return;
+      var br = { st: copyState(), sel: ui.sel }, dr = dirty;
+      state.seed = 1 + Math.floor(Math.random() * 90); setMix(randomMix()); renderAll(); changed('shuffle');
+      offerUndo(br, dr ? tx('shuffleOn') : ''); dirty = false; return;
     }
-    if (t.closest('[data-dv-reset]')) { setDefault(); renderAll(); changed('reset'); say(tx('resetDone')); return; }
+    if (t.closest('[data-dv-reset]')) { var bz = { st: copyState(), sel: ui.sel }; setDefault(); renderAll(); changed('reset'); offerUndo(bz, tx('resetDone')); dirty = false; return; }
+    var ub = t.closest('[data-dv-undo]'); if (ub) { undo(ub); return; }
     var rc = t.closest('[data-dv-recipe-copy]');
     if (rc) { var txt = recipeText(), ev = emit('dvatone:recipe', { state: copyState(), text: txt }); if (!ev.defaultPrevented) copy(txt, tx('recipeCopied'), rc); return; }
     var lc = t.closest('[data-dv-link-copy]');
@@ -544,36 +600,132 @@
     return ok;
   }
 
-  /* ---------- room view (option C): the composition becomes the wall texture, rooms.js does the recolouring ---------- */
-  var roomEl = $('[data-dv-room]'), roomVer = 0, roomStage = null, texCanvas = document.createElement('canvas');
-  var roomInView = false, roomDirty = false, roomIdle = 0;
-  texCanvas.width = 900; texCanvas.height = 600;
-  function roomUpdate() {
-    if (!roomEl || !NS.rooms) return;
-    if (!roomInView) { roomDirty = true; return; }   // off-screen: remember it, do the work when the room view comes near
-    if (roomIdle) return;
-    var run = function () {
-      roomIdle = 0; roomDirty = false;
-      var tc = texCanvas, tmp = copyState(); tmp.scale = 'wall';
-      try { engine.render(tc, tmp, { draft: false, texture: true }); } catch (e) { engines.stub.render(tc, tmp, { texture: true }); }
-      var snap = document.createElement('canvas'); snap.width = tc.width; snap.height = tc.height; snap.getContext('2d').drawImage(tc, 0, 0);
-      roomVer++;
-      if (!roomStage) roomStage = NS.rooms.mount(roomEl);
-      roomStage.setFinish({ canvas: snap, key: 'gen' + roomVer }, (T.idPrefix || '') + compId());
+  /* ---------- room view (option C): photoreal renders of a living room, a bedroom and a hallway whose feature wall wears the composition ----------
+     The interiors block's photo mode (assets/3d/photoroom.js, DONE_INTERIOR2.md): Cycles renders, the wall recoloured live and exactly.
+     generator-c.html hands the module over as DVATONE.photoRoom() (a module script, so this file stays a classic script); it is imported
+     in an idle slot once the stage is within a screen of the viewport, and the room's poster shows until the first frame. The module takes
+     the desktop view (-d) or the phone view (-p) by the shape of [data-dv-room-host]: site.css makes it 4:5 on phones held upright (the
+     stage then shows its middle band). At every commit the wall takes the composition (mix, fraction, density, seed) with the module's
+     own wipe; the [data-room-tab] tabs (arrow keys, Home, End) and a horizontal swipe on a touch screen change the room. */
+  var roomEl = $('[data-dv-room]'), roomHost = roomEl ? $('[data-dv-room-host]', roomEl) : null, roomTabs = $$('[data-room-tab]'), roomNow = $('[data-room-now]');
+  var ROOM_GRAIN = { S: 0.6, M: 1, XL: 1.8 };   // the fractions on the 3D modules' grain scale (DONE_3D.md: granules of about 1.1, 1.9 and 3.4 mm)
+  var room = { name: (roomEl && roomEl.getAttribute('data-dv-room')) || 'living', ctl: null, ready: false, loading: false, queued: false, inView: false, dirty: false, key: '' };
+  var roomKey = function () { return state.mix.map(function (c) { return c.hex + ':' + c.share; }).join(',') + '|' + state.grain + '|' + state.density + '|' + state.seed; };
+  var roomColours = function () { return state.mix.map(function (c) { return { hex: c.hex, share: c.share }; }); };
+  var roomLabel = function (on) { var n = roomNow && roomNow.closest('.rooms__now'); if (n) n.style.display = on ? '' : 'none'; };   // no composition number over a poster that cannot show the composition
+  function roomUpdate() {   // after a commit (scale, area and lock leave the wall as it is)
+    if (!roomEl) return;
+    if (roomNow) roomNow.textContent = (T.idPrefix || '') + compId();
+    if (!room.ready || !room.inView) { room.dirty = true; return; }   // still loading, or off-screen: done once it is ready and near
+    room.dirty = false;
+    var k = roomKey(); if (k === room.key) return;
+    room.key = k;
+    room.ctl.setState({ mix: roomColours(), grain: ROOM_GRAIN[state.grain] || 1, density: state.density, seed: state.seed });
+  }
+  function roomSync(name) {   // tabs, stage attributes and the page's own poster follow the room
+    var tab = null;
+    roomTabs.forEach(function (t) { var on = t.getAttribute('data-room-tab') === name; if (on) tab = t; t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1; });
+    if (!tab) return null;
+    room.name = name; roomEl.setAttribute('data-dv-room', name); if (tab.id) roomEl.setAttribute('aria-labelledby', tab.id);
+    if (roomHost) $$('[data-dv-room-poster], source', roomHost).forEach(function (n) {
+      ['src', 'srcset'].forEach(function (a) { var v = n.getAttribute(a); if (v) n.setAttribute(a, v.replace(/poster-[a-z]+/, 'poster-' + name)); });
+    });
+    return tab;
+  }
+  function roomSelect(name, focus) {
+    var tab = roomSync(name); if (!tab) return;
+    if (focus) tab.focus();
+    if (room.ctl) room.ctl.setRoom(name);   // a crossfade; before the first frame only the module's poster changes (roomReady then shows the room)
+  }
+  function roomReady(ok) {
+    room.ready = !!ok;
+    if (!ok) { roomLabel(false); return; }   // no WebGL 2: the module keeps its poster, the tabs still change it
+    var v = room.ctl.stats().view || '';
+    if (v.indexOf(room.name + '-') !== 0) room.ctl.setRoom(room.name, true);   // a tab was picked while the module was loading
+    roomUpdate();
+  }
+  function roomLoad() {
+    if (room.ctl || room.loading || !roomHost) return;
+    if (typeof NS.photoRoom !== 'function') { roomLabel(false); return; }   // without ES modules the posters stay
+    room.loading = true;
+    NS.photoRoom().then(function (m) {
+      room.key = roomKey(); roomLabel(true);
+      var ctl = room.ctl = m.mountPhoto(roomHost, { room: room.name, colors: roomColours(), grain: ROOM_GRAIN[state.grain] || 1, density: state.density, seed: state.seed });
+      var pre = $('picture', roomHost), own = $('.dv3d__poster', roomHost), drop = function () { if (pre && pre.parentNode) pre.parentNode.removeChild(pre); };
+      if (pre) { if (!own || own.complete) setTimeout(drop, 60); else { own.addEventListener('load', function () { setTimeout(drop, 60); }, { once: true }); setTimeout(drop, 2500); } }   // the module's poster is the same picture
+      ctl.ready.then(roomReady);
+    }).catch(function () { if (!room.ctl) { room.loading = false; roomLabel(false); } });   // not loaded (offline, blocked): the poster stays, the next approach tries again
+  }
+
+  /* ---------- phones and tablets: the sticky preview (qa/wave2/MOBILE_HOOKS.md section 1) ----------
+     While it is stuck under the header (.is-stuck), the toggle can fold it to a 56 px strip (.is-collapsed, a clip-path in site.css:
+     nothing below it moves). Options A and C also fold it by themselves once the area step comes up, and unfold it when the visitor
+     scrolls back above it; B releases its preview before the area anyway. A hand-made choice wins and lasts for the session. */
+  var prevEl = document.getElementById('dvPrev'), prevBtn = prevEl && root.contains(prevEl) ? $('[data-dv-prev-toggle]', prevEl) : null;
+  if (prevBtn) {
+    var PKEY = 'dvGenPrevFolded', pv = { pref: false, zone: false, keepOpen: false, stuck: false, sticky: false, top: 0, rest: null, raf: 0 };
+    try { pv.pref = sessionStorage.getItem(PKEY) === '1'; } catch (e) {}
+    var pvArea = root.getAttribute('data-variant') === 'b' ? null : $('[data-dv-mount="area"]'), pvSr = $('.sr', prevBtn);
+    var pvMeasure = function () {   // the resting place is forgotten only when the width changes (the phone URL bar fires resize on every scroll)
+      var cs = getComputedStyle(prevEl); pv.sticky = /sticky/.test(cs.position); pv.top = parseFloat(cs.top) || 0;
+      if (pv.w !== window.innerWidth) { pv.w = window.innerWidth; pv.rest = null; }
     };
-    if (NS.idle) roomIdle = NS.idle(run, 900); else run();
+    var pvApply = function () {
+      var folded = pv.stuck && (pv.pref || (pv.zone && !pv.keepOpen));
+      prevEl.classList.toggle('is-stuck', pv.stuck); prevEl.classList.toggle('is-collapsed', folded);
+      prevBtn.setAttribute('aria-expanded', folded ? 'false' : 'true');
+      if (pvSr) pvSr.textContent = prevBtn.getAttribute(folded ? 'data-label-expand' : 'data-label-collapse') || pvSr.textContent;
+    };
+    var pvCheck = function () {
+      pv.raf = 0;
+      var stuck = false, zone = false, y = window.pageYOffset || 0;
+      if (pv.sticky) {
+        var r = prevEl.getBoundingClientRect();
+        if (r.top > pv.top + 1) pv.rest = r.top + y;   // resting in its place: remember where
+        stuck = r.top <= pv.top + 1 && (pv.rest == null || y + pv.top - pv.rest > r.height - 56);   // foldable only after it has travelled more than its own height, so it never folds over an empty slot
+        if (pvArea) zone = pvArea.getBoundingClientRect().top < window.innerHeight * 0.65;
+      }
+      if (!zone) pv.keepOpen = false;
+      if (stuck !== pv.stuck || zone !== pv.zone) { pv.stuck = stuck; pv.zone = zone; pvApply(); }
+    };
+    var pvQueue = function () {   // one check per frame; a frame request older than 250 ms counts as lost (a paused or throttled page) and is made again
+      var now = Date.now(); if (pv.raf && now - pv.at < 250) return;
+      pv.at = now; pv.raf = requestAnimationFrame(pvCheck);
+    };
+    prevBtn.addEventListener('click', function () {
+      if (prevEl.classList.contains('is-collapsed')) { pv.pref = false; if (pv.zone) pv.keepOpen = true; }
+      else { pv.pref = true; pv.keepOpen = false; }
+      try { sessionStorage.setItem(PKEY, pv.pref ? '1' : '0'); } catch (e) {}
+      pvApply();
+    });
+    window.addEventListener('scroll', pvQueue, { passive: true });
+    window.addEventListener('resize', function () { pvMeasure(); pvQueue(); });
+    window.addEventListener('load', function () { pvMeasure(); pvQueue(); });   // site.css arrives without blocking: measure again once it applies
+    pvMeasure(); pvQueue();
   }
 
   /* ---------- go ---------- */
-  $$('.ghint').forEach(function (e) { if (/^(Торкніться відтінка|Tap a shade)/.test(e.textContent.trim())) e.textContent = tx('hint'); });   // the swatches add AND remove
   if (window.matchMedia && matchMedia('(min-width:1100px)').matches) $$('details.gadd').forEach(function (d) { d.open = true; });
   var fromQuery = fromUrl();
   if (!fromQuery) setMix(G.presets[0].cols);
   if (areaIn) areaIn.value = state.area;
   applySearch(); renderAll(); runArea();
   if (roomEl) {
-    var started = false, go = function () { roomInView = true; if (!started || roomDirty) { started = true; roomUpdate(); } };
-    if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { if (es[0].isIntersecting) go(); else roomInView = false; }, { rootMargin: '100% 0px 100% 0px' }).observe(roomEl); else go();   // about one screen ahead
+    roomTabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { roomSelect(t.getAttribute('data-room-tab')); });
+      t.addEventListener('keydown', function (e) {
+        var k = e.key, n = roomTabs.length, to = k === 'Home' ? 0 : k === 'End' ? n - 1 : k === 'ArrowRight' || k === 'ArrowDown' ? (i + 1) % n : k === 'ArrowLeft' || k === 'ArrowUp' ? (i - 1 + n) % n : -1;
+        if (to < 0) return; e.preventDefault(); roomSelect(roomTabs[to].getAttribute('data-room-tab'), true);
+      });
+    });
+    roomEl.addEventListener('dv3d:room', function (e) { if (e.detail && e.detail.room) roomSync(e.detail.room); });   // a swipe changed the room
+    roomUpdate();   // the composition number on the stage
+    var roomGo = function () {
+      room.inView = true;
+      if (!room.ctl && !room.loading && !room.queued) { room.queued = true; (NS.idle || function (f) { return setTimeout(f, 60); })(function () { room.queued = false; roomLoad(); }, 1500); }
+      if (room.dirty) roomUpdate();
+    };
+    if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { if (es[es.length - 1].isIntersecting) roomGo(); else room.inView = false; }, { rootMargin: '100% 0px 100% 0px' }).observe(roomEl); else roomGo();   // about one screen ahead
   }
   if (window.matchMedia && matchMedia('(pointer:coarse)').matches) paint(true);   // phones: a quick coarse first frame, the full render follows 220 ms later
 })();

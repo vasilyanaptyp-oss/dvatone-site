@@ -157,6 +157,7 @@
     this.scope = el.closest('[data-rooms-scope]') || document;
     this.nowEl = $('[data-room-now]', this.scope);
     this.wired = false;
+    this.fails = 0; this.failAt = 0; this.retryT = 0;   // failed photo requests in a row, when the last one failed, the pending retry
     this.wire();
   }
   Stage.prototype.src = function (f) { return this.base + f; };
@@ -205,8 +206,11 @@
     var self = this; if (!this.canvas || !this.finish) return;
     var tok = ++this.token, R = ROOMS[this.room];
     this.placeUI();
+    if (this.retryT) return;   // a failed photo is fetched again shortly, and that draw shows the latest state
+    if (this.fails > 1 && performance.now() - this.failAt < 2000) { this.plain(true); return; }   // still no photo: at most one new request every 2 s
     Promise.all([loadImg(this.src(R.img)), this.coated(this.room, this.finish)]).then(function (r) {
       if (tok !== self.token) return;
+      self.fails = 0; self.plain(false);
       self.size(2000);
       var c = self.canvas, im = r[0], off = r[1], cw = c.width, ch = c.height;
       var vk = self.room + '|' + self.finishKey(self.finish) + '|' + cw + 'x' + ch;
@@ -227,7 +231,29 @@
       var sx = Math.round(cw * self.split);
       if (sx > 0) ctx.drawImage(self.view.coat, 0, 0, sx, ch, 0, 0, sx, ch);
       self.el.classList.add('is-ready');
-    }).catch(function () {});
+    }).catch(function (e) {
+      if (e === STALE || tok !== self.token) return;
+      // the room photo (or its mask) did not arrive: one more try in 2 s (a flaky mobile connection), then the finish itself
+      // fills the stage, so the visitor sees the colour instead of an empty box; every later draw tries the photo again
+      self.fails = (self.fails || 0) + 1; self.failAt = performance.now();
+      if (self.fails === 1) { self.retryT = setTimeout(function () { self.retryT = 0; self.draw(); }, 2000); return; }
+      self.plain(true);
+    });
+  };
+  Stage.prototype.plain = function (on) {   // fallback without the room photo: the finish alone, cover-fitted; the before/after controls step aside
+    var el = this.el, ui = [this.handle, $('.rooms__line', el), this.labels.l, this.labels.r];
+    if (!on) {
+      if (el.classList.contains('is-plain')) { el.classList.remove('is-plain'); ui.forEach(function (n) { if (n) n.style.visibility = ''; }); }
+      return;
+    }
+    var c = this.canvas, f = this.finish; if (!c || !f) return;
+    this.size(2000);
+    var x = c.getContext('2d'), cw = c.width, ch = c.height, src = f.canvas;
+    x.clearRect(0, 0, cw, ch);
+    if (src && src.width) { var s = Math.max(cw / src.width, ch / src.height), dw = src.width * s, dh = src.height * s; x.drawImage(src, (cw - dw) / 2, (ch - dh) / 2, dw, dh); }
+    else if (f.hex) { x.fillStyle = '#' + f.hex; x.fillRect(0, 0, cw, ch); }
+    el.classList.add('is-ready', 'is-plain');
+    ui.forEach(function (n) { if (n) n.style.visibility = 'hidden'; });
   };
   Stage.prototype.placeUI = function () {
     var st = this.el.getBoundingClientRect(); if (!st.width) return;

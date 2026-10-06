@@ -155,7 +155,27 @@
 
   /* ---------- header + mobile nav (modal sheet: inert page behind, Tab trapped, focus returned) ---------- */
   var hdr = $('#hdr'), burger = $('.burger'), mnav = $('#mnav'), menuOpen = false, inerted = [];
-  function onScrollHdr() { hdr.classList.toggle('is-solid', window.scrollY > 40 || (mnav && mnav.classList.contains('is-open'))); }
+  var hdrY = 0, hdrPins = $$('.gframe,.gc__stage,.gb .gen__mat,.ga__easel,.gb__stage,.gc__main');
+  var keepHdr = function () {   // the bar stays: desktop layout, keyboard focus inside it, or a generator preview pinned under it (hiding would open a see-through gap above the preview)
+    if (!burger || getComputedStyle(burger).display === 'none') return true;
+    var a = document.activeElement;
+    if (a && hdr.contains(a)) { try { if (a.matches(':focus-visible')) return true; } catch (e) { return true; } }
+    for (var i = 0; i < hdrPins.length; i++) {
+      var cs = getComputedStyle(hdrPins[i]); if (cs.position !== 'sticky') continue;
+      var r = hdrPins[i].getBoundingClientRect(); if (r.height > 0 && r.bottom > 0 && r.top <= (parseFloat(cs.top) || 0) + 2) return true;
+    }
+    return false;
+  };
+  function onScrollHdr() {
+    var open = !!(mnav && mnav.classList.contains('is-open')), y = window.scrollY;
+    hdr.classList.toggle('is-solid', y > 40 || open);
+    // phones and tablets: the bar slides away while reading down and comes back on any scroll up
+    y = clamp(y, 0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight));   // an iOS rubber band past either end is not a change of direction
+    if (open || y <= 400 || keepHdr()) { hdr.classList.remove('is-hidden'); hdrY = y; return; }
+    if (y > hdrY + 6) { hdr.classList.add('is-hidden'); hdrY = y; }
+    else if (y < hdrY - 6) { hdr.classList.remove('is-hidden'); hdrY = y; }
+  }
+  hdr.addEventListener('focusin', function () { hdr.classList.remove('is-hidden'); });   // Shift+Tab back into a hidden bar brings it down
   var seen = function (el) { return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length) && getComputedStyle(el).visibility !== 'hidden'; };
   var tabbables = function () {
     return $$('a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])', hdr)
@@ -205,8 +225,19 @@
     });
     window.addEventListener('resize', function () { if (menuOpen && getComputedStyle(burger).display === 'none') setMenu(false); });   // the burger leaves with the breakpoint (px or text size)
   }
-  window.addEventListener('scroll', onScrollHdr, { passive: true });
+  window.addEventListener('scroll', onScrollHdr, { passive: true }); window.addEventListener('resize', onScrollHdr);
   onScrollHdr();
+
+  /* ---------- language switch keeps what is on screen: a shared composition (?mix=…), a search (?q=…), a section (#s4).
+     File names and section ids are the same in both languages; the href is refreshed right before it is used. ---------- */
+  $$('.lang a[hreflang]').forEach(function (a) {
+    var base = a.getAttribute('href');
+    if (!base || base.charAt(0) === '#') return;   // the current language
+    base = base.split('#')[0].split('?')[0];
+    var sync = function () { a.setAttribute('href', base + location.search + location.hash); };
+    sync();
+    ['pointerenter', 'pointerdown', 'focus', 'click'].forEach(function (t) { a.addEventListener(t, sync); });
+  });
 
   /* ---------- reveal on scroll ---------- */
   var rv = $$('[data-reveal]');
@@ -216,6 +247,27 @@
     }, { rootMargin: matchMedia('(max-width: 760px)').matches ? '0px 0px 25% 0px' : '0px 0px -8% 0px', threshold: 0.06 });   // phones: start before the block scrolls in, so fast flicks never show faded text
     rv.forEach(function (el) { io.observe(el); });
   } else { rv.forEach(function (el) { el.classList.add('is-in'); }); }
+
+  /* ---------- legal pages: the sticky contents list marks the section being read: the one crossing the line just under
+     the header (where a click on the list lands a section, so a short one is never skipped), the next one while the line
+     is in the gap between two, and the last one once the page cannot scroll further ---------- */
+  var toc = $('.prose__toc');
+  if (toc) {
+    var tocA = $$('a[href^="#"]', toc), tocS = tocA.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); }), tocK = -2, tocRaf = 0;
+    var spy = function () {
+      tocRaf = 0;
+      var de = document.documentElement, line = (parseFloat(getComputedStyle(de).scrollPaddingTop) || hdrH()) + 24, k = tocS.length - 1;
+      for (var i = 0; i < tocS.length; i++) {
+        var r = tocS[i] && tocS[i].getBoundingClientRect(); if (!r || r.bottom <= line) continue;
+        k = i === 0 && r.top > line ? -1 : i; break;   // -1: the intro is still on top, nothing is marked yet
+      }
+      if (k > -1 && window.scrollY + window.innerHeight >= de.scrollHeight - 2) k = tocS.length - 1;
+      if (k === tocK) return; tocK = k;
+      tocA.forEach(function (a, j) { if (j === k) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); });
+    };
+    var spySoon = function () { if (!tocRaf) tocRaf = requestAnimationFrame(spy); };
+    window.addEventListener('scroll', spySoon, { passive: true }); window.addEventListener('resize', spySoon); spy();
+  }
 
   /* ---------- digital-catalogue strip: a photo appears only once fully loaded (its swatch colour shows meanwhile),
      so slow phones never see half-painted strips ---------- */
@@ -360,11 +412,17 @@
   var ERR = DV.err || {};
   if (ERR.area) ERR.area = ERR.area.replace(', більшою за нуль', ' більшим за нуль');   // UA grammar
   if (!ERR.send) ERR.send = SH.send;   // never a bare Telegram link
+  var tgNick = function (v) {   // '@nick', a bare 'nick' or a t.me link: the Telegram handle with its '@', else ''
+    v = String(v || '').trim();
+    if (/^@[A-Za-z0-9_]{4,}$/.test(v)) return v;
+    var m = /^(?:(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me)\/)?([A-Za-z][A-Za-z0-9_]{3,31})\/?$/i.exec(v);
+    return m ? '@' + m[1] : '';
+  };
   var fmt = function (kind, v) {
     v = v.trim(); if (!v) return '';
     if (kind === 'email') return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) ? '' : ERR.email;
-    if (kind === 'phone') return (v.charAt(0) === '@' ? /^@[A-Za-z0-9_]{4,}$/.test(v) : (v.replace(/\D/g, '').length >= 9 && /^[+\d\s()\-]+$/.test(v))) ? '' : (v.charAt(0) === '@' ? ERR.telegram : ERR.phone);
-    if (kind === 'contact') return (/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) || /^@[A-Za-z0-9_]{4,}$/.test(v) || (v.replace(/\D/g, '').length >= 9 && /^[+\d\s()\-]+$/.test(v))) ? '' : ERR.contact;
+    if (kind === 'phone') return (tgNick(v) || (v.replace(/\D/g, '').length >= 9 && /^[+\d\s()\-]+$/.test(v))) ? '' : (v.charAt(0) === '@' ? ERR.telegram : ERR.phone);
+    if (kind === 'contact') return (/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) || tgNick(v) || (v.replace(/\D/g, '').length >= 9 && /^[+\d\s()\-]+$/.test(v))) ? '' : ERR.contact;
     if (kind === 'area') { var ar = NS.parseArea(v); return ar.err === 'big' ? SH.areaBig : (ar.err ? ERR.area : ''); }
     return '';
   };
@@ -393,7 +451,8 @@
       if (!el.name || el.name === 'website' || el.type === 'submit' || el.type === 'button') return;
       if (el.type === 'checkbox') { o[el.name] = !!el.checked; return; }
       if (el.type === 'radio' && !el.checked) return;
-      o[el.name] = String(el.value || '').trim();
+      var v = String(el.value || '').trim(), k = el.getAttribute('data-kind');
+      o[el.name] = ((k === 'phone' || k === 'contact') && tgNick(v)) || v;   // a bare nick or a t.me link reaches the team as @nick
     });
     return o;
   }
@@ -576,11 +635,22 @@
     };
     var atX = function (x) { var r = sw.getBoundingClientRect(); return r.width ? (x - r.left) / r.width * 100 : cur; };
     var take = function () { used = true; if (hintRaf) { cancelAnimationFrame(hintRaf); hintRaf = 0; } };
+    // the divider glides to the finger instead of jumping with every pointer event, so sparse or uneven touch events still look smooth
+    var tgt = 50, glideRaf = 0;
+    var glide = function () {
+      glideRaf = 0;
+      var d = tgt - cur;
+      if (Math.abs(d) < 0.05) { set(tgt); return; }
+      set(cur + d * 0.45);
+      glideRaf = requestAnimationFrame(glide);
+    };
+    var aim = function (v) { tgt = clamp(v, 0, 100); if (!glideRaf) glideRaf = requestAnimationFrame(glide); };
     sw.addEventListener('pointerdown', function (e) {
       if (e.button > 0) return;
       take();
-      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, on: e.pointerType !== 'touch' };
-      if (drag.on) { set(atX(e.clientX)); sw.classList.add('is-drag'); try { sw.setPointerCapture(e.pointerId); } catch (_) {} }
+      var onKnob = !!(knob && (e.target === knob || knob.contains(e.target)));   // a finger on the round handle drags at once (the handle has touch-action: none)
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, on: e.pointerType !== 'touch' || onKnob };
+      if (drag.on) { aim(atX(e.clientX)); sw.classList.add('is-drag'); try { sw.setPointerCapture(e.pointerId); } catch (_) {} }
     });
     sw.addEventListener('pointermove', function (e) {
       if (!drag || e.pointerId !== drag.id) return;
@@ -589,14 +659,15 @@
         if (dx < 6 || dx < dy) return;
         drag.on = true; sw.classList.add('is-drag'); try { sw.setPointerCapture(e.pointerId); } catch (_) {}
       }
-      set(atX(e.clientX));
+      aim(atX(e.clientX));
     });
     var end = function () { drag = null; sw.classList.remove('is-drag'); };
-    sw.addEventListener('pointerup', end); sw.addEventListener('pointercancel', end); sw.addEventListener('lostpointercapture', end);
+    sw.addEventListener('pointerup', end); sw.addEventListener('pointercancel', end);
+    sw.addEventListener('lostpointercapture', function (e) { if (e.target === sw) end(); });   // a finger or pen starts captured by the part it lands on (.base, .done, the handle); moving the capture here fires lostpointercapture on that part, which bubbles up and must not end the drag
     if (knob) knob.addEventListener('keydown', function (e) {
       var d = { ArrowLeft: -5, ArrowDown: -5, ArrowRight: 5, ArrowUp: 5, PageDown: -20, PageUp: 20, Home: -cur, End: 100 - cur }[e.key];
       if (d === undefined) return;
-      e.preventDefault(); take(); set(cur + d);
+      e.preventDefault(); take(); tgt = clamp(cur + d, 0, 100); set(tgt);
     });
     set(50);
     // the coated side loads its picture only near the viewport (desktop 1000 px or phone 720 px wide)
@@ -708,6 +779,7 @@
     $('#skyPill').setAttribute('aria-label', SL.label + ': ' + hhmm(s.t) + ', ' + SL.phases[s.phase] + ', ' + SL.seasons[s.season]);
     $('#skyTimeVal').textContent = hhmm(s.t); $('#skyPhase').textContent = '· ' + SL.phases[s.phase]; $('#skySeasonVal').textContent = SL.seasons[s.season];
     var tr = $('#skyTime'); if (document.activeElement !== tr) tr.value = Math.round(s.t / 5) * 5 % 1440;
+    tr.setAttribute('aria-valuetext', hhmm(s.t) + ', ' + SL.phases[s.phase]);   // "20:15, сутінки", not the raw minute count
     var sg = $('#skySeason');   // built once and updated in place: rebuilding it on every tick would drop keyboard focus
     if (sg.children.length !== SL.seasons.length) sg.innerHTML = SL.seasons.map(function (n, k) { return '<button type="button" data-s="' + k + '">' + n + '</button>'; }).join('');
     Array.prototype.forEach.call(sg.children, function (b, k) { b.setAttribute('aria-pressed', s.season === k ? 'true' : 'false'); });
@@ -725,16 +797,26 @@
     if (open) { skyCtl.classList.remove('is-away'); if (toFirst) { var t = $('#skyTime'); if (t) t.focus(); } } else tickPill();
   }
   var tickRaf = 0, collide = null;
+  var ZONES = [['form,.btn,.gb__actions,.gacts,.tray', 80], ['.acc,.faqnav,.ftr__top,.ftr__bot', 16], ['.cgrid', 8]];   // what the pill keeps clear of, and by how many px (a whole FAQ list, not row by row, so the pill does not blink in and out while reading)
   function tickPillSoon() { if (!tickRaf) tickRaf = requestAnimationFrame(function () { tickRaf = 0; tickPill(); }); }
-  function tickPill() {  // never sit on top of the hero, a colour composition, a form, a button or the generator action row
+  function tickPill() {  // never sit on top of the hero, a colour composition, a form, a button, the generator action row, the catalogue grid, a FAQ list or the footer
     if (!skyCtl || skyOpen) return;
-    var pill = $('#skyPill'), pl = pill.getBoundingClientRect(), hit = false, h = hero ? hero.getBoundingClientRect() : null;
+    var pill = $('#skyPill'), pr = pill.getBoundingClientRect(), hit = false, h = hero ? hero.getBoundingClientRect() : null;
+    var tf = /^matrix\((.+)\)$/.exec(getComputedStyle(skyCtl).transform || ''), dy = tf ? parseFloat(tf[1].split(',')[5]) || 0 : 0;
+    var pl = { left: pr.left, right: pr.right, top: pr.top - dy, bottom: pr.bottom - dy };   // where the pill rests: its own "away" slide must not feed back into the decision
     if (h && h.bottom > window.innerHeight * 0.4) hit = true;
-    var near = function (r, m) { return r.right > pl.left - m && r.left < pl.right + m && r.bottom > pl.top - m && r.top < pl.bottom + m; };
+    var near = function (r, m) { return r.width > 0 && r.right > pl.left - m && r.left < pl.right + m && r.bottom > pl.top - m && r.top < pl.bottom + m; };
     if (!hit) $$('.gen__mat').forEach(function (m) { if (near(m.getBoundingClientRect(), 12)) hit = true; });
     if (!hit) {
-      if (!collide) collide = $$('form,.btn,.gb__actions,.gacts,.tray:not([hidden])');
-      for (var i = 0; i < collide.length && !hit; i++) { var c = collide[i]; if (c.offsetParent === null && getComputedStyle(c).position !== 'fixed') continue; if (near(c.getBoundingClientRect(), 80)) hit = true; }
+      if (!collide) {   // built once (again on load); nothing from the closed mobile menu, which is laid out but invisible
+        collide = [];
+        ZONES.forEach(function (z) { $$(z[0]).forEach(function (el) { if (!el.closest('#mnav')) collide.push([el, z[1]]); }); });
+      }
+      for (var i = 0; i < collide.length && !hit; i++) {
+        var c = collide[i][0];
+        if (c.hidden || (c.offsetParent === null && getComputedStyle(c).position !== 'fixed')) continue;   // the tray is listed even while it is empty and hidden
+        if (near(c.getBoundingClientRect(), collide[i][1]) && getComputedStyle(c).visibility !== 'hidden') hit = true;
+      }
     }
     if (skyCtl.contains(document.activeElement)) hit = false;   // a focused pill is never hidden from the keyboard user
     skyCtl.classList.toggle('is-away', hit);
@@ -758,6 +840,8 @@
     skyCtl.addEventListener('focusout', function (e) { var n = e.relatedTarget; if (skyOpen && n && !skyCtl.contains(n)) openSky(false); });
     window.addEventListener('scroll', tickPillSoon, { passive: true }); window.addEventListener('resize', tickPillSoon);
     window.addEventListener('load', function () { collide = null; tickPillSoon(); });
+    document.addEventListener('toggle', tickPillSoon, true);   // an opened FAQ answer moves the rows below it without a scroll
+    var trayEl = $('.tray'); if (trayEl && window.MutationObserver) new MutationObserver(tickPillSoon).observe(trayEl, { attributes: true, attributeFilter: ['hidden'] });
   }
   // QA deep links: ?t=21:40  ?season=winter|spring|summer|autumn  ?sky=night|dawn|day|golden|dusk
   (function () {
