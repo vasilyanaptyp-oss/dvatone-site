@@ -13,6 +13,48 @@ export const ROOM = {
   sun: [-0.84, 0.42, 0.34]                                           /* direction to the sun (normalised in use) */
 };
 
+/* tone curve shared by every room surface (procedural room, furnished room, coated wall) */
+export const TONE_GLSL = `
+/* Khronos PBR Neutral (as three.js) with a hue-keeping toe for the room: the shadow offset scales the colour
+   instead of being subtracted from every channel. The subtractive toe empties the blue channel of a warm
+   coating in shade and turns honey into mustard; scaled, the coating keeps the chroma of its swatches.
+   toe 0 = no shadow offset at all (identity below 0.76, as the Interiors v2 rooms): used by the furnished room. */
+vec3 dvTone(vec3 color, float keep, float toe){
+#ifdef TONE_MAPPING
+  color *= toneMappingExposure;
+  float x = min(color.r, min(color.g, color.b));
+  float off = (x < 0.08 ? x - 6.25 * x * x : 0.04) * toe;
+  float y = dot(color, vec3(0.2126, 0.7152, 0.0722));
+  color = mix(color - off, color * (max(y - off, 0.0) / max(y, 1e-5)), keep);
+  const float sc = 0.76;
+  float peak = max(color.r, max(color.g, color.b));
+  if (peak < sc) return color;
+  const float d = 1.0 - sc;
+  float np = 1.0 - d * d / (peak + d - sc);
+  color *= np / peak;
+  float g = 1.0 - 1.0 / (0.15 * (peak - np) + 1.0);
+  return mix(color, vec3(np), g);
+#else
+  return color;
+#endif
+}
+`;
+
+/* the photo frame's tone curve (Interiors v2 photo mode, photoroom.js): identity below 0.55, then a long roll-off
+   towards 0.97 that scales the three channels together, a trace of desaturation in the brightest light. The
+   furnished room uses it, so its crossfade into the photograph is seamless */
+export const TONE_PHOTO_GLSL = `
+vec3 dvTonePhoto(vec3 c){
+  const float S = 0.55; const float A = 0.97; const float D = 0.03;
+  float peak = max(c.r, max(c.g, c.b));
+  if (peak < S) return c;
+  float np = A - (A - S) * (A - S) / (peak - S + (A - S));
+  c *= np / peak;
+  float g = 1.0 - 1.0 / (D * (peak - np) + 1.0);
+  return mix(c, vec3(np), g);
+}
+`;
+
 /* GLSL shared by the room surfaces and the coated wall */
 export const ROOM_GLSL = `
 uniform vec3 uSun;
@@ -28,28 +70,7 @@ float sdBox(vec3 p, vec3 b0, vec3 b1){ vec3 c = (b0 + b1) * 0.5, e = (b1 - b0) *
 float sdVase(vec3 p){ vec2 d = vec2(length(p.xz - uVase.xy) - uVase.z, max(uBenchMax.y - p.y, p.y - uVase.w)); return min(max(d.x, d.y), 0.0) + length(max(d, 0.0)); }
 uniform float uWind;          /* time for the leaves outside the window */
 float hh2(vec2 c){ return fract(sin(dot(c, vec2(127.1, 311.7))) * 43758.5453); }
-/* Khronos PBR Neutral (as three.js) with a hue-keeping toe for the room: the shadow offset scales the colour
-   instead of being subtracted from every channel. The subtractive toe empties the blue channel of a warm
-   coating in shade and turns honey into mustard; scaled, the coating keeps the chroma of its swatches. */
-vec3 dvTone(vec3 color, float keep){
-#ifdef TONE_MAPPING
-  color *= toneMappingExposure;
-  float x = min(color.r, min(color.g, color.b));
-  float off = x < 0.08 ? x - 6.25 * x * x : 0.04;
-  float y = dot(color, vec3(0.2126, 0.7152, 0.0722));
-  color = mix(color - off, color * (max(y - off, 0.0) / max(y, 1e-5)), keep);
-  const float sc = 0.76;
-  float peak = max(color.r, max(color.g, color.b));
-  if (peak < sc) return color;
-  const float d = 1.0 - sc;
-  float np = 1.0 - d * d / (peak + d - sc);
-  color *= np / peak;
-  float g = 1.0 - 1.0 / (0.15 * (peak - np) + 1.0);
-  return mix(color, vec3(np), g);
-#else
-  return color;
-#endif
-}
+${TONE_GLSL}
 /* leaves of a tree outside the window, as seen in the window plane (z, y): soft dappled light that sways */
 float leaves(vec2 w, float pen){
   float o = 1.0;
@@ -156,7 +177,7 @@ float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 void main(){
   vec3 n = normalize(vN);
   vec3 p = vW;
-  if (uKind == 4) { gl_FragColor = vec4(dvTone(uCol, 1.0), 1.0);
+  if (uKind == 4) { gl_FragColor = vec4(dvTone(uCol, 1.0, 1.0), 1.0);
     #include <colorspace_fragment>
     return; }
   /* the left wall has the window opening */
@@ -195,7 +216,7 @@ void main(){
   /* bounce of the sun patch off the oak floor onto the lower walls */
   col += alb * uSunCol * 0.018 * exp(-max(p.y - uRoomBox.z, 0.0) / 700.0) * (1.0 - abs(n.y));
   col = mix(uFog, col, uRFade);
-  gl_FragColor = vec4(dvTone(col, 1.0), 1.0);
+  gl_FragColor = vec4(dvTone(col, 1.0, 1.0), 1.0);
   #include <colorspace_fragment>
 }`;
 

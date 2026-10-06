@@ -1644,3 +1644,13 @@ input[type=search]::-webkit-search-cancel-button:hover{opacity:1}
 .hero[data-story-room] .hero__cap{visibility:visible}
 .hero__cap a{pointer-events:auto;font-size:12px;letter-spacing:var(--ls-caps);text-transform:uppercase;font-weight:600;color:var(--copper-hi);border-bottom:1px solid currentColor;padding-block:12px 4px}
 @media (prefers-reduced-motion:reduce){.hero-track{height:auto}.hero__cap{display:none}}
+
+/* interiors 3D stage: the whole room fits on large screens */
+@media (min-width:761px){.rooms__stage--3d{max-width:min(100%,calc(78vh * 16 / 9));margin-inline:auto}}
+
+/* application before/after: draggable (06.10). The visible handle stays .edge::after; .app__knob is the focusable hit target on top of it. */
+.app__vis[data-sweep]{touch-action:pan-y;cursor:ew-resize;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.app__knob{position:absolute;top:50%;left:var(--p,50%);z-index:3;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;cursor:ew-resize;outline:none}
+.app__knob:focus-visible{box-shadow:0 0 0 3px var(--copper-hi)}
+.app__vis.is-drag .edge{box-shadow:0 0 30px 4px rgba(220,186,148,.75)}
+.app__vis .app__cap{pointer-events:none}

@@ -556,15 +556,69 @@
     });
   });
 
-  /* ---------- application sweep (scroll-linked) ---------- */
-  var sw = $('[data-sweep]');
-  if (sw && !reduce) {
-    var sweep = function () {
-      var r = sw.getBoundingClientRect(), vh = window.innerHeight, k = clamp((vh * 0.9 - r.top) / (vh * 0.75), 0, 1);
-      sw.style.setProperty('--p', (14 + k * 82).toFixed(1) + '%');
+  /* ---------- application before/after: drag anywhere on the picture (mouse, pen, horizontal swipe), arrow keys on the
+     handle; one short hint sweep when it first comes into view. Vertical swipes keep scrolling the page (touch-action: pan-y). ---------- */
+  $$('[data-sweep]').forEach(function (sw) {
+    var knob = $('.app__knob', sw), cur = 50, drag = null, used = false, hintRaf = 0;
+    var set = function (v) {
+      cur = clamp(v, 0, 100);
+      sw.style.setProperty('--p', cur.toFixed(1) + '%');
+      if (knob) { knob.setAttribute('aria-valuenow', String(Math.round(cur))); knob.setAttribute('aria-valuetext', Math.round(cur) + '%'); }
     };
-    var swRaf = 0; window.addEventListener('scroll', function () { if (!swRaf) swRaf = requestAnimationFrame(function () { swRaf = 0; sweep(); }); }, { passive: true }); sweep();
-  }
+    var atX = function (x) { var r = sw.getBoundingClientRect(); return r.width ? (x - r.left) / r.width * 100 : cur; };
+    var take = function () { used = true; if (hintRaf) { cancelAnimationFrame(hintRaf); hintRaf = 0; } };
+    sw.addEventListener('pointerdown', function (e) {
+      if (e.button > 0) return;
+      take();
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, on: e.pointerType !== 'touch' };
+      if (drag.on) { set(atX(e.clientX)); sw.classList.add('is-drag'); try { sw.setPointerCapture(e.pointerId); } catch (_) {} }
+    });
+    sw.addEventListener('pointermove', function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      if (!drag.on) {   // touch: start only on a clearly horizontal move, so a vertical swipe still scrolls the page
+        var dx = Math.abs(e.clientX - drag.x), dy = Math.abs(e.clientY - drag.y);
+        if (dx < 6 || dx < dy) return;
+        drag.on = true; sw.classList.add('is-drag'); try { sw.setPointerCapture(e.pointerId); } catch (_) {}
+      }
+      set(atX(e.clientX));
+    });
+    var end = function () { drag = null; sw.classList.remove('is-drag'); };
+    sw.addEventListener('pointerup', end); sw.addEventListener('pointercancel', end); sw.addEventListener('lostpointercapture', end);
+    if (knob) knob.addEventListener('keydown', function (e) {
+      var d = { ArrowLeft: -5, ArrowDown: -5, ArrowRight: 5, ArrowUp: 5, PageDown: -20, PageUp: 20, Home: -cur, End: 100 - cur }[e.key];
+      if (d === undefined) return;
+      e.preventDefault(); take(); set(cur + d);
+    });
+    set(50);
+    // the coated side loads its picture only near the viewport (desktop 1000 px or phone 720 px wide)
+    var done = $('.done', sw);
+    if (done && done.getAttribute('data-bg')) {
+      var loadBg = function () {
+        var big = sw.clientWidth * (window.devicePixelRatio || 1) > 800;
+        done.style.backgroundImage = 'url(' + (done.getAttribute(big ? 'data-bg' : 'data-bg-m') || done.getAttribute('data-bg')) + ')';
+      };
+      if ('IntersectionObserver' in window) {
+        var lio = new IntersectionObserver(function (en) { if (en[0].isIntersecting) { lio.disconnect(); loadBg(); } }, { rootMargin: '800px 0px' });
+        lio.observe(sw);
+      } else loadBg();
+    }
+    if (reduce || !('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function (en) {
+      if (!en[0].isIntersecting) return;
+      io.disconnect();
+      if (used) return;
+      var t0 = 0, dur = 1700;
+      var step = function (t) {
+        if (used) return;
+        if (!t0) t0 = t;
+        var k = Math.min(1, (t - t0) / dur);
+        set(50 - 18 * Math.sin(k * Math.PI * 2) * (1 - k * 0.35));
+        if (k < 1) hintRaf = requestAnimationFrame(step); else { hintRaf = 0; set(50); }
+      };
+      setTimeout(function () { if (!used) hintRaf = requestAnimationFrame(step); }, 350);
+    }, { threshold: 0.6 });
+    io.observe(sw);
+  });
 
   /* =====================================================
      Live sky: tones follow local time of day and season.

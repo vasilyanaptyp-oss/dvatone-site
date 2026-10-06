@@ -30,6 +30,8 @@ const CSS = `
 `;
 const CSS_H2 = `
 .dv3d--hero2,.dv3d--hero2>canvas{touch-action:pan-y pinch-zoom}
+.dv3d__photo{position:absolute;inset:0;z-index:1;opacity:0;pointer-events:none;transform-origin:0 0;will-change:opacity,transform}
+.dv3d__room{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1;opacity:0;pointer-events:none;user-select:none}
 .dv3d__live{position:absolute;right:max(16px,env(safe-area-inset-right));top:calc(var(--hdr,64px) + 14px);z-index:3;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px 0 12px;border:1px solid rgba(237,230,218,.34);border-radius:999px;background:rgba(18,16,14,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#ede6da;font:600 11px/1 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;pointer-events:auto}
 .dv3d__live svg{width:16px;height:16px;fill:currentColor}
 .dv3d__live:focus-visible{outline:2px solid #ede6da;outline-offset:3px}
