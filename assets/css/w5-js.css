@@ -1,0 +1,5 @@
+/* w5-js.css (wave 5, owner: js; W5_SPEC 0.4.5 and 5.5). Loaded on every page after site.css, so every rule here stays under .cxd:
+   the shade dialog of the catalogue page, filled by assets/js/catalogue.js.
+   The DV collection is a light block now (sec--light, typographic tiles on --paper-2). A DV shade without a photo shows the same
+   light tile in the dialog (its code, weight 200, lower left), not the dark gradient tile of site.css. */
+.cxd__neutral{background:var(--paper-2);color:var(--tl)}

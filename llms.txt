@@ -1,0 +1,42 @@
+# Dvatone
+
+> Dvatone is a Kyiv brand of multicolour paint (multicolour decorative coating) for interiors. Its multicolour mosaic texture forms as the paint is sprayed on. The site is in Ukrainian at the root and in English under /en/.
+
+Facts from Dvatone (see the FAQ page):
+
+- Water-based and odour-free; VOC content below 30 g/l.
+- Highly wear-resistant and washable; it stands up to regular wet cleaning.
+- A damaged spot can be repaired locally; once dry it blends into the wall with no visible seams.
+- Base consumption from 200 ml/m². Made to order from 2 litres, in 1-litre steps.
+- Any custom multicolour composition can be matched to NCS, RAL or Sikkens 5051. The DV collection was created with Ukrainian designers.
+- The technological base is original Belgian components made by Trimetal, part of the AkzoNobel group. These are the base components of the Dialcolor multicolour coating.
+- Recommended application: Rigo professional compressors (Italy) with a 2.5 mm nozzle. Dvatone offers turnkey application, on-site training and technical support.
+- Base components are kept in stock in Ukraine; paint is shipped to any country.
+- Contact: +38 098 698 69 90, Telegram bot @Dvatone_bot (https://t.me/Dvatone_bot), Kyiv, Ukraine.
+
+## Pages in English
+
+- [Home](https://vasylian.com/dvatone-site/en/): the coating, the catalogue, the generator, interiors and the Designer Box
+- [Colour catalogue](https://vasylian.com/dvatone-site/en/catalogue.html): the colour fan and the DV collection
+- [Composition generator](https://vasylian.com/dvatone-site/en/generator.html): build a composition and try it on a wall in a room
+- [Technology](https://vasylian.com/dvatone-site/en/technology.html): properties, how the mosaic forms, comparison with ordinary paint
+- [Designer Box](https://vasylian.com/dvatone-site/en/designer-box.html): the sample set for designers and architects
+- [Professional application](https://vasylian.com/dvatone-site/en/service.html)
+- [FAQ](https://vasylian.com/dvatone-site/en/faq.html)
+- [Contact](https://vasylian.com/dvatone-site/en/contacts.html)
+
+## Сторінки українською
+
+- [Головна](https://vasylian.com/dvatone-site/): мультикольорове декоративне покриття, каталог, генератор, інтер’єри, Designer Box
+- [Каталог](https://vasylian.com/dvatone-site/catalogue.html): колірне віяло й колекція DV
+- [Генератор композицій](https://vasylian.com/dvatone-site/generator.html): складіть композицію й приміряйте її на стіні
+- [Технологія](https://vasylian.com/dvatone-site/technology.html): характеристики, як утворюється мозаїка, порівняння зі звичайною фарбою
+- [Designer Box](https://vasylian.com/dvatone-site/designer-box.html): набір зразків для дизайнерів і архітекторів
+- [Професійне нанесення](https://vasylian.com/dvatone-site/service.html)
+- [Питання та відповіді](https://vasylian.com/dvatone-site/faq.html)
+- [Контакти](https://vasylian.com/dvatone-site/contacts.html)
+
+## Optional
+
+- [Privacy policy](https://vasylian.com/dvatone-site/en/privacy.html)
+- [Terms of use](https://vasylian.com/dvatone-site/en/terms.html)

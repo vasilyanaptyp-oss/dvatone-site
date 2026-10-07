@@ -37,7 +37,7 @@
    no WebGL2 = poster. Assets per room: interior2/<room>.glb (meshopt), -lm/-sun/-env.webp, <room>.json; shared textures
    interior2/tex/*.webp and interior2/exterior.webp. */
 import { createStage, createBaker, bakeGranules, normColors, clamp, crossfade, THREE_VERSION } from './core.js';
-import { mountPhoto, photoFrame, photoCamera } from './photoroom.js';
+import { mountPhoto, photoFrame, photoCamera, PHOTO_ROOMS, PHOTO_GROUPS } from './photoroom.js';
 
 const BASE = import.meta.url;
 const ASSET = new URL('./interior2/', BASE).href;
@@ -380,7 +380,11 @@ function damp(cur, target, vel, smoothTime, dt) {
 const halton = (i, b) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
 
 /* ------------------------------------------------------------------ module */
-export const DVInterior2 = { mount, photoFrame, photoCamera, rooms: ROOMS.slice(), modes: ['photo', 'live'] };
+/* photoRooms: [{ id, group: 'residential' | 'public', name: { uk, en }, ready }] (photo mode, setRoom(id));
+   groups: [{ id, name: { uk, en }, rooms: [ready ids] }]; rooms: the live mode's rooms */
+const photoRooms = PHOTO_ROOMS.map(r => ({ id: r.id, group: r.group, name: Object.assign({}, r.name), ready: r.ready }));
+const groups = PHOTO_GROUPS.map(g => ({ id: g.id, name: Object.assign({}, g.name), rooms: photoRooms.filter(r => r.group === g.id && r.ready).map(r => r.id) }));
+export const DVInterior2 = { mount, photoFrame, photoCamera, photoRooms, groups, rooms: ROOMS.slice(), modes: ['photo', 'live'] };
 if (typeof window !== 'undefined') window.DVInterior2 = DVInterior2;
 
 function mount(el, opts = {}) {

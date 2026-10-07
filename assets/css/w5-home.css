@@ -1,0 +1,100 @@
+/* Dvatone, wave 5 (Viktor 07.10): home owner (_src/build_home.py). Loaded on every page after site.css (layout.page(),
+   config.W5_CSS), so every rule is scoped to a section id of the home page: #technology, #catalogue, #interiors,
+   #designer-box, #faq. New class names start with h (hproc, hdv, hbox); .rsel is the room selector of common.room_selector()
+   as it sits in #interiors (the generator styles its own copy under .gx5). site.css is not edited. */
+
+/* ---- #technology: «Як утворюється мозаїка», the compact process of W5_SPEC 4.2 B1 (three stills of the client's
+   application film). Thin numbers and spacing only, no borders; between .specs and .origin */
+#technology .hproc{margin-top:clamp(64px,7vw,112px)}
+#technology .hproc__head{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:var(--s-4) clamp(32px,6vw,112px);align-items:end}
+#technology .hproc__head h3{font-weight:300;font-size:clamp(30px,2.9vw,48px);line-height:1.08;letter-spacing:var(--ls-head);text-wrap:balance}
+#technology .hproc__head h3 em{color:var(--mute-l)}
+#technology .hproc__head p{font-size:var(--fs-lede);line-height:1.65;color:var(--ml);max-width:48ch}
+#technology .hproc__l{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(20px,2.4vw,40px);margin-top:clamp(32px,3.6vw,60px)}
+#technology .hproc__l>li{min-width:0}
+#technology .hproc__l img{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:var(--r-1);background:var(--paper-2)}
+#technology .hproc__n{display:block;margin-top:var(--s-5);font-size:clamp(36px,3.2vw,56px);font-weight:200;line-height:1;letter-spacing:-.04em;color:var(--copper-lo);font-variant-numeric:tabular-nums}
+#technology .hproc__l h4{margin-top:var(--s-4);font-size:var(--fs-h4);font-weight:500;line-height:1.3;letter-spacing:-.01em}
+#technology .hproc__l p{margin-top:var(--s-3);font-size:15px;line-height:1.6;color:var(--ml);max-width:42ch}
+#technology .hproc__foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:var(--s-4) var(--s-6);margin-top:clamp(28px,3vw,48px)}
+#technology .hproc__src{font-size:12px;line-height:1.5;color:var(--ml)}
+@media (max-width:900px){#technology .hproc__head{grid-template-columns:minmax(0,1fr)}}
+/* phones: one swipeable row (the next still peeks in), so the three steps stay as compact as the rest of the section */
+@media (max-width:700px){
+  #technology .hproc__l{display:flex;gap:var(--s-4);overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-inline:calc(var(--pad) * -1);padding-inline:var(--pad);scroll-padding-inline:var(--pad)}
+  #technology .hproc__l::-webkit-scrollbar{display:none}
+  #technology .hproc__l>li{flex:0 0 min(80vw,340px);scroll-snap-align:start}
+  #technology .hproc__n{margin-top:var(--s-4)}
+  #technology .hproc__foot{align-items:flex-start;flex-direction:column}
+}
+
+/* ---- #catalogue: the DV strip under the colour fan (W5_SPEC 5.3): the .sws strip with real coating photos, tiles 4:5,
+   caption = code + name, as on the catalogue's DV cards (code in mono copper, the name under it) */
+#catalogue .hdv img{aspect-ratio:4/5}
+#catalogue .hdv .sws__ph{position:relative;background:var(--paper-2)}
+/* a faint inner edge keeps the palest samples (DV 011, DV 056) apart from the light page */
+#catalogue .hdv .sws__ph::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1px rgba(25,21,17,.07);pointer-events:none}
+#catalogue .hdv figcaption{flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:3px;padding-top:12px}
+#catalogue .hdv figcaption b{font-family:var(--f-mono);font-size:12px;font-weight:500;letter-spacing:.02em;color:var(--copper-lo)}
+#catalogue .hdv figcaption span{font-size:14.5px;line-height:1.35;color:var(--tl);transition:color var(--dur-1)}
+@media (hover:hover){#catalogue .hdv>a:hover figcaption span{color:var(--copper-lo)}}
+
+/* ---- #interiors: the room selector (W5_SPEC 3.3 / 3.4) in the first concept's style: text tabs over a hairline, no pills.
+   The group switch sits above the tabs on the left, the composition chips stay on the right. */
+#interiors .rsel{display:flex;flex-direction:column;align-items:flex-start;gap:var(--s-2);min-width:0}
+#interiors .rsel__g{display:flex;gap:clamp(20px,2.2vw,36px)}
+#interiors .rsel__gb,#interiors .rsel__cap{position:relative;display:inline-flex;align-items:center;min-height:44px;padding:0;
+  font-size:11px;letter-spacing:.18em;text-transform:uppercase;font-weight:600;line-height:1.35;color:var(--ml)}
+#interiors .rsel__gb{cursor:pointer;transition:color var(--dur-1)}
+#interiors .rsel__gb::after{content:"";position:absolute;left:0;right:.18em;bottom:9px;height:1px;background:currentColor;transform:scaleX(0);transform-origin:left;transition:transform var(--dur-2) var(--ease)}
+#interiors .rsel__gb[aria-pressed="true"]{color:var(--tl)}
+#interiors .rsel__gb[aria-pressed="true"]::after{transform:none}
+#interiors .rsel__r{display:flex;gap:clamp(20px,3vw,44px);max-width:100%;border-bottom:1px solid var(--line-l)}
+#interiors .rsel__t{display:inline-flex;align-items:baseline;gap:10px;min-height:44px;padding:10px 0 14px;margin-bottom:-1px;
+  border-bottom:1px solid transparent;font-size:15px;line-height:1.3;color:var(--ml);white-space:nowrap;cursor:pointer;
+  transition:color var(--dur-1),border-color var(--dur-1)}
+#interiors .rsel__t i{font-style:normal;font-size:10.5px;font-weight:600;letter-spacing:.14em;color:var(--copper-lo);font-variant-numeric:tabular-nums}
+#interiors .rsel__t[aria-selected="true"]{color:var(--tl);border-bottom-color:var(--tl)}
+#interiors .rsel__t[hidden]{display:none}
+@media (hover:hover){#interiors .rsel__gb:hover,#interiors .rsel__t:hover{color:var(--tl)}}
+@media (min-width:761px){#interiors .rooms__ui{align-items:flex-end}}
+/* phones: the switch takes the full width in two equal halves; the tabs are one row that scrolls sideways with an edge fade */
+@media (max-width:760px){
+  #interiors .rsel{align-items:stretch;gap:var(--s-3)}
+  #interiors .rsel__g{display:grid;grid-template-columns:1fr 1fr;gap:var(--s-4)}
+  #interiors .rsel__gb{justify-content:center;text-align:center;letter-spacing:.14em;text-wrap:balance;padding-block:6px}
+  #interiors .rsel__gb::after{left:50%;right:auto;width:min(100%,64px);margin-left:max(-50%,-32px);bottom:2px;transform-origin:center}
+  /* a scrolling row clips at its padding box, so the hairline is drawn inside it and the selected tab's line lies over it */
+  #interiors .rsel__r{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+    margin-inline:calc(var(--pad) * -1);padding-inline:var(--pad) calc(var(--pad) + 28px);max-width:none;border-bottom:0;box-shadow:inset 0 -1px 0 var(--line-l);
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 var(--fade-l),#000 calc(100% - var(--fade-r)),transparent 100%);
+    mask-image:linear-gradient(90deg,transparent 0,#000 var(--fade-l),#000 calc(100% - var(--fade-r)),transparent 100%);
+    animation:rowFade linear both;animation-timeline:scroll(self inline)}
+  #interiors .rsel__r::-webkit-scrollbar{display:none}
+  #interiors .rsel__t{flex:none;margin-bottom:0}
+}
+@supports not (animation-timeline:scroll()){
+  @media (max-width:760px){#interiors .rsel__r{-webkit-mask-image:none;mask-image:none;animation:none}}
+}
+
+/* ---- #designer-box: real photos only, no 3D (W5_SPEC 6.2). A mosaic without a frame: A (the open box, 4:5) spans two rows,
+   B (the colour fan in its case, a real cut-out photo) and C (the closed box) are square. A and C are marked places until their
+   photos arrive; when a place returns nothing (photo slots off), the remaining tiles fill the mosaic. */
+#designer-box .dbox__photos{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);grid-template-rows:repeat(2,minmax(0,1fr));
+  gap:clamp(8px,1vw,16px);aspect-ratio:13/10;min-width:0}
+#designer-box .hbox{width:100%;height:100%;min-width:0;min-height:0;margin:0;aspect-ratio:auto!important;overflow:hidden}
+#designer-box .hbox--a{grid-row:1/3}
+#designer-box .hbox--b{background:#f6f4f0}
+#designer-box .hbox--b img{display:block;width:100%;height:100%;object-fit:contain;padding:9%}
+#designer-box .dbox__photos>:first-child:nth-last-child(2),#designer-box .dbox__photos>:first-child:nth-last-child(2)~*{grid-row:1/3}
+#designer-box .dbox__photos>:only-child{grid-column:1/-1;grid-row:1/3}
+/* phones: the open box on top, the fan and the closed box side by side under it (a marked place keeps room for its label) */
+@media (max-width:560px){
+  #designer-box .dbox__photos{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;aspect-ratio:auto}
+  #designer-box .hbox{height:auto}
+  #designer-box .hbox--a{grid-column:1/-1;grid-row:auto;aspect-ratio:4/3!important}
+  #designer-box .hbox--b,#designer-box .hbox--c{aspect-ratio:1/1!important}
+  #designer-box .dbox__photos>:first-child:nth-last-child(2),#designer-box .dbox__photos>:first-child:nth-last-child(2)~*{grid-column:auto;grid-row:auto;aspect-ratio:1/1!important}
+  #designer-box .dbox__photos>:only-child{grid-column:1/-1;grid-row:auto;aspect-ratio:4/3!important}
+}

@@ -1,4 +1,4 @@
-/* DVATONE site.js: header, reveal, hero loupe, fan, generator teaser, rooms, forms, video, live sky.
+/* DVATONE site.js: header, reveal, hero loupe, fan, generator teaser, forms, video, live sky, shared helpers (window.DVATONE).
    Plain JS, no libraries. Page data comes from window.DV (set inline by the page). */
 (function () {
   'use strict';
@@ -139,13 +139,26 @@
     return new Promise(function (res) { setTimeout(res, 0); });
   };
   var hdrH = function () { return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hdr')) || 70; };
-  var stickyEls = null;
-  NS.topInset = function () {   // bottom edge of whatever is pinned at the top right now: the header and a sticky generator preview
+  /* The generator's colour preview ([data-dv-sticky-preview], #dvPrev) is sticky under the header. On phones and tablets it sits
+     above the controls, which scroll under it, so it is part of the top inset. On desktop it is a column beside the controls
+     (the W5 studio): nothing scrolls under it, and counting it would send every focus and anchor to the bottom of the screen. */
+  var PIN = '[data-dv-sticky-preview]';
+  var beside = function (el, r) {   // another child of the same parent lies next to it: clear of it sideways, level with it vertically
+    var p = el.parentElement, c, q;
+    if (!p) return false;
+    for (c = p.firstElementChild; c; c = c.nextElementSibling) {
+      if (c === el) continue;
+      q = c.getBoundingClientRect();
+      if (q.width > 0 && q.height > 0 && q.top < r.bottom && q.bottom > r.top && (q.left >= r.right - 1 || q.right <= r.left + 1)) return true;
+    }
+    return false;
+  };
+  var overhead = function (el, r) { return r.height > 0 && r.height < window.innerHeight * 0.75 && !beside(el, r); };   // a bar over the controls (a side column, or a preview taller than the screen, is not one)
+  NS.topInset = function () {   // bottom edge of whatever is pinned at the top right now: the header and a sticky generator preview above the controls
     var inset = hdrH();
-    if (!stickyEls) stickyEls = $$('.gframe,.gc__stage,.gb .gen__mat,.ga__easel');
-    stickyEls.forEach(function (el) {
+    $$(PIN).forEach(function (el) {
       var cs = getComputedStyle(el); if (cs.position !== 'sticky') return;
-      var r = el.getBoundingClientRect(); if (r.height > 0 && r.top <= (parseFloat(cs.top) || 0) + 2 && r.bottom > 0) inset = Math.max(inset, r.bottom);
+      var r = el.getBoundingClientRect(); if (r.top <= (parseFloat(cs.top) || 0) + 2 && r.bottom > 0 && overhead(el, r)) inset = Math.max(inset, r.bottom);
     });
     return inset;
   };
@@ -158,18 +171,18 @@
   };
   (function () {   // JS-owned mobile CSS: scroll padding under the pinned bars, keyboard-open state, loupe-free touch
     var st = document.createElement('style'); st.setAttribute('data-dv-ux', '');
-    st.textContent = '@media (max-width:1100px){html[data-dv-kbd] .gframe,html[data-dv-kbd] .gc__stage,html[data-dv-kbd] .gb .gen__mat{position:static!important}}';
+    st.textContent = '@media (max-width:1099.98px){html[data-dv-kbd] ' + PIN + '{position:static!important}}';   // one-column generator (below 1100 px): the keyboard needs the room
     document.head.appendChild(st);
     var pad = 0, padRaf = 0;
     var upd = function () {
-      padRaf = 0; var v = hdrH();   // header plus any sticky preview, whether or not it is stuck right now: a focused control must never end up behind it
-      $$('.gframe,.gc__stage,.gb .gen__mat').forEach(function (el) { var cs = getComputedStyle(el), h = el.getBoundingClientRect().height; if (cs.position === 'sticky' && h > 0) v = Math.max(v, (parseFloat(cs.top) || 0) + h); });
+      padRaf = 0; var v = hdrH();   // header plus a sticky preview above the controls, whether or not it is stuck right now: a focused control must never end up behind it
+      $$(PIN).forEach(function (el) { var cs = getComputedStyle(el), r = el.getBoundingClientRect(); if (cs.position === 'sticky' && overhead(el, r)) v = Math.max(v, (parseFloat(cs.top) || 0) + r.height); });
       v = Math.round(v + 12);
       if (v !== pad) { pad = v; document.documentElement.style.scrollPaddingTop = v + 'px'; }
     };
     var soon = function () { if (!padRaf) padRaf = requestAnimationFrame(upd); };
     window.addEventListener('resize', soon); window.addEventListener('load', soon); soon();
-    if (window.ResizeObserver) { var ro = new ResizeObserver(soon); $$('.gframe,.gc__stage,.gb .gen__mat').forEach(function (e) { ro.observe(e); }); }
+    if (window.ResizeObserver) { var ro = new ResizeObserver(soon); $$(PIN).forEach(function (e) { ro.observe(e); }); }
     var vv = window.visualViewport;   // on-screen keyboard: the visual viewport shrinks well below the layout viewport
     if (vv && window.matchMedia && matchMedia('(pointer:coarse)').matches) {
       var kb = function () { var on = vv.height < window.innerHeight * 0.72 && /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || ''); if (on !== kb.on) { kb.on = on; document.documentElement.toggleAttribute('data-dv-kbd', on); soon(); } };
@@ -186,7 +199,7 @@
 
   /* ---------- header + mobile nav (modal sheet: inert page behind, Tab trapped, focus returned) ---------- */
   var hdr = $('#hdr'), burger = $('.burger'), mnav = $('#mnav'), menuOpen = false, inerted = [];
-  var hdrY = 0, hdrPins = $$('.gframe,.gc__stage,.gb .gen__mat,.ga__easel,.gb__stage,.gc__main');
+  var hdrY = 0, hdrPins = $$(PIN);
   var keepHdr = function () {   // the bar stays: desktop layout, keyboard focus inside it, or a generator preview pinned under it (hiding would open a see-through gap above the preview)
     if (!burger || getComputedStyle(burger).display === 'none') return true;
     var a = document.activeElement;
@@ -346,14 +359,14 @@
   }
 
   /* ---------- colour fan ---------- */
-  var stage = $('[data-tilt]');
-  if (stage) {
-    var fan = $('#fanPhoto'), cs = $('#casePhoto'), hots = $('#fanHots');
+  var stage = $('[data-tilt]'), fan = $('#fanPhoto'), cs = $('#casePhoto'), hots = $('#fanHots');
+  if (stage && fan && cs) {   // the fan and its case are both on the page (the hot spots are optional)
     $$('.cat__tabs button', stage).forEach(function (b) {
       b.addEventListener('click', function () {
         var v = b.getAttribute('data-view');
         $$('.cat__tabs button', stage).forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
-        fan.classList.toggle('is-off', v !== 'fan'); cs.classList.toggle('is-off', v !== 'case'); hots.style.opacity = v === 'fan' ? 1 : 0; hots.style.transition = 'opacity .5s';
+        fan.classList.toggle('is-off', v !== 'fan'); cs.classList.toggle('is-off', v !== 'case');
+        if (hots) { hots.style.opacity = v === 'fan' ? 1 : 0; hots.style.transition = 'opacity .5s'; }
       });
     });
     if (!reduce && window.matchMedia('(hover:hover)').matches) {
@@ -422,7 +435,7 @@
     else paint();
   }
 
-  /* interiors: see rooms.js (photo-based wall recolouring) */
+  /* interiors: the home page's own module script (build_home.py) drives assets/3d/interior2.js; the generator's room view lives in generator.js */
 
   /* ---------- forms: validation, then delivery (deliver) ----------
      data-need="name contact consent"  required fields (by input name; "consent" is the checkbox)
@@ -818,16 +831,16 @@
     if (open) { skyCtl.classList.remove('is-away'); if (toFirst) { var t = $('#skyTime'); if (t) t.focus(); } } else tickPill();
   }
   var tickRaf = 0, collide = null;
-  var ZONES = [['form,.btn,.gb__actions,.gacts,.tray', 80], ['.acc,.faqnav,.ftr__top,.ftr__bot', 16], ['.cgrid,.sws,.leaves,.link-arrow,.vplay', 8]];   // what the pill keeps clear of, and by how many px (a whole FAQ list, not row by row, so the pill does not blink in and out while reading)
+  var ZONES = [['form,.btn,.tray', 80], ['.acc,.faqnav,.ftr__top,.ftr__bot', 16], ['.cgrid,.sws,.leaves,.link-arrow,.vplay,.studio__panel', 8]];   // what the pill keeps clear of, and by how many px (a whole FAQ list or generator panel, not row by row, so the pill does not blink in and out while reading)
   function tickPillSoon() { if (!tickRaf) tickRaf = requestAnimationFrame(function () { tickRaf = 0; tickPill(); }); }
-  function tickPill() {  // never sit on top of the hero, a colour composition, a form, a button, the generator action row, the catalogue grid, a sample strip, an arrow link, a video, a FAQ list or the footer
+  function tickPill() {  // never sit on top of the hero, a colour composition, a form, a button, the generator's controls, the catalogue grid, a sample strip, an arrow link, a video, a FAQ list or the footer
     if (!skyCtl || skyOpen) return;
     var pill = $('#skyPill'), pr = pill.getBoundingClientRect(), hit = false, h = hero ? hero.getBoundingClientRect() : null;
     var tf = /^matrix\((.+)\)$/.exec(getComputedStyle(skyCtl).transform || ''), dy = tf ? parseFloat(tf[1].split(',')[5]) || 0 : 0;
     var pl = { left: pr.left, right: pr.right, top: pr.top - dy, bottom: pr.bottom - dy };   // where the pill rests: its own "away" slide must not feed back into the decision
     if (h && h.bottom > window.innerHeight * 0.4) hit = true;
     var near = function (r, m) { return r.width > 0 && r.right > pl.left - m && r.left < pl.right + m && r.bottom > pl.top - m && r.top < pl.bottom + m; };
-    if (!hit) $$('.gen__mat').forEach(function (m) { if (near(m.getBoundingClientRect(), 12)) hit = true; });
+    if (!hit) $$('.gen__mat,' + PIN).forEach(function (m) { if (near(m.getBoundingClientRect(), 12)) hit = true; });   // the composition: texture or room view
     if (!hit) {
       if (!collide) {   // built once (again on load); nothing from the closed mobile menu, which is laid out but invisible
         collide = [];

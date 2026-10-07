@@ -1,5 +1,7 @@
-/* Named DV collection, taken from the client's own Telegram bot text. Only DV 033 has a real photo (assets/img/dv033.webp);
-   no hex values are known for the DV colours, so none are shown. */
+/* Named DV collection, taken from the client's own Telegram bot text (names and descriptions are never invented).
+   Photos: "photo" below is the fallback; scans processed by _src/make_dv_photos.py (assets/data/dv-photos.json) win over it,
+   and codes known only from scans are added by the build without a name (common.dv_collection(), W5_SPEC 0.4.2).
+   No hex values are known for the DV colours, so none are shown. */
 window.DV_COLLECTION=[
  {
   "code": "DV 033",
@@ -56,8 +58,8 @@ window.DV_COLLECTION=[
    "uk": "Теплий пісок"
   },
   "desc": {
-   "uk": "М’який бежевий відтінок із мінеральною глибиною, фактура висушеного сонцем пісковика.",
-   "en": "A soft beige with mineral depth, a texture like sun-dried sandstone."
+   "uk": "М’який бежевий відтінок із глибиною каменю, фактура висушеного сонцем пісковика.",
+   "en": "A soft beige with the depth of stone, a texture like sun-dried sandstone."
   },
   "photo": null
  },

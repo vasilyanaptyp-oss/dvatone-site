@@ -28,16 +28,100 @@ import { createStage, createBaker, bakeGranules, normColors, clamp, crossfade } 
 const ASSET = new URL('./interior2/photo/', import.meta.url).href;
 const POSTER = new URL('./interior2/', import.meta.url).href;
 const CELL_M = 0.0021;                  /* granule lattice cell at grain 1 (as the live rooms and v1) */
-const ROOMS = ['living', 'bedroom', 'hallway'];
-const VIEWS = { living: ['living-d', 'living-p'], bedroom: ['bedroom-d', 'bedroom-p'], hallway: ['hallway-d', 'hallway-p'], 'hero-end': ['hero-d', 'hero-p'] };
+const COAT = new URL('./interior2/coat/', import.meta.url).href;
+const STRUCTURE = 'dv018';              /* the default fleck structure (from the DV 018 scan); others: setState({ structure }) */
+/* albedo tile from a real fleck structure: each fleck's rank u picks the composition colour (sorted dark to light) whose
+   cumulative share contains it; a faint rim where the neighbour is another colour; a fine mottle inside the flecks */
+const SCAN_FRAG = `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D tRank; uniform vec2 uTexel; uniform vec3 uCol[6]; uniform float uCum[6]; uniform int uN;
+vec3 pickCol( float u ) { vec3 c = uCol[0]; for ( int i = 1; i < 6; i ++ ) { if ( i < uN && u > uCum[i - 1] ) c = uCol[i]; } return c; }
+float h21( vec2 p ) { vec3 p3 = fract( vec3( p.xyx ) * 0.1031 ); p3 += dot( p3, p3.yzx + 33.33 ); return fract( ( p3.x + p3.y ) * p3.z ); }
+void main() {
+  float u = texture( tRank, vUv ).r;
+  vec3 c = pickCol( u );
+  float e = 0.0;
+  e += step( 0.0001, distance( pickCol( texture( tRank, vUv + vec2( uTexel.x, 0.0 ) ).r ), c ) );
+  e += step( 0.0001, distance( pickCol( texture( tRank, vUv - vec2( uTexel.x, 0.0 ) ).r ), c ) );
+  e += step( 0.0001, distance( pickCol( texture( tRank, vUv + vec2( 0.0, uTexel.y ) ).r ), c ) );
+  e += step( 0.0001, distance( pickCol( texture( tRank, vUv - vec2( 0.0, uTexel.y ) ).r ), c ) );
+  c *= ( 1.0 - 0.05 * e * 0.25 ) * ( 1.0 + 0.05 * ( h21( floor( vUv / uTexel ) ) - 0.5 ) );
+  gl_FragColor = vec4( c, 1.0 );
+}`;
+const structures = new Map();
+function loadStructure(T, id) {
+  if (!structures.has(id)) {
+    const p = Promise.all([
+      fetch(COAT + id + '.json').then(r => { if (!r.ok) throw new Error('coat ' + id); return r.json(); }),
+      new Promise((res, rej) => new T.TextureLoader().load(COAT + id + '.webp', t => {
+        t.colorSpace = T.NoColorSpace; t.minFilter = t.magFilter = T.NearestFilter; t.generateMipmaps = false;
+        t.wrapS = t.wrapT = T.RepeatWrapping; t.needsUpdate = true; res(t);
+      }, undefined, rej))
+    ]).then(([meta, tex]) => ({ meta, tex }));
+    p.catch(() => structures.delete(id));
+    structures.set(id, p);
+  }
+  return structures.get(id);
+}
+function bakeScan(T, baker, st, colors) {
+  const cols = normColors(colors).map(c => ({ c: new T.Color('#' + c.hex), share: c.share }));
+  cols.sort((a, b) => (0.2126 * a.c.r + 0.7152 * a.c.g + 0.0722 * a.c.b) - (0.2126 * b.c.r + 0.7152 * b.c.g + 0.0722 * b.c.b));
+  const tot = cols.reduce((s, c) => s + c.share, 0) || 1;
+  const uCol = [], uCum = []; let acc = 0;
+  for (let i = 0; i < 6; i++) {
+    const c = cols[Math.min(i, cols.length - 1)];
+    uCol.push(c.c.clone());
+    if (i < cols.length) acc += c.share / tot;
+    uCum.push(i < cols.length - 1 ? acc : 2.0);
+  }
+  const size = st.meta.size || 1024;
+  const mat = baker.shader(SCAN_FRAG, { tRank: { value: st.tex }, uTexel: { value: new T.Vector2(1 / size, 1 / size) }, uCol: { value: uCol }, uCum: { value: uCum }, uN: { value: cols.length } });
+  const rt = baker.target(size, size, { srgb: true });
+  baker.run(mat, rt); mat.dispose();
+  return { albedo: rt.texture, cells: st.meta.cells || 190, size, structure: st.meta.id, dispose() { rt.dispose(); } };
+}
+/* rooms of the photo mode, in two groups (Viktor 07.10). id: the room for setRoom(); file: the prefix of its view files
+   (<file>-d desktop 16:9, <file>-p phone 4:5); ready: its views are rendered and published. 'hallway' is an alias of
+   'corridor' (the home page's old tab). */
+export const PHOTO_GROUPS = [
+  { id: 'residential', name: { uk: 'Житлові', en: 'Residential' } },
+  { id: 'public', name: { uk: 'Комерційні / Громадські', en: 'Commercial / Public' } }
+];
+export const PHOTO_ROOMS = [
+  { id: 'living', group: 'residential', file: 'living', ready: true, name: { uk: 'Вітальня', en: 'Living room' },
+    label: { uk: 'Вітальня, стіна з мультиколоровим покриттям Dvatone у денному світлі', en: 'Living room with a Dvatone multicolour coating on the feature wall in daylight' } },
+  { id: 'bedroom', group: 'residential', file: 'bedroom', ready: true, name: { uk: 'Спальня', en: 'Bedroom' },
+    label: { uk: 'Спальня, стіна за ліжком з покриттям Dvatone', en: 'Bedroom with a Dvatone coating on the wall behind the bed' } },
+  { id: 'kitchen', group: 'residential', file: 'kitchen', ready: false, name: { uk: 'Кухня', en: 'Kitchen' },
+    label: { uk: 'Кухня, стіна з покриттям Dvatone за робочою зоною', en: 'Kitchen with a Dvatone coating on the wall behind the counter' } },
+  { id: 'lobby', group: 'public', file: 'lobby', ready: false, name: { uk: 'Хол / лобі', en: 'Lobby' },
+    label: { uk: 'Хол, стіна з покриттям Dvatone за стійкою рецепції', en: 'Lobby with a Dvatone coating on the wall behind the reception desk' } },
+  { id: 'office', group: 'public', file: 'office', ready: false, name: { uk: 'Офіс', en: 'Office' },
+    label: { uk: 'Кабінет, стіна з покриттям Dvatone', en: 'Office with a Dvatone coating on the feature wall' } },
+  { id: 'meeting', group: 'public', file: 'meeting', ready: false, name: { uk: 'Переговорна', en: 'Meeting room' },
+    label: { uk: 'Переговорна кімната, торцева стіна з покриттям Dvatone', en: 'Meeting room with a Dvatone coating on the end wall' } },
+  { id: 'corridor', group: 'public', file: 'hallway', ready: true, name: { uk: 'Коридор', en: 'Corridor' },
+    label: { uk: 'Коридор, стіна з покриттям Dvatone', en: 'Corridor with a Dvatone coating' } }
+];
+const ALIAS = { hallway: 'corridor' };
+const roomDef = id => PHOTO_ROOMS.find(r => r.id === (ALIAS[id] || id));
+const ROOMS = PHOTO_ROOMS.map(r => r.id);
+const VIEWS = { 'hero-end': ['hero-d', 'hero-p'] };
+PHOTO_ROOMS.forEach(r => { VIEWS[r.id] = [r.file + '-d', r.file + '-p']; });
 const LANG = /^en/i.test(document.documentElement.lang || '') ? 'en' : 'uk';
-const LABEL = {
-  uk: { living: 'Вітальня, стіна з мультиколоровим покриттям Dvatone у денному світлі', bedroom: 'Спальня, стіна за ліжком з покриттям Dvatone', hallway: 'Передпокій, довга стіна з покриттям Dvatone', 'hero-end': 'Вітальня з покриттям Dvatone на стіні' },
-  en: { living: 'Living room with a Dvatone multicolour coating on the feature wall in daylight', bedroom: 'Bedroom with a Dvatone coating on the wall behind the bed', hallway: 'Hallway with a Dvatone coating along the long wall', 'hero-end': 'Living room with a Dvatone coating on the wall' }
-};
+const LABEL = { uk: { 'hero-end': 'Вітальня з покриттям Dvatone на стіні' }, en: { 'hero-end': 'Living room with a Dvatone coating on the wall' } };
+PHOTO_ROOMS.forEach(r => { LABEL.uk[r.id] = r.label.uk; LABEL.en[r.id] = r.label.en; });
+/* ready rooms of the same group as `id` (swipe and prefetch stay inside the group the visitor chose) */
+const groupRooms = id => { const d = roomDef(id); return PHOTO_ROOMS.filter(r => r.ready && (!d || r.group === d.group)).map(r => r.id); };
 const G = window.DV3D || (window.DV3D = {});
 const PUSH = { amount: 0.025, secs: 22 };   /* slow push-in after a view appears */
 
+/* AVIF support, tested once with a 1 x 1 image */
+const AVIF = new Promise(res => {
+  const i = new Image(); i.onload = () => res(i.width > 0); i.onerror = () => res(false);
+  i.src = 'data:image/avif;base64,AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZk1BMUIAAADybWV0YQAAAAAAAAAoaGRscgAAAAAAAAAAcGljdAAAAAAAAAAAAAAAAGxpYmF2aWYAAAAADnBpdG0AAAAAAAEAAAAeaWxvYwAAAABEAAABAAEAAAABAAABGgAAAB0AAAAoaWluZgAAAAAAAQAAABppbmZlAgAAAAABAABhdjAxQ29sb3IAAAAAamlwcnAAAABLaXBjbwAAABRpc3BlAAAAAAAAAAIAAAACAAAAEHBpeGkAAAAAAwgICAAAAAxhdjFDgQ0MAAAAABNjb2xybmNseAACAAIAAYAAAAAXaXBtYQAAAAAAAAABAAEEAQKDBAAAACVtZGF0EgAKCBgANogQEAwgMg8f8D///8WfhwB8+ErK42A=';
+});
 const metaCache = new Map();
 function viewMeta(id) {
   if (!metaCache.has(id)) {
@@ -74,6 +158,7 @@ uniform vec4 uFit; uniform vec2 uFocus; uniform float uZoom; uniform vec2 uPhoto
 uniform mat3 uH; uniform float uRho0; uniform float uBleedScale;
 uniform float uMetresA; uniform float uMetresB; uniform float uFlatA; uniform float uFlatB;
 uniform float uWipe; uniform vec2 uWipeRange; uniform float uWipeMix; uniform float uCoatBias; uniform float uCells;
+uniform float uFade; uniform vec3 uBg;
 vec2 dvHash2( vec2 p ) { vec3 p3 = fract( p.xyx * vec3( 0.1031, 0.1030, 0.0973 ) ); p3 += dot( p3, p3.yzx + 33.33 ); return fract( ( p3.xx + p3.yz ) * p3.zy ); }
 /* tiling and blending (Heitz and Neyret 2018): a triangle grid over the wall, each of its vertices reads the seamless
    tile at its own random offset and the three reads are blended around the tile's mean with a variance-preserving
@@ -170,6 +255,7 @@ void main() {
   vec3 rest = max( b + J * ( meanC - uRho0 ) * bl, 0.0 );
   vec3 col = dvSRGB( clamp( mix( rest, wallC, m ), 0.0, 1.0 ) );
   float dn = texture( tBlue, gl_FragCoord.xy / 64.0 ).r;
+  col = mix( col, uBg, uFade );                            /* room change: through the stage colour, never a double exposure */
   gl_FragColor = vec4( col + ( dn - 0.5 ) / 255.0, 1.0 );
 }`;
 
@@ -178,15 +264,16 @@ export function mountPhoto(el, opts = {}) {
   if (opts.maxHeight != null && opts.maxHeight !== '') el.style.maxHeight = typeof opts.maxHeight === 'number' ? opts.maxHeight + 'px' : String(opts.maxHeight);
   const hero = opts.view === 'hero-end';
   const S = {
-    room: hero ? 'hero-end' : (ROOMS.includes(opts.room) ? opts.room : 'living'),
+    room: hero ? 'hero-end' : (roomDef(opts.room) ? roomDef(opts.room).id : 'living'),
     colors: normColors(opts.colors), grain: clamp(+opts.grain || 1, 0.6, 1.8),
     density: opts.density == null ? 0.92 : clamp(+opts.density, 0.4, 1), seed: opts.seed == null ? 11 : +opts.seed,
     textureUrl: opts.textureUrl || null, textureSize: +opts.textureSize || 0.6,
+    structure: opts.structure === false || opts.structure === null ? null : (opts.structure || STRUCTURE),   /* null or false: synthetic granules */
     drift: opts.drift == null ? !hero : opts.drift !== false
   };
   const box0 = el.getBoundingClientRect();
   let portrait = box0.width > 0 && box0.height > 0 && box0.width / box0.height < 0.95;
-  const posterOf = (room, p) => POSTER + 'poster-' + (room === 'hero-end' ? 'hero' : room) + (p ? '-p' : '') + '.webp';
+  const posterOf = (room, p) => POSTER + 'poster-' + (room === 'hero-end' ? 'hero' : (roomDef(room) ? roomDef(room).file : room)) + (p ? '-p' : '') + '.webp';
   let T, R, baker, scene, camera, mat, U, stage = null, view = null, coatA = null, coatB = null, wipe = null, roomTok = 0, coatTok = 0;
   let push = 0, dirty = true, lastT = null;
   const views = new Map();
@@ -212,7 +299,9 @@ export function mountPhoto(el, opts = {}) {
       if (e.pointerId !== id) return; id = -1;
       const dx = e.clientX - sx, dy = e.clientY - sy;
       if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.4 && e.timeStamp - st < 900) {
-        const i = ROOMS.indexOf(S.room), n = ROOMS.length, next = ROOMS[(i + (dx < 0 ? 1 : -1) + n) % n];
+        const list = groupRooms(S.room), i = Math.max(0, list.indexOf(S.room)), n = list.length;
+        if (n < 2) return;
+        const next = list[(i + (dx < 0 ? 1 : -1) + n) % n];
         ctl.setRoom(next);
         el.dispatchEvent(new CustomEvent('dv3d:room', { bubbles: true, detail: { room: next, via: 'swipe' } }));
       }
@@ -246,7 +335,8 @@ export function mountPhoto(el, opts = {}) {
       uFit: { value: new T.Vector4(0, 0, 1, 1) }, uFocus: { value: new T.Vector2(0.5, 0.5) }, uZoom: { value: 1 }, uPhotoPx: { value: new T.Vector2(1920, 1080) },
       uMinify: { value: 1 }, uH: { value: new T.Matrix3() }, uRho0: { value: 0.42 }, uBleedScale: { value: 0 },
       uMetresA: { value: 0.27 }, uMetresB: { value: 0.27 }, uFlatA: { value: 0 }, uFlatB: { value: 0 },
-      uWipe: { value: 0 }, uWipeRange: { value: new T.Vector2(0, 6) }, uWipeMix: { value: 0 }, uCoatBias: { value: 0.15 }, uCells: { value: 128 }
+      uWipe: { value: 0 }, uWipeRange: { value: new T.Vector2(0, 6) }, uWipeMix: { value: 0 }, uCoatBias: { value: 0.15 }, uCells: { value: 128 },
+      uFade: { value: 0 }, uBg: { value: new T.Vector3(0.11, 0.105, 0.1) }
     };
     mat = new T.ShaderMaterial({ uniforms: U, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }', fragmentShader: GLSL, depthTest: false, depthWrite: false });
     const g = new T.BufferGeometry();
@@ -267,7 +357,7 @@ export function mountPhoto(el, opts = {}) {
     if (stage.destroyed) return;
     useView(v);
     /* the other rooms of this orientation load quietly after the first frame: a room switch is then only a crossfade */
-    if (!hero) setTimeout(() => { if (!stage.destroyed) ROOMS.forEach(r => loadView(viewId(r, portrait)).catch(() => {})); }, 1500);
+    if (!hero) prefetchNext();
     if (/[?&]debug(&|$)/.test(location.search)) G.photo = { T, R, U, get view() { return view; }, stage };
   }
   function loadTex(url, srgb, mip) {
@@ -295,12 +385,46 @@ export function mountPhoto(el, opts = {}) {
     if (views.has(id)) return views.get(id);
     const p = (async () => {
       const meta = await viewMeta(id);
-      const [base, light, detail, mask, bleed] = await Promise.all([loadTex(ASSET + id + '.webp', true, true), loadTex(ASSET + id + '-l.webp', false, false),
+      const ext = meta.avif && await AVIF ? '.avif' : '.webp';
+      const [base, light, detail, mask, bleed] = await Promise.all([loadTex(ASSET + id + ext, true, true), loadTex(ASSET + id + '-l.webp', false, false),
         loadTex(ASSET + id + '-d.webp', false, true), loadTex(ASSET + id + '-m.webp', false, true), loadTex(ASSET + id + '-b.webp', false, false)]);
       return { id, meta, base, light, detail, mask, bleed };
     })();
     views.set(id, p); p.catch(() => views.delete(id));
     return p;
+  }
+  /* fade the frame towards the stage's own colour (read once from the page) and back: a room change in ~380 ms */
+  function stageColour() {
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      const m = getComputedStyle(n).backgroundColor.match(/rgba?\(([^)]+)\)/);
+      if (!m) continue;
+      const c = m[1].split(',').map(Number);
+      if (c.length > 3 && c[3] === 0) continue;
+      return [c[0] / 255, c[1] / 255, c[2] / 255];
+    }
+    return [0.11, 0.105, 0.1];
+  }
+  let fadeRun = 0;
+  function fade(to, ms) {
+    const id = ++fadeRun, from = U.uFade.value, t0 = performance.now();
+    if (to > 0) { const c = stageColour(); U.uBg.value.set(c[0], c[1], c[2]); }
+    return new Promise(res => {
+      const step = () => {
+        if (stage.destroyed || id !== fadeRun) return res();
+        const k = Math.min(1, (performance.now() - t0) / ms), e = k * k * (3 - 2 * k);
+        U.uFade.value = from + (to - from) * e; frameNow();
+        if (k < 1) requestAnimationFrame(step); else res();
+      };
+      requestAnimationFrame(step);
+    });
+  }
+  /* when the browser is idle after a view is shown: the next room of the same group, and only that one */
+  function prefetchNext() {
+    const list = groupRooms(S.room), i = list.indexOf(S.room);
+    if (i < 0 || list.length < 2) return;
+    const next = list[(i + 1) % list.length];
+    const go = () => { if (!stage || stage.destroyed) return; loadView(viewId(next, portrait)).catch(() => {}); };
+    if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 5000 }); else setTimeout(go, 2000);
   }
   function useView(v) {
     view = v;
@@ -319,6 +443,7 @@ export function mountPhoto(el, opts = {}) {
   function useCoat(tl, which) {
     const t = tl.albedo; t.anisotropy = Math.min(8, R.capabilities.getMaxAnisotropy()); t.needsUpdate = true;
     U['tCoat' + which].value = t; U['uMetres' + which].value = tl.metres; U['uFlat' + which].value = tl.flat ? 1 : 0;
+    if (which === 'A' || !U.uWipeMix.value) U.uCells.value = tl.cells || 128;      /* flecks across a tile: the coat's filter size */
   }
   /* the granule bake's program compiles in parallel before the first bake (KHR_parallel_shader_compile through
      compileAsync): compiled synchronously at the first bake it froze the main thread for seconds (ANGLE/D3D11). The
@@ -352,6 +477,15 @@ export function mountPhoto(el, opts = {}) {
       const tex = await new Promise((res, rej) => new T.TextureLoader().load(S.textureUrl, res, undefined, rej));
       tex.colorSpace = T.SRGBColorSpace; tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.generateMipmaps = true; tex.minFilter = T.LinearMipmapLinearFilter;
       return { albedo: tex, metres: S.textureSize, flat: true, dispose() { tex.dispose(); } };
+    }
+    if (S.structure) {                                     /* real fleck structure from the DV scans, recoloured live */
+      try {
+        const st = await loadStructure(T, S.structure);
+        if (stage.destroyed) return null;
+        const b = bakeScan(T, baker, st, S.colors);
+        b.metres = st.meta.tileMetres * S.grain;
+        return b;
+      } catch (e) { console.warn('[dvatone 3d] fleck structure not loaded, synthetic granules instead:', S.structure); }
     }
     await warmBake();
     if (stage.destroyed) return null;
@@ -432,12 +566,14 @@ export function mountPhoto(el, opts = {}) {
       if (st.grain != null) S.grain = clamp(+st.grain, 0.6, 1.8);
       if (st.density != null) S.density = clamp(+st.density, 0.4, 1);
       if (st.seed != null) S.seed = +st.seed;
+      if (st.structure !== undefined) S.structure = st.structure || null;     /* a DV id with a structure file, or null: synthetic */
       S.textureUrl = null; return refreshCoat();
     },
     setTexture(url, metres) { S.textureUrl = url || null; if (metres) S.textureSize = +metres; return refreshCoat(); },
     async setRoom(name, orientation) {
       if (hero) name = 'hero-end';
-      else if (!ROOMS.includes(name)) return;
+      else if (!roomDef(name)) return;
+      else name = roomDef(name).id;
       if (name === S.room && !orientation) return;
       S.room = name; const tok = ++roomTok;
       if (!stage) return;
@@ -447,7 +583,12 @@ export function mountPhoto(el, opts = {}) {
       try { v = await loadView(viewId(name, portrait)); await upload(v); } catch (e) { console.error('[dvatone 3d]', e); return; }
       if (stage.destroyed || tok !== roomTok) return;
       if (orientation) { useView(v); stage.invalidate(); return; }
-      crossfade(stage, frameNow, () => useView(v), 1.1);
+      if (stage.reduced) { useView(v); frameNow(); prefetchNext(); return; }
+      await fade(1, 170);                                        /* out to the stage colour */
+      if (stage.destroyed) return;
+      if (tok === roomTok) useView(v);                           /* a newer setRoom takes over from here */
+      await fade(0, 210);                                        /* the new room in */
+      prefetchNext();
     },
     get room() { return S.room; },
     stats() { return Object.assign({}, stage ? stage.stats : {}, { room: S.room, mode: 'photo', view: view && view.id, started: !!stage }); },
@@ -467,5 +608,6 @@ export function mountPhoto(el, opts = {}) {
 
 /* the hero story's end frame: the living room photograph, framed exactly like the story's final camera */
 export function photoFrame(host, o = {}) {
-  return mountPhoto(host, Object.assign({ drift: false, swipe: false }, o, { view: o.view || 'hero-end' }));
+  /* the hero story ends on DV 033: its own fleck structure (from the DV 033 photo) unless the caller sets another */
+  return mountPhoto(host, Object.assign({ drift: false, swipe: false, structure: 'dv033' }, o, { view: o.view || 'hero-end' }));
 }

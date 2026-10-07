@@ -1,0 +1,300 @@
+/* Dvatone, wave 5: the composition generator (owner: gen; W5_SPEC section 1).
+   One page in the style of the first concept (new-client-dvatone/styles.css 242-408): a light, neutral grey studio, a sticky
+   preview, text toggles, underline-only inputs, no frames and no plates ("без рамкових обведень чи плашок", Viktor 07.10).
+   This file loads on every page, so every rule is scoped under .gx5 (the generator section), except the one header rule of
+   W5_SPEC 1.2 (the header stays solid on this page). site.js keeps the header in place while the preview is pinned under it and
+   releases the preview while the on-screen keyboard is open (both through [data-dv-sticky-preview]).
+   Colour isolation: the composition is drawn only into the canvas of .gen__mat (opaque neutral grey); nothing translucent,
+   blended or filtered lies over it. */
+
+/* ---------- the header of this page ---------- */
+body:has(.gx5) .hdr{background:rgba(18,16,14,.92);-webkit-backdrop-filter:blur(16px) saturate(1.2);backdrop-filter:blur(16px) saturate(1.2);border-bottom-color:var(--line-d)}
+
+/* ---------- section and head ---------- */
+.sec.gx5{padding-top:calc(var(--hdr) + clamp(48px,6vw,96px));padding-bottom:clamp(72px,8vw,128px);color:var(--tl)}
+.gx5 [hidden]{display:none!important}
+.gx5 .gx5__head{margin-bottom:clamp(44px,5.4vw,84px)}
+.gx5 .gx5__head .h1{font-weight:300;font-size:clamp(38px,5.1vw,78px);line-height:1.02;letter-spacing:-.04em}
+.gx5 .gx5__head .lede{max-width:470px;justify-self:end}
+
+/* ---------- the studio: one fixed, colour-neutral surface ----------
+   Tokens of the concept; --s-mute and --s-faint are a shade darker than the concept's #737373 / #a3a3a3 so that small text keeps
+   a 4.5:1 contrast on #f5f5f5 (WCAG AA) and icons 3:1. */
+.gx5 .studio{--studio:#f5f5f5;--s-ink:#141414;--s-2:#3a3a3a;--s-mute:#6b6b6b;--s-faint:#8c8c8c;--s-line:rgba(0,0,0,.08);--s-line-2:rgba(0,0,0,.17);
+  position:relative;display:grid;grid-template-columns:minmax(0,1fr) clamp(360px,27vw,440px);
+  width:min(1840px,calc(100% - 2 * clamp(10px,1.4vw,28px)));margin-inline:auto;
+  background:var(--studio);color:var(--s-ink);
+  box-shadow:0 1px 0 rgba(0,0,0,.02),0 60px 120px -60px rgba(30,24,18,.30)}
+.gx5 .studio ::selection{background:#141414;color:#fff}
+.gx5 .studio :focus-visible{outline:2px solid var(--s-ink);outline-offset:3px}
+
+/* ---------- preview column: sticky, as large as the viewport allows ---------- */
+.gx5 .studio__view{position:sticky;top:calc(var(--hdr) + 14px);align-self:start;z-index:3;display:flex;flex-direction:column;min-width:0;
+  height:calc(100vh - var(--hdr) - 28px);height:calc(100svh - var(--hdr) - 28px);min-height:520px;max-height:1000px;
+  padding:clamp(14px,1.4vw,22px) 0 0 clamp(14px,1.4vw,22px);background:var(--studio)}
+.gx5 .view__frame{position:relative;flex:1 1 auto;min-height:0;background:#e8e8e8;overflow:hidden}
+.gx5 .gen__mat{position:absolute;inset:0;padding:0;border-radius:0;background:#e8e8e8;isolation:isolate}
+.gx5 .gen__mat canvas{position:absolute;inset:0;display:block;width:100%;height:100%;max-width:none;max-height:none;margin:0;aspect-ratio:auto;object-fit:cover;background:#e8e8e8}
+/* the try-on: a photoreal room whose feature wall wears the composition (assets/3d/photoroom.js mounts into the host) */
+.gx5 .view__room{position:absolute;inset:0;background:#e8e8e8}
+.gx5 .view__host{position:absolute;inset:0;overflow:hidden}
+.gx5 .view__poster{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover}
+.gx5 .view__now{position:absolute;left:clamp(10px,1.2vw,18px);bottom:clamp(10px,1.2vw,18px);z-index:4;display:flex;align-items:baseline;gap:10px;margin:0;padding:9px 14px;
+  background:var(--studio);font-size:12px;line-height:1.2;color:var(--s-mute);pointer-events:none}
+.gx5 .view__now b{font-weight:400;font-size:14px;color:var(--s-ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.gx5 .view__now b:empty{display:none}
+
+/* bar under the frame: view switch, proportion strip, neutral backing */
+.gx5 .view__bar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:clamp(16px,2.2vw,36px);min-height:58px;padding:6px 0 8px}
+.gx5 .vsw{display:flex;gap:20px}
+.gx5 .ratio{display:flex;height:3px;gap:2px;min-width:0}
+.gx5 .ratio i{height:100%;min-width:2px;transition:flex-grow .45s var(--ease)}
+.gx5 .view__mat{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--s-mute);white-space:nowrap;cursor:help}
+.gx5 .view__mat i{width:12px;height:12px;border-radius:50%;background:var(--studio);box-shadow:inset 0 0 0 1px var(--s-line-2),0 0 0 3px var(--studio),0 0 0 4px rgba(0,0,0,.06)}
+
+/* room bar (room view only): type of space above the rooms on the left, the note on the right */
+.gx5 .view__rooms{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;min-width:0;padding:0 0 14px}
+.gx5 .view__note{flex:0 1 320px;margin:0;font-size:12.5px;line-height:1.5;color:var(--s-mute);text-align:right}
+.gx5 .rsel{display:flex;flex-direction:column;gap:2px;min-width:0}
+.gx5 .rsel__g{display:flex;gap:24px;min-width:0}
+.gx5 .rsel__gb,.gx5 .rsel__cap{display:inline-block;margin:0;padding:6px 0;font-size:11px;line-height:16px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--s-mute);white-space:nowrap;transition:color .3s}
+.gx5 .rsel__gb:hover,.gx5 .rsel__gb[aria-pressed="true"]{color:var(--s-ink)}
+.gx5 .rsel__gb[aria-pressed="true"]{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:6px}
+.gx5 .rsel__r{display:flex;gap:24px;min-width:0}
+.gx5 .rsel__t{display:inline-block;padding:6px 0;font-size:15px;line-height:20px;color:var(--s-2);white-space:nowrap;transition:color .3s}
+.gx5 .rsel__t i{margin-right:7px;font-style:normal;font-size:10.5px;color:var(--s-mute);font-variant-numeric:tabular-nums;vertical-align:.2em}
+.gx5 .rsel__t:hover{color:var(--s-ink)}
+.gx5 .rsel__t[aria-selected="true"]{color:var(--s-ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:7px}
+
+/* text toggles (the concept's .scale__b / .sysb): words, a 1 px ink underline when on */
+.gx5 .tt{display:inline-block;padding:6px 0;font-size:13px;line-height:16px;color:var(--s-mute);white-space:nowrap;text-decoration:none;transition:color .3s}
+.gx5 .tt:hover{color:var(--s-ink)}
+.gx5 .tt[aria-pressed="true"]{color:var(--s-ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:7px}
+
+/* fold button of the pinned preview (phones and tablets; site.css shows it while the preview is stuck) */
+.gx5 .gprev__toggle{top:8px;right:8px;background:var(--studio);color:var(--s-ink);box-shadow:0 0 0 1px var(--s-line-2),0 4px 14px -6px rgba(0,0,0,.3)}
+.gx5 .gprev__toggle:focus-visible{outline:2px solid var(--s-ink);outline-offset:2px}
+.gx5 .studio__view.is-stuck{box-shadow:0 16px 24px -20px rgba(30,24,18,.4)}
+
+/* ---------- control panel: groups separated by space only ---------- */
+.gx5 .studio__panel{min-width:0;display:flex;flex-direction:column;gap:clamp(44px,4.2vw,60px);
+  padding:clamp(30px,2.8vw,48px) clamp(40px,3vw,52px) clamp(40px,3.4vw,56px) clamp(24px,2.6vw,44px)}
+.gx5 .phead{display:flex;flex-direction:column;gap:6px;min-width:0}
+.gx5 .phead__k{font-size:13px;color:var(--s-mute)}
+.gx5 .phead__id{display:block;font-weight:200;font-size:clamp(40px,3.5vw,54px);line-height:1.08;letter-spacing:-.035em;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gx5 .phead__no{font-size:.5em;letter-spacing:0;color:var(--s-faint);margin-right:.22em;vertical-align:.38em}
+.gx5 .phead__sum{margin-top:6px;font-size:13.5px;color:var(--s-mute)}
+.gx5 .pgroup{min-width:0}
+.gx5 .pgroup__h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:22px}
+.gx5 .pgroup__t{margin:0;font-size:13px;font-weight:400;line-height:1.4;letter-spacing:0;text-transform:none;color:var(--s-mute)}
+.gx5 .pgroup__h em{min-width:0;overflow:hidden;font-style:normal;font-size:13px;font-variant-numeric:tabular-nums;color:var(--s-2);text-align:right;text-overflow:ellipsis;white-space:nowrap}
+.gx5 .pgroup__h em.is-max{color:var(--s-ink);font-weight:600}
+.gx5 .pmsg{margin:12px 0 0;font-size:12.5px;line-height:1.55;color:var(--s-mute)}
+
+/* colours and proportions */
+.gx5 .gmx{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:20px}
+.gx5 .gmx__row{display:grid;grid-template-columns:44px minmax(0,1fr) auto auto;grid-template-areas:"sw name pct act" "sw rng rng rng";column-gap:14px;align-items:center}
+.gx5 .gmx__sw{grid-area:sw;align-self:start;display:block;width:44px;height:44px;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.gx5 .gmx__name{grid-area:name;min-width:0;display:flex;flex-direction:column;line-height:1.3}
+.gx5 .gmx__name b{font-weight:400;font-size:15px;letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gx5 .gmx__name small{font-size:12px;color:var(--s-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gx5 .gmx__row.is-locked .gmx__name small{color:var(--s-ink)}
+.gx5 .gmx__pct{grid-area:pct;font-weight:200;font-size:31px;line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.gx5 .gmx__pct sup{position:relative;top:2px;margin-left:3px;font-size:12px;font-weight:300;letter-spacing:0;color:var(--s-mute);vertical-align:top}
+.gx5 .gmx__act{grid-area:act;justify-self:end;display:flex}
+.gx5 .gmx__rng{grid-area:rng;margin-top:4px}
+/* round icon buttons: the visible circle is 30 px (::before); the button grows to 44 px for touch */
+.gx5 .icob{position:relative;width:30px;height:30px;display:grid;place-items:center;color:#757575;transition:color .3s}
+.gx5 .icob::before{content:"";position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;transition:background .3s,box-shadow .3s}
+.gx5 .icob:hover{color:var(--s-ink)}
+.gx5 .icob:hover::before{background:rgba(0,0,0,.045)}
+.gx5 .icob svg{position:relative;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+.gx5 .icob[data-act="lock"]{color:var(--s-2)}
+.gx5 .icob[data-act="lock"]::before{box-shadow:inset 0 0 0 1px var(--s-line-2)}
+.gx5 .icob[data-act="lock"]:hover::before{background:transparent;box-shadow:inset 0 0 0 1px var(--s-ink)}
+.gx5 .icob[data-act="lock"][aria-pressed="true"]{color:#fff}
+.gx5 .icob[data-act="lock"][aria-pressed="true"]::before{background:var(--s-ink);box-shadow:none}
+
+/* thin sliders (the concept's .srange): a 2 px track, a white 18 px thumb */
+.gx5 .srange{--v:50%;--fill:var(--s-ink);-webkit-appearance:none;appearance:none;display:block;width:100%;height:26px;margin:0;padding:0;border:0;border-radius:0;background:transparent;cursor:pointer;touch-action:pan-y}
+.gx5 .srange::-webkit-slider-runnable-track{height:2px;border-radius:2px;background:linear-gradient(90deg,var(--fill) 0,var(--fill) var(--v),rgba(0,0,0,.1) var(--v),rgba(0,0,0,.1) 100%)}
+.gx5 .srange::-moz-range-track{height:2px;border-radius:2px;background:rgba(0,0,0,.1)}
+.gx5 .srange::-moz-range-progress{height:2px;border-radius:2px;background:var(--fill)}
+.gx5 .srange::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-8px;border:0;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.16),0 2px 8px rgba(0,0,0,.12);transition:transform .2s var(--ease)}
+.gx5 .srange::-moz-range-thumb{width:18px;height:18px;border:0;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.16),0 2px 8px rgba(0,0,0,.12)}
+.gx5 .srange:active::-webkit-slider-thumb{transform:scale(1.18)}
+.gx5 .srange:focus-visible{outline:none}
+.gx5 .srange:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 2px var(--s-ink),0 0 0 6px rgba(0,0,0,.08)}
+.gx5 .srange:focus-visible::-moz-range-thumb{box-shadow:0 0 0 2px var(--s-ink),0 0 0 6px rgba(0,0,0,.08)}
+.gx5 .gmx__rng{--fill:var(--c-d,var(--c))}
+
+.gx5 .addc{display:flex;align-items:center;gap:14px;margin-top:24px;font-size:14px;color:var(--s-2);text-align:left;transition:color .3s}
+.gx5 .addc i{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;border:1px dashed var(--s-line-2);transition:border-color .3s}
+.gx5 .addc svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round}
+.gx5 .addc:hover{color:var(--s-ink)}
+.gx5 .addc:hover i{border-style:solid;border-color:var(--s-ink)}
+.gx5 .addc[aria-disabled="true"]{opacity:.38;cursor:default}
+.gx5 .addc[aria-disabled="true"]:hover i{border-style:dashed;border-color:var(--s-line-2)}
+
+/* catalogue shades: saturation categories, standards, search by code, results */
+/* the four saturation categories read as a scale, light to deep: one column each, the name over its count */
+.gx5 .gcat{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0 12px;margin:-6px 0 6px}
+.gx5 .gcat .tt{display:block;min-width:0;margin:0;padding:6px 0;font-size:14px;line-height:18px;color:var(--s-2);text-align:left;text-decoration:none;white-space:normal}
+.gx5 .gcat .tt:hover,.gx5 .gcat .tt[aria-pressed="true"]{color:var(--s-ink)}
+.gx5 .gcat .tt>span{display:block;white-space:nowrap}
+.gx5 .gcat .tt[aria-pressed="true"]{text-decoration:none}
+.gx5 .gcat .tt[aria-pressed="true"]>span{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:5px}
+.gx5 .gcat small{display:block;margin-top:7px;font-size:11px;line-height:14px;color:var(--s-mute);font-variant-numeric:tabular-nums}
+.gx5 .find__sys{display:flex;flex-wrap:wrap;gap:0 20px;margin:0 0 12px}
+.gx5 .find__field{display:flex;align-items:center;gap:12px;padding-bottom:6px;border-bottom:1px solid var(--s-line-2);cursor:text;transition:border-color .3s,box-shadow .3s}
+.gx5 .find__field:focus-within{border-color:var(--s-ink);box-shadow:0 1px 0 var(--s-ink)}
+.gx5 .find__field>svg{flex:none;width:18px;height:18px;fill:none;stroke:var(--s-mute);stroke-width:1.3}
+.gx5 .find__field input{flex:1;min-width:0;height:40px;margin:0;padding:0;border:0;border-radius:0;background:transparent;font:inherit;font-size:18px;font-weight:300;letter-spacing:-.01em;color:var(--s-ink);outline:none;-webkit-appearance:none;appearance:none}
+.gx5 .find__field input:focus-visible{outline:none}
+.gx5 .find__field input::placeholder{color:var(--s-mute);font-size:14px;letter-spacing:0;opacity:1}
+.gx5 .find__res{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px 8px;margin-top:26px}
+.gx5 .find__res:empty{display:none}
+.gx5 .res{display:flex;flex-direction:column;align-items:center;gap:9px;min-width:0;padding:2px 0;text-align:center}
+.gx5 .res i{position:relative;display:block;width:40px;height:40px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);transition:transform .4s var(--ease)}
+.gx5 .res:hover i{transform:scale(1.1)}
+.gx5 .res[aria-pressed="true"] i::after{content:"";position:absolute;inset:-4px;border-radius:50%;box-shadow:0 0 0 1px var(--s-ink)}
+.gx5 .res span{display:block;max-width:100%;font-size:11.5px;line-height:1.25;color:var(--s-2);overflow-wrap:anywhere}
+.gx5 .res mark{background:none;color:var(--s-ink);font-weight:600}
+.gx5 .res small{display:block;margin-top:-7px;font-size:10px;line-height:1.2;letter-spacing:.02em;color:var(--s-mute)}
+.gx5 .find__empty{margin:22px 0 0;font-size:13.5px;line-height:1.6;color:var(--s-mute)}
+.gx5 .find__empty a{color:var(--s-ink);text-decoration:underline;text-underline-offset:3px}
+.gx5 .find__meta{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:22px;font-size:12.5px;color:var(--s-mute)}
+.gx5 .find__meta span:empty{display:none}
+.gx5 .find__more{flex:none;padding:6px 0;font-size:12.5px;color:var(--s-ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:5px}
+
+/* texture */
+.gx5 .tgrain{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:14px;color:var(--s-2)}
+.gx5 .tgrain__b{display:flex;gap:20px}
+.gx5 .tgrain .tt{min-width:22px;font-size:14px;text-align:center}
+.gx5 .tslider{display:block;margin-top:28px;cursor:default}
+.gx5 .tslider__h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:6px;font-size:14px;color:var(--s-2)}
+.gx5 .tslider__h b{font-weight:200;font-size:27px;line-height:1;letter-spacing:-.03em;color:var(--s-ink);font-variant-numeric:tabular-nums}
+.gx5 .tslider__ends{display:flex;justify-content:space-between;margin-top:1px;font-size:11px;color:var(--s-mute)}
+
+/* curated palettes: dots and a name, no outline; the active one is ink with a 1 px underline */
+.gx5 .pchips{display:flex;flex-wrap:wrap;gap:4px 26px}
+.gx5 .pchip{display:inline-flex;align-items:center;gap:10px;padding:6px 0;font-size:13.5px;line-height:1.3;color:var(--s-2);transition:color .3s}
+.gx5 .pchip:hover,.gx5 .pchip[aria-pressed="true"]{color:var(--s-ink)}
+.gx5 .pchip>span:last-child{padding-bottom:3px;background:linear-gradient(currentColor,currentColor) 0 100%/0 1px no-repeat;transition:background-size .4s var(--ease)}
+.gx5 .pchip[aria-pressed="true"]>span:last-child{background-size:100% 1px}
+.gx5 .pchip__dots{display:flex}
+.gx5 .pchip__dots i{width:14px;height:14px;margin-left:-4px;border-radius:50%;box-shadow:0 0 0 1.5px var(--studio)}
+.gx5 .pchip__dots i:first-child{margin-left:0}
+
+/* text actions with line icons (the concept's .pact) */
+.gx5 .pacts{display:flex;flex-wrap:wrap;gap:2px 28px;margin-top:20px}
+.gx5 .pact{display:inline-flex;align-items:center;gap:10px;padding:6px 0;font-size:13.5px;line-height:1.3;color:var(--s-2);text-align:left;transition:color .3s}
+.gx5 .pact svg{flex:none;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round;transition:transform .6s var(--ease)}
+.gx5 .pact:hover{color:var(--s-ink)}
+.gx5 [data-dv-random]:hover svg{transform:rotate(-8deg) scale(1.06)}
+.gx5 [data-dv-reset]:hover svg{transform:rotate(-40deg)}
+
+/* area and consumption (the module's mount point data-dv-mount="area") */
+.gx5 .parea__k{display:block;font-size:14px;color:var(--s-2)}
+.gx5 .parea__in{display:flex;align-items:baseline;gap:10px;margin-top:4px;border-bottom:1px solid var(--s-line-2);transition:border-color .3s,box-shadow .3s}
+.gx5 .parea__in:focus-within{border-color:var(--s-ink);box-shadow:0 1px 0 var(--s-ink)}
+.gx5 .parea__in:has([aria-invalid="true"]){border-color:#a3402f}
+.gx5 .parea__in input{flex:1;min-width:0;height:44px;margin:0;padding:0;border:0;border-radius:0;background:transparent;font:inherit;font-size:22px;font-weight:300;letter-spacing:-.01em;color:var(--s-ink);outline:none;-webkit-appearance:none;appearance:none}
+.gx5 .parea__in input:focus-visible{outline:none}
+.gx5 .parea__in input::placeholder{color:var(--s-mute);font-size:15px;letter-spacing:0;opacity:1}
+.gx5 .parea__u{font-size:14px;color:var(--s-mute)}
+.gx5 .perr{margin:10px 0 0;font-size:12.5px;line-height:1.5;color:#a3402f}
+.gx5 .parea__res{margin-top:26px}
+.gx5 .parea__res small{display:block;font-size:13px;color:var(--s-mute)}
+.gx5 .parea__val{display:flex;align-items:baseline;gap:8px;margin-top:4px}
+.gx5 .parea__val b{font-weight:200;font-size:clamp(40px,3.2vw,52px);line-height:1;letter-spacing:-.035em;font-variant-numeric:tabular-nums}
+.gx5 .parea__val span{font-size:15px;color:var(--s-mute)}
+.gx5 .parea__res p{margin:8px 0 0;font-size:12.5px;line-height:1.55;color:var(--s-mute)}
+.gx5 .parea__res[data-state="error"] p{color:#a3402f}
+
+/* files for the project (the module's mount point data-dv-mount="export"): text buttons with their icons */
+.gx5 .pexp{display:flex;flex-direction:column;gap:14px}
+.gx5 .pexp__i .pmsg{margin-top:2px;padding-left:26px}
+.gx5 .pexp__b[aria-disabled="true"],.gx5 .pexp__b[aria-disabled="true"]:hover{color:var(--s-mute);cursor:default}
+.gx5 .pexp__b[data-state="preparing"] svg{animation:gx5pulse 1.2s ease-in-out infinite}
+@keyframes gx5pulse{50%{opacity:.3}}
+.gx5 .pexp__s{margin:0;font-size:12.5px;line-height:1.55;color:var(--s-mute)}
+.gx5 .pexp__s:empty{display:none}
+.gx5 .pexp__s[data-state="error"]{color:#a3402f}
+.gx5 .pexp__s[data-state="done"]{color:var(--s-ink)}
+.gx5 .pexp__s .link-arrow,.gx5 .perr .link-arrow{color:var(--s-ink)}
+
+/* recipe */
+.gx5 .recipe__list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:13px}
+.gx5 .recipe__list li{display:flex;align-items:baseline;gap:12px;min-width:0;font-size:14px}
+.gx5 .recipe__list i{flex:none;width:9px;height:9px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)}
+.gx5 .recipe__list .c{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gx5 .recipe__list .c small{margin-left:6px;font-size:12px;color:var(--s-mute)}
+.gx5 .recipe__list .f{flex:1;min-width:14px;border-bottom:1px dotted var(--s-line-2);transform:translateY(-4px)}
+.gx5 .recipe__list b{font-weight:300;font-variant-numeric:tabular-nums}
+.gx5 .recipe__tex{margin:18px 0 0;font-size:12.5px;color:var(--s-mute)}
+.gx5 .recipe .pacts{margin-top:14px}
+
+/* call to action: the only solid element of the panel */
+.gx5 .studio__cta{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.gx5 .pcta{display:inline-flex;align-items:center;justify-content:center;gap:14px;height:54px;padding:0 28px;border:0;border-radius:0;background:var(--s-ink);color:#fff;font-size:11.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;white-space:nowrap;transition:background .5s var(--ease)}
+.gx5 .pcta:hover{background:#000}
+.gx5 .pcta svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.4;transform:rotate(90deg);transition:transform .6s var(--ease)}
+.gx5 .pcta:hover svg{transform:rotate(90deg) translateY(4px)}
+.gx5 .ptalk{height:44px;color:var(--s-ink)}
+
+/* under the studio */
+.gx5 .gx5__foot{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:14px 40px;margin-top:30px}
+.gx5 .gen__note,.gx5 .gx5__rnote{margin:0;max-width:760px;font-size:13px;line-height:1.65;color:var(--ml)}
+.gx5 .gx5__rnote{display:none}
+
+/* ---------- tablets and phones: one column, the preview first and pinned under the header ---------- */
+@media (max-width:1099px){
+  .gx5 .gx5__head .lede{justify-self:start}
+  .gx5 .studio{grid-template-columns:minmax(0,1fr);width:calc(100% - 20px)}
+  .gx5 .studio__view{top:var(--hdr);height:auto;min-height:0;max-height:none;padding:10px 10px 0}
+  .gx5 .view__frame{flex:none;aspect-ratio:16/9}
+  /* bars that do not fit scroll sideways (no second line) and fade out at the edge */
+  .gx5 .view__bar,.gx5 .rsel__g,.gx5 .rsel__r{overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}
+  .gx5 .view__bar::-webkit-scrollbar,.gx5 .rsel__g::-webkit-scrollbar,.gx5 .rsel__r::-webkit-scrollbar{display:none}
+  .gx5 .view__bar{grid-template-columns:auto minmax(72px,1fr) auto;gap:22px;min-height:52px;padding:0 28px 0 0}
+  .gx5 .rsel__g,.gx5 .rsel__r{padding-right:28px}
+  .gx5 .view__rooms{padding-bottom:8px}
+  .gx5 .studio__panel{gap:48px;padding:28px 20px 40px}
+  .gx5 .find__res{grid-template-columns:repeat(6,minmax(0,1fr))}
+  .gx5 .pcta svg{transform:rotate(180deg)}   /* the preview is above the button here */
+  .gx5 .pcta:hover svg{transform:rotate(180deg) translateY(4px)}
+}
+@media (max-width:760px){
+  .gx5 .view__frame{aspect-ratio:4/3}
+  .gx5 .view__now,.gx5 .view__note{display:none}
+  .gx5 .gx5__rnote{display:block}
+  .gx5 .find__res{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .gx5 .gx5__foot{flex-direction:column;align-items:flex-start;gap:12px}
+}
+
+/* ---------- touch: every control at least 44 px ----------
+   Text toggles grow by 11 px on each side and give the same back as a negative margin: the words keep their places and
+   spacing, the hit areas do not overlap (gaps of 24 px), and the shortest word ("S", «Усі») still gets 44 px. */
+@media (pointer:coarse),(max-width:1099px){
+  .gx5 .tt,.gx5 .rsel__gb,.gx5 .rsel__t{min-width:44px;margin:0 -11px;padding:14px 11px;text-align:center}
+  .gx5 .rsel__t{padding-block:12px}
+  .gx5 .rsel__cap{padding:14px 0}
+  .gx5 .vsw,.gx5 .find__sys,.gx5 .tgrain__b{gap:0 24px}
+  .gx5 .tgrain .tt{min-width:44px}
+  .gx5 .icob{width:44px;height:44px}
+  .gx5 .srange{height:44px}
+  .gx5 .pact,.gx5 .pchip,.gx5 .find__more{min-height:44px}
+  .gx5 .find__field input{height:44px}
+  .gx5 .gx5__foot .link-arrow{padding-top:17px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .gx5 *,.gx5 *::before,.gx5 *::after{transition:none!important;animation:none!important}
+}
+@media (forced-colors:active){
+  .gx5 .gmx__sw,.gx5 .res i,.gx5 .ratio i,.gx5 .pchip__dots i,.gx5 .recipe__list i{forced-color-adjust:none;outline:1px solid CanvasText}
+  .gx5 .icob[aria-pressed="true"],.gx5 .res[aria-pressed="true"] i{outline:2px solid Highlight}
+  .gx5 .pcta{border:1px solid CanvasText}
+}

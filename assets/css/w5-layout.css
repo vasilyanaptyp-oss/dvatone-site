@@ -1,0 +1,16 @@
+/* Dvatone, wave 5 (Viktor 07.10): layout owner. Loaded on every page after site.css (layout.page(), config.W5_CSS).
+   Scope: .pslot (the marked place for a photo that has not arrived yet, parts.photo_slot) and the shared header / footer
+   pieces this wave changes. No other owner's class is styled here; site.css is not edited. */
+
+/* ---- photo slot: a flat surface, no frame, no shadow. The label says what photo goes here; the mark says it is a placeholder */
+.pslot{position:relative;display:flex;align-items:center;justify-content:center;width:100%;min-height:0;
+  background:var(--paper-2);color:var(--tl);border:0;border-radius:0;box-shadow:none;overflow:hidden;text-align:center}
+.sec--dark .pslot,.sec--warm .pslot{background:rgba(237,230,218,.05);color:var(--td)}
+.pslot__in{display:flex;flex-direction:column;align-items:center;gap:10px;max-width:38ch;padding:clamp(16px,2.4vw,32px)}
+.pslot__ico{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round;opacity:.7;margin-bottom:4px}
+.pslot b{font-size:15px;font-weight:400;line-height:1.45;letter-spacing:0}
+.pslot small{font-size:11px;font-weight:600;line-height:1.3;letter-spacing:.18em;text-transform:uppercase;color:var(--ml)}
+.sec--dark .pslot small,.sec--warm .pslot small{color:var(--md)}
+.pslot__img{display:block;width:100%;height:100%;object-fit:cover}
+/* phones: small tiles (a third of the width) keep the mark on one line */
+@media (max-width:480px){.pslot b{font-size:14px}.pslot__in{gap:8px;padding:12px}.pslot small{font-size:10px;letter-spacing:.12em}}
