@@ -30,6 +30,9 @@ const LAYER_DYN = 2;               /* objects that throw contact shadows */
 /* the box lid opens to 100 degrees on its hinge at the back edge of the base: just past upright, leaning back a
    little, the whole open box standing on the plinth */
 const BOX_OPEN = 1.745;
+/* the pour is switched off (Artur 07.10: «Банка полностью сломана, убери возможность вылить»): no «Вилити» control,
+   no P key, pour() does nothing and pour.js / puddle.js / the fluid worker are never loaded. true brings it back. */
+const POUR_ON = false;
 /* plinth radius per arrangement (decimetres, times S.prK 0.92): the open box with its standing lid, the can, its
    popped lid and a poured puddle all lie on it with room to spare (checked by projecting their footprints) */
 const PLINTH = { both: 3.663, can: 2.5, box: 2.717 };
@@ -230,7 +233,7 @@ function mount(el, opts = {}) {
       b.addEventListener('keydown', e => onKey(e, n));
       b.addEventListener('focus', () => { dirty = true; invalidate(); });
     });
-    ui.appendChild(pourBtn);                     /* after the can and the box in the tab order */
+    if (POUR_ON) ui.appendChild(pourBtn);        /* after the can and the box in the tab order */
     if (fromTap) { wrap.tabIndex = -1; try { wrap.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
     stage.readyP.then(v => readyResolve(v));
   }
@@ -815,7 +818,7 @@ function mount(el, opts = {}) {
      low and reduced motion: the finished pour as a still */
   let pour = null, pourP = null, pourSeq = null, pourReset = false, pourBtnOn = null;
   function pourBusy() { return !!(pour && pour.pouring) || !!pourSeq || pourReset; }
-  function onCanOpen() { ensurePour(); syncPourBtn(); }
+  function onCanOpen() { if (POUR_ON) ensurePour(); syncPourBtn(); }
   function onCanClose() { syncPourBtn(); }
   function ensurePour() {
     if (pourP || stage.destroyed) return pourP || Promise.resolve(null);
@@ -1507,7 +1510,7 @@ function mount(el, opts = {}) {
     setTheme(theme) { S.theme = ['light', 'dark'].includes(theme) ? theme : 'auto'; if (built) { applyTheme(); invalidate(); } },
     /* opens the can if needed and pours (the Pour control); low tier and reduced motion show the finished pour */
     pour() {
-      if (!built) return;
+      if (!built || !POUR_ON) return;
       touchInput();
       const go = () => ensurePour().then(() => pourNow());
       if (items.can.state === 'closed') { openCan(); setTimeout(go, stage.reduced ? 0 : 900); } else go();
