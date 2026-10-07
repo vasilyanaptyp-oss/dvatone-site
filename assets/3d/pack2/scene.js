@@ -1,51 +1,41 @@
 /* Dvatone packaging v2, the scene: a physically based studio scene for the Designer Box block. ../pack2.js (the small
    entry with the public API) loads it when the block nears the viewport.
    Matte black can with a copper lid and copper-foil label, rigid Designer Box with a hinged lid, sample chips and a
-   colour fan, a plinth coated with the composition. Studio HDRI (Poly Haven, CC0) reflections, soft key shadow,
+   colour fan, all on a plinth coated with the composition. Studio HDRI (Poly Haven, CC0) reflections, soft key shadow,
    contact shadows, bloom on the copper highlights, Khronos Neutral tone mapping (hue-true).
-   Real physics (Rapier, WASM): grab, toss and spin the can and the box; they collide with each other and the plinth
-   and settle; after a few idle seconds they glide back to the hero pose. Click/tap the can: the lid lifts and shows
-   the paint (granular multicolour, living sheen, ripples where you click). Click the box: the lid opens, click again:
-   the colour fan rises and fans out; click a strip to pour that composition into the can.
+   The plinth is a turntable: a sideways drag turns it, a flick lets it coast to a stop, and after a quiet while it
+   turns back to the front. The studio light turns with the view, so every side is seen in the same light. Nothing
+   else is dragged about: tap the can and its lid pops off onto the plinth (the paint inside ripples wherever it is
+   tapped, «Вилити» pours it out), tap it again and the lid flies back on; tap the box and its lid swings open on the
+   hinge at its back edge, again and the colour fan rises and fans out, tap a strip to pour that composition into the
+   can. All motion is scripted (no physics engine).
 
-   mount(el, { object:'can'|'box'|'both', colors:[{hex,share}], physics:true, theme:'dark'|'light'|'auto',
+   mount(el, { object:'can'|'box'|'both', colors:[{hex,share}], theme:'dark'|'light'|'auto',
                labels:{...}, lang:'uk'|'en', poster:url|false, fan:[{name, colors}], plinth:'coating'|'dark'|colors,
                hint:true })
-     -> { ready, setColors(colors), setObject(name), open(which?), close(which?), setTheme(t), reset(), stats(), destroy() }
-   Events on el: dv3d:ready, dv3d:fallback, dv3d:open {object}, dv3d:close {object}, dv3d:pick {name, colors}.
-   Declarative: <div data-dv3d="pack2" data-object="both" data-colors='[...]' data-physics="true"></div>
-   Keyboard: Tab to the can or the box; arrows turn it (or pick a fan strip), Up/Down tilt the view, Enter opens,
-   Escape closes, Home re-arranges. prefers-reduced-motion: no physics, static beauty pose, instant changes.
-   No WebGL2: the poster stays. */
+     -> { ready, setColors(colors), setObject(name), open(which?), close(which?), pour(), setTheme(t), reset(), stats(), destroy() }
+   Events on el: dv3d:ready, dv3d:fallback, dv3d:open {object}, dv3d:close {object}, dv3d:pick {name, colors},
+   dv3d:pour {state}, dv3d:lid {state}, dv3d:paint {x, y}, dv3d:turn {angle}.
+   Declarative: <div data-dv3d="pack2" data-object="both" data-colors='[...]'></div>
+   Keyboard: Tab to the can or the box; Left/Right turn the plinth (or walk the fan strips), Up/Down tilt the view,
+   Enter opens, Escape closes, Home brings the front back, P pours. prefers-reduced-motion: static beauty pose,
+   instant changes, no coasting. No WebGL2: the poster stays. */
 import { createStage, createBaker, bakeGranules, normColors, clamp, isSmallScreen, isFinePointer, crossfade, hasWebGL2 } from '../core.js';
 import { detectTier, probe, remember, lower, TIER_CFG } from './tier.js';
 
 const BASE = import.meta.url;
-const RAPIER_URL = (typeof window !== 'undefined' && window.DV3D_RAPIER_URL) || 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.19.3/rapier.mjs';
 const OBJECTS = ['can', 'box', 'both'];
-const GRAV = 98.1;                 /* dm / s^2: real gravity, the scene is modelled in decimetres */
-const HSTEP = 1 / 120;             /* physics substep */
+const GRAV = 98.1;                 /* dm / s^2: the popped lid's arc, the scene is modelled in decimetres */
 const LAYER_DYN = 2;               /* objects that throw contact shadows */
-/* real-ish physics (kg, decimetres, seconds): a filled steel can with its weight low, its thin tin lid, a light
-   cardboard box, a stone plinth on a table. Bounce stays low (metal 0.15-0.2, cardboard 0.05), so things clatter
-   and settle instead of springing about; rolling slows them the way a real can or a coin-like lid slows */
-const PHYS = {
-  can: { fr: 0.45, re: 0.15, lin: 0.03, ang: 0.12, roll: 6, held: 1.3 },        /* roll: the thick paint inside soaks up a rolling can quickly */
-  lid: { mass: 0.045, fr: 0.32, re: 0.22, lin: 0.02, ang: 0.03, roll: 0.9, held: 0.8 },
-  box: { mass: 0.45, fr: 0.6, re: 0.05, lin: 0.05, ang: 0.2, roll: 0, held: 1.7 },
-  plinth: { fr: 0.62, re: 0.3 }, floor: { fr: 0.7, re: 0.25 }
-};
-/* the can's mass properties for a paint level 0..1: 0.3 kg of steel plus up to 1.2 kg of paint, whose weight sits low */
-function canMass(level) {
-  const R = 0.875, H = 1.93, COM = 0.965, ri = 0.85;
-  const ms = 0.3, mp = 1.2 * level, hp = 1.62 * Math.max(level, 1e-3), yp = (0.02 + hp / 2) - COM;
-  const m = ms + mp, yc = (mp * yp) / m;
-  const ixs = ms * (R * R / 2 + H * H / 12), iys = ms * R * R;
-  const ixp = mp * (ri * ri / 4 + hp * hp / 12), iyp = 0.5 * mp * ri * ri;
-  const ix = ixs + ms * yc * yc + ixp + mp * (yp - yc) * (yp - yc);
-  return { m, com: yc, ix, iy: iys + iyp };
-}
-
+/* the box lid opens to 100 degrees on its hinge at the back edge of the base: just past upright, leaning back a
+   little, the whole open box standing on the plinth */
+const BOX_OPEN = 1.745;
+/* plinth radius per arrangement (decimetres, times S.prK 0.92): the open box with its standing lid, the can, its
+   popped lid and a poured puddle all lie on it with room to spare (checked by projecting their footprints) */
+const PLINTH = { both: 3.663, can: 2.5, box: 2.717 };
+/* where the popped lid lands and where the pour runs, per arrangement (x, z on the plinth top) */
+const SPOTS = { both: { lid: [0.89, 2.01], pour: [-1.11, 2.03] }, can: { lid: [0.55, 1.03], pour: [0.87, -0.9] }, box: {} };
+const wrapPi = a => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
 
 /* the scene code (models, post, contact shadows, HDR loader) loads with three.js, when the block nears the viewport */
 let loadHDR = null, createPost = null, createContact = null, M = null, partsP = null;
@@ -58,42 +48,25 @@ function loadParts() {
   return partsP;
 }
 
-let rapierP = null;
-function loadRapier() {
-  if (!rapierP) {
-    rapierP = import(/* @vite-ignore */ RAPIER_URL).then(async mod => {
-      const RA = mod.default || mod;
-      /* the compat build passes its inlined wasm positionally and warns about it; keep the console clean */
-      const warn = console.warn;
-      console.warn = function (...a) { if (!/deprecated parameters for the initialization function/.test(String(a[0]))) warn.apply(console, a); };
-      let p; try { p = RA.init(); } finally { console.warn = warn; }
-      await p;
-      return RA;
-    });
-    rapierP.catch(() => { rapierP = null; });
-  }
-  return rapierP;
-}
-
 const TXT = {
   uk: {
     region: 'Упаковка Dvatone у 3D: банка й коробка Designer Box', can: 'Банка Dvatone', box: 'Коробка Designer Box',
-    canHelp: 'Enter відкриває кришку, стрілки обертають банку', boxHelp: 'Enter відкриває коробку, ще раз розгортає віяло, стрілки обертають коробку',
+    canHelp: 'Enter відкриває кришку, стрілки повертають подіум', boxHelp: 'Enter відкриває коробку, ще раз розгортає віяло, стрілки повертають подіум',
     fanHelp: 'Стрілки вибирають зразок віяла, Enter наливає цей колір у банку, Escape закриває коробку',
     canOpened: 'Кришку знято: усередині фарба', canClosed: 'Банку закрито', boxOpened: 'Коробку відкрито: зразки й віяло',
     fanOpened: 'Віяло розгорнуто', boxClosed: 'Коробку закрито', picked: 'Колір у банці: {name}', strip: 'Зразок {name}',
-    hint: 'Натисніть, щоб відкрити · потягніть, щоб підкинути', hintTouch: 'Торкніться, щоб відкрити · змахніть, щоб підкинути',
+    hint: 'Натисніть, щоб відкрити · Тягніть, щоб повернути', hintTouch: 'Торкніться, щоб відкрити · Тягніть, щоб повернути',
     live: 'Живе 3D', liveLabel: 'Увімкнути інтерактивне 3D: банка й коробка Designer Box',
     pour: 'Вилити', pourLabel: 'Вилити фарбу з банки на подіум', poured: 'Фарбу вилито: калюжа розтікається', refilled: 'Банку знову наповнено',
     line: 'МУЛЬТИКОЛОРОВЕ ДЕКОРАТИВНЕ ПОКРИТТЯ', vol: '2 л', boxCaption: 'DESIGNER BOX', inside: 'Зразки покриття для вашого проєкту'
   },
   en: {
     region: 'Dvatone packaging in 3D: the can and the Designer Box', can: 'Dvatone can', box: 'Designer Box',
-    canHelp: 'Enter lifts the lid, arrow keys turn the can', boxHelp: 'Enter opens the box, again to fan out the colour fan, arrow keys turn the box',
+    canHelp: 'Enter lifts the lid, arrow keys turn the plinth', boxHelp: 'Enter opens the box, again to fan out the colour fan, arrow keys turn the plinth',
     fanHelp: 'Arrow keys choose a fan strip, Enter pours that colour into the can, Escape closes the box',
     canOpened: 'Lid lifted: the paint inside', canClosed: 'Can closed', boxOpened: 'Box open: samples and the colour fan',
     fanOpened: 'Colour fan open', boxClosed: 'Box closed', picked: 'Colour in the can: {name}', strip: 'Sample {name}',
-    hint: 'Click to open · drag to toss', hintTouch: 'Tap to open · flick to toss',
+    hint: 'Click to open · Drag to turn', hintTouch: 'Tap to open · Drag to turn',
     live: 'Live 3D', liveLabel: 'Start the interactive 3D: the can and the Designer Box',
     pour: 'Pour', pourLabel: 'Pour the paint out of the can onto the plinth', poured: 'Paint poured: the puddle spreads', refilled: 'The can is full again',
     line: 'MULTICOLOUR DECORATIVE COATING', vol: '2 L', boxCaption: 'DESIGNER BOX', inside: 'Coating samples for your project'
@@ -118,7 +91,7 @@ const FAN_SET = [
 const DARK_STONE = mix([['2C2926', 40], ['3A3531', 28], ['1F1D1B', 22], ['4B453E', 10]]);
 
 const CSS = `
-.dvp2-stage{touch-action:pan-y pinch-zoom;cursor:default;outline:none}
+.dvp2-stage{touch-action:pan-y pinch-zoom;cursor:grab;outline:none}
 .dvp2-gate{position:relative;width:100%;height:100%}
 .dvp2-gate__img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;user-select:none}
 .dvp2-live{position:absolute;left:50%;bottom:clamp(10px,4%,24px);transform:translateX(-50%);display:inline-flex;align-items:center;gap:10px;
@@ -128,7 +101,7 @@ const CSS = `
 .dvp2-live i{width:7px;height:7px;border-radius:50%;background:#c4935c;box-shadow:0 0 0 4px rgba(196,147,92,.2)}
 .dvp2-live:focus-visible{outline:none;box-shadow:inset 0 0 0 1px rgba(220,186,148,.42),0 0 0 2px var(--focus,#e6c9a4)}
 .dvp2-gate.is-light .dvp2-live{color:#191511;background:rgba(247,244,239,.7);box-shadow:inset 0 0 0 1px rgba(138,79,31,.4)}
-.dvp2-stage.is-hover{cursor:grab}.dvp2-stage.is-point{cursor:pointer}.dvp2-stage.is-grabbing,.dvp2-stage.is-orbit{cursor:grabbing}
+.dvp2-stage.is-hover,.dvp2-stage.is-point{cursor:pointer}.dvp2-stage.is-turning{cursor:grabbing}
 .dvp2-ui{position:absolute;inset:0;pointer-events:none;z-index:2}
 .dvp2-hit{position:absolute;left:0;top:0;width:10px;height:10px;margin:0;padding:0;border:0;background:none;color:transparent;font-size:1px;
   border-radius:22px;pointer-events:none;outline:none;opacity:1;transition:box-shadow .25s ease}
@@ -182,7 +155,6 @@ function mount(el, opts = {}) {
     object: OBJECTS.includes(opts.object) ? opts.object : 'both',
     colors: normColors(opts.colors || FAN_SET[0].colors),
     plinth: opts.plinth || 'coating',
-    physics: opts.physics !== false,
     theme: opts.theme || 'auto',
     hint: opts.hint !== false,
     ph: 0.6, prK: 0.92, el: 0.38,
@@ -201,20 +173,22 @@ function mount(el, opts = {}) {
   let T, R, scene, camera, post, contact, contactFloor = null, baker, envRT = null, envHDR = null, key, rim, fill, floor, floorRing, plinthMesh, plinthMat, mats, tex = {}, coat = null, coatPlinth = null, oldCoat = null;
   let paintMat, chipMats = [], stripMats = [], stripBakes = null;
   const chipIdx = [0, 2, 4, 6, 8, 10];
-  let can = null, box = null, plinthR = 3.3, world = null, RA = null, physicsState = 'off';
+  let can = null, box = null, plinthR = 3.3;
   const items = {};
   const V = {};                       /* scratch vectors */
   const cam = { tx: 0, ty: 1.2, tz: 0, az: 0, el: 0.3, dist: 14, fov: 24 }, camGoal = Object.assign({}, cam), camVel = {};
-  const view = { focus: 'hero', userAz: 0, userEl: 0, userVaz: 0, userVel: 0, par: [0, 0], parGoal: [0, 0] };
+  const view = { focus: 'hero', wide: true, userEl: 0, par: [0, 0], parGoal: [0, 0] };
+  /* the turntable: the studio (camera, lights, environment) turns around the plinth by a. v: coasting after a flick;
+     goal: a glide (the arrow keys, Home, the slow return to the front after a quiet while), spring rate w */
+  const turn = { a: 0, v: 0, goal: null, w: 6, sv: 0, applied: NaN };
   let time = 0, lastInput = -10, dirty = true, shadowDirty = true, contactDirty = true, built = false, hintShown = false, hintT = 0;
   const buildSteps = {};
   let msaa = 4;
   let forceRender = false, lastDraw = -1;
   const drawn = [];
-  const bounds = { xmin: -5, xmax: 5, ytop: 6, zf: 4.5, zb: -4.5 };
-  let acc = 0, alpha = 0, grab = null, fanSel = -1, hoverStrip = -1, transitions = [], tweens = [];
+  let fanSel = -1, hoverStrip = -1, transitions = [], tweens = [];
   const ptr = { id: null, mode: null, x0: 0, y0: 0, t0: 0, x: 0, y: 0, lx: 0, ly: 0, lt: 0, vx: 0, vy: 0, hit: null, hold: 0, touch: false, hist: [] };
-  let drawCount = 0, quietFrom = 0, physicsFaults = 0, dprBoost = 0;
+  let drawCount = 0, quietFrom = 0, dprBoost = 0;
 
   let stage = null, wrap = null, ui = null, live = null, hint = null, gate = null, readyResolve = null, pourBtn = null;
   const btn = {}, readyGate = new Promise(r => (readyResolve = r));
@@ -224,7 +198,7 @@ function mount(el, opts = {}) {
       poster: null,
       className: 'dv3d--pack dvp2-stage', alpha: true, antialias: false,
       build, update, render, resize, dispose,
-      continuous: () => !!grab || tweens.length > 0 || transitions.length > 0
+      continuous: () => ptr.mode === 'turn' || !!turn.v || turn.goal != null || tweens.length > 0 || transitions.length > 0
     });
     /* the poster too waits until the block nears the viewport (the browser's lazy loading), not the page load */
     const ps = opts.poster === false ? null : (opts.poster || posterFor(S.object));
@@ -249,14 +223,14 @@ function mount(el, opts = {}) {
     pourBtn.appendChild(document.createTextNode(L.pour));
     pourBtn.addEventListener('pointerdown', e => e.stopPropagation());
     pourBtn.addEventListener('click', e => { e.stopPropagation(); touchInput(); pourNow(); });
-    ui.appendChild(pourBtn);
     ['can', 'box'].forEach(n => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'dvp2-hit'; b.dataset.object = n;
       b.setAttribute('aria-expanded', 'false'); b.hidden = true; ui.appendChild(b); btn[n] = b;
       b.addEventListener('click', () => { touchInput(); activate(n, null); });
       b.addEventListener('keydown', e => onKey(e, n));
-      b.addEventListener('focus', () => { dirty = true; invalidate(); wantPhysics(); });
+      b.addEventListener('focus', () => { dirty = true; invalidate(); });
     });
+    ui.appendChild(pourBtn);                     /* after the can and the box in the tab order */
     if (fromTap) { wrap.tabIndex = -1; try { wrap.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
     stage.readyP.then(v => readyResolve(v));
   }
@@ -295,7 +269,7 @@ function mount(el, opts = {}) {
     const tb = performance.now(), mark = n => (buildSteps[n] = Math.round(performance.now() - tb));
     T = st.THREE; R = st.renderer;
     const vec = () => new T.Vector3();
-    Object.assign(V, { a: vec(), b: vec(), c: vec(), d: vec(), pv: vec(), q: new T.Quaternion(), q2: new T.Quaternion(), m: new T.Matrix4(), ray: new T.Raycaster(), ndc: new T.Vector2(), plane: new T.Plane(), box: new T.Box3() });
+    Object.assign(V, { a: vec(), b: vec(), c: vec(), d: vec(), pv: vec(), cp: vec(), ct: vec(), Y: new T.Vector3(0, 1, 0), q: new T.Quaternion(), q2: new T.Quaternion(), m: new T.Matrix4(), ray: new T.Raycaster(), ndc: new T.Vector2(), plane: new T.Plane(), box: new T.Box3() });
     R.shadowMap.enabled = true; R.shadowMap.type = T.VSMShadowMap; R.shadowMap.autoUpdate = false;
     scene = new T.Scene();
     camera = new T.PerspectiveCamera(cam.fov, st.w / st.h, 0.3, 120);
@@ -385,7 +359,7 @@ function mount(el, opts = {}) {
     for (let i = 0; i < ru.count; i++) ru.setXY(i, (Math.hypot(rp.getX(i), rp.getY(i)) - 0.9) / 0.6, 0.5);
     floorRing = new T.Mesh(rg, edgeFade(new T.MeshBasicMaterial({ color: 0x000000, transparent: true, depthWrite: false, alphaMap: ringTex(), toneMapped: false })));
     floorRing.rotation.x = -Math.PI / 2; floorRing.position.y = 0.002; floorRing.renderOrder = 1; scene.add(floorRing);
-    contact = createContact(T, R, { res: TC.contact, layer: LAYER_DYN, height: 0.9, darkness: 0.92, blur: TC.contact < 512 ? 1.6 : 2.4 });
+    contact = createContact(T, R, { res: TC.contact, layer: LAYER_DYN, height: 1.25, darkness: 0.92, blur: TC.contact < 512 ? 1.6 : 2.4 });
     scene.add(contact.mesh);
     contactFloor = createContact(T, R, { res: TC.contact, layer: LAYER_DYN, height: 0.9, darkness: 0.85, blur: TC.contact < 512 ? 1.8 : 2.6, ground: 0 });
     edgeFade(contactFloor.mesh.material); contactFloor.mesh.visible = false; contactFloor.mesh.renderOrder = 1;
@@ -415,13 +389,7 @@ function mount(el, opts = {}) {
     if (S.hint && !stage.reduced) setTimeout(() => { if (!hintShown && lastInput < 0) { hint.classList.add('is-on'); hintT = time; } }, 900);
     else if (S.hint) hint.classList.add('is-on');
     idle(() => { if (!stage.destroyed) ensureStrips(); });
-    /* Rapier (about 740 KB) waits for a sign of intent (wantPhysics), so a visitor who only scrolls past never loads it;
-       recordings (?capture) keep the early start */
-    if (G3.capture) idle(() => startPhysics());
   }
-  /* load the physics on a mouse press on the stage, the mouse resting on the can or the box, a touch that taps, holds,
-     spins or orbits (never one that scrolls the page), keyboard focus on the can or the box */
-  function wantPhysics() { if (physicsState === 'off' && built && S.physics && !stage.reduced) startPhysics(); }
   /* studio environment: the Poly Haven HDRI on a sphere (turned so its big diffusion panel is front-left and the two
      strip boxes rim the objects) plus one long overhead softbox behind them: it draws the wet highlight on the paint,
      the long glint on the copper lid and the soft gradient on the black coat */
@@ -504,9 +472,9 @@ function mount(el, opts = {}) {
 
   function makeItem(name, model, com) {
     return {
-      name, model, root: model.root, com, half: model.half, body: null, visible: true,
+      name, model, root: model.root, com, half: model.half, visible: true,
       home: { p: new T.Vector3(), q: new T.Quaternion() }, cur: { p: new T.Vector3(), q: new T.Quaternion() }, prev: { p: new T.Vector3(), q: new T.Quaternion() },
-      last: { p: new T.Vector3(1e9, 0, 0), q: new T.Quaternion() }, glide: null, frozen: false, state: 'closed', k: 0, yawV: 0
+      last: { p: new T.Vector3(1e9, 0, 0), q: new T.Quaternion() }, glide: null, frozen: false, state: 'closed'
     };
   }
 
@@ -536,17 +504,18 @@ function mount(el, opts = {}) {
   function homes() {
     const H = S.ph, c = items.can, b = items.box;
     const Q = (y) => new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), y);
+    plinthR = PLINTH[S.object] * S.prK;
     if (S.object === 'both') {
-      plinthR = 3.37 * S.prK;
-      c.home.p.set(1.45, H + M.CAN.COM, 0.9); c.home.q.copy(Q(-0.12));
-      b.home.p.set(-0.75, H + M.BOX.COM, -0.8); b.home.q.copy(Q(0.22));
+      /* the box at the back left with room behind it for its standing lid, the can on the right; the can's lid lands
+         front centre and the pour runs front left (SPOTS) */
+      c.home.p.set(2.19, H + M.CAN.COM, 0.35); c.home.q.copy(Q(-0.12));
+      b.home.p.set(-0.67, H + M.BOX.COM, -0.28); b.home.q.copy(Q(0.14));
     } else if (S.object === 'can') {
-      plinthR = 1.85 * S.prK;
-      c.home.p.set(0, H + M.CAN.COM, 0); c.home.q.copy(Q(-0.3));
+      c.home.p.set(-1.05, H + M.CAN.COM, -0.3); c.home.q.copy(Q(-0.3));
       b.home.p.set(0, -40, 0); b.home.q.identity();
     } else {
-      plinthR = 2.55 * S.prK;
-      b.home.p.set(0, H + M.BOX.COM, 0); b.home.q.copy(Q(0.16));
+      /* the open box (base and standing lid) centred on the plinth */
+      b.home.p.set(0.062, H + M.BOX.COM, 0.385); b.home.q.copy(Q(0.16));
       c.home.p.set(0, -40, 0); c.home.q.identity();
     }
     c.visible = S.object !== 'box'; b.visible = S.object !== 'can';
@@ -574,8 +543,9 @@ function mount(el, opts = {}) {
     key.angle = Math.atan((plinthR * 0.85) / 15); key.penumbra = 1;
     key.shadow.camera.near = 8; key.shadow.camera.far = 26; key.shadow.focus = 1; key.shadow.camera.updateProjectionMatrix();
     rim.position.set(9, 6, -10); rim.target.position.set(0, S.ph, 0);
-    if (world) rebuildWorld();
-    view.focus = 'hero'; view.userAz = view.userEl = 0;
+    rigSave();
+    turn.a = 0; turn.v = 0; turn.sv = 0; turn.goal = null; turn.applied = NaN;
+    view.focus = 'hero'; view.wide = true; view.userEl = 0;
     heroView(camGoal);
     if (first || stage.reduced) Object.assign(cam, camGoal);
     labelButtons();
@@ -634,32 +604,48 @@ function mount(el, opts = {}) {
     }
     return out;
   }
-  function heroView(goal) {
+  /* the whole turntable in the picture at every angle: each point stands for the circle it sweeps as the plinth turns,
+     so turning never pushes anything out of the frame (and the camera stays put while it turns) */
+  function sweep(pts, out) {
+    const seen = new Set();
+    for (const p of pts) {
+      const r = Math.hypot(p.x, p.z), k = Math.round(r * 25) + ':' + Math.round(p.y * 25);
+      if (seen.has(k)) continue;
+      seen.add(k); circlePts(0, p.y, 0, r, 24, out);
+    }
+    return out;
+  }
+  function wideView(goal, f) {
     const aspect = Math.max(0.3, stage.w / stage.h), portrait = aspect < 0.95;
     goal.fov = portrait ? 30 : 24; goal.el = portrait ? S.el + 0.06 : S.el; goal.az = S.object === 'both' ? -0.06 : 0;
-    const pts = circlePts(0, S.ph, 0, plinthR, 24, []);
-    circlePts(0, 0, 0, plinthR, 24, pts);
-    Object.values(items).forEach(it => { if (it.visible) { const keep = it.cur.p.clone(), kq = it.cur.q.clone(); it.cur.p.copy(it.home.p); it.cur.q.copy(it.home.q); boxPts(it, pts, 0.1, 0.25); it.cur.p.copy(keep); it.cur.q.copy(kq); } });
-    frame(goal, pts, portrait ? 0.04 : 0.08, 0.1, 0.07);
-    if (goal === camGoal) heroBounds(goal);
+    const pts = circlePts(0, S.ph, 0, plinthR, 32, []);
+    circlePts(0, 0, 0, plinthR, 32, pts);
+    const own = [];
+    Object.values(items).forEach(it => {
+      if (!it.visible || it.name === 'lid') return;
+      const keep = it.cur.p.clone(), kq = it.cur.q.clone(); it.cur.p.copy(it.home.p); it.cur.q.copy(it.home.q);
+      boxPts(it, own, 0.1, 0.25);
+      it.cur.p.copy(keep); it.cur.q.copy(kq);
+    });
+    const ci = items.can, bi = items.box;
+    /* the popped lid's arc over the can */
+    if (ci.visible && (f === 'can' || f === 'pour' || ci.state !== 'closed')) circlePts(ci.home.p.x, ci.home.p.y + M.CAN.H / 2 + 1.45, ci.home.p.z, M.CAN.R, 8, own);
+    if (bi.visible && (f === 'box' || f === 'fan' || bi.state !== 'closed')) own.push(...finalPoints(f === 'fan' || bi.state === 'fan' ? 'fan' : 'box'));
+    if (f === 'pour' && pourPts) own.push(...pourPts);
+    frame(goal, sweep(own, pts), portrait ? 0.04 : 0.08, 0.1, 0.07);
   }
+  function heroView(goal) { wideView(goal, 'hero'); }
   /* the open poses are known in advance: frame them before they happen (the camera moves while the lid lifts) */
   function finalPoints(f) {
     const pts = [], v = () => new T.Vector3();
     if (f === 'can') {
       const it = items.can; it.root.position.copy(it.cur.p); it.root.quaternion.copy(it.cur.q); it.root.updateMatrixWorld(true);
-      if (!items.lid && !(world && !stage.reduced)) {        /* the hovering lid belongs to the picture (no physics) */
-        const lid = can.lid, p0 = lid.position.clone(), r0 = lid.rotation.clone();
-        lid.position.set(0.12, M.CAN.LID_Y + 1.18, -0.62); lid.rotation.set(0.62, 0, 0.1); lid.updateMatrixWorld(true);
-        for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; pts.push(v().set(Math.cos(a) * M.CAN.R, 0.06, Math.sin(a) * M.CAN.R).applyMatrix4(lid.matrixWorld)); }
-        lid.position.copy(p0); lid.rotation.copy(r0); lid.updateMatrixWorld(true);
-      }
       for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; pts.push(v().set(Math.cos(a) * (M.CAN.R + 0.05), M.CAN.H, Math.sin(a) * (M.CAN.R + 0.05)).applyMatrix4(can.body.matrixWorld)); }
       for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; pts.push(v().set(Math.cos(a) * M.CAN.R, M.CAN.H - 0.75, Math.sin(a) * M.CAN.R).applyMatrix4(can.body.matrixWorld)); }
     } else {
       const it = items.box; it.root.position.copy(it.cur.p); it.root.quaternion.copy(it.cur.q); it.root.updateMatrixWorld(true);
       boxPts(it, pts, 0.04, 0);
-      const h0 = box.hinge.rotation.x; box.hinge.rotation.x = -1.86; box.hinge.updateMatrixWorld(true);
+      const h0 = box.hinge.rotation.x; box.hinge.rotation.x = -BOX_OPEN; box.hinge.updateMatrixWorld(true);
       [[-1, 0.85, -1], [1, 0.85, -1], [-1, 0.85, 1], [1, 0.85, 1]].forEach(([x, y, z]) => pts.push(v().set(x * M.BOX.LW / 2, y, z * M.BOX.LD / 2).applyMatrix4(box.lid.matrixWorld)));
       box.hinge.rotation.x = h0; box.hinge.updateMatrixWorld(true);
       if (f === 'fan') {
@@ -674,37 +660,17 @@ function mount(el, opts = {}) {
   let pourPts = null;
   function focusView(goal) {
     const f = view.focus, aspect = Math.max(0.3, stage.w / stage.h), portrait = aspect < 0.95;
-    if (f === 'hero') return heroView(goal);
-    if (f === 'pour' && pourPts) { goal.fov = portrait ? 30 : 24; goal.az = 0; goal.el = 0.36; frame(goal, pourPts, portrait ? 0.06 : 0.09, 0.12, 0.08); return; }
+    /* the whole turntable: always on a phone-sized stage (both objects stay whole at every angle), and on a desktop
+       once the plinth has been turned; otherwise a close-up of what was opened, seen from where the plinth stands */
+    if (f === 'hero' || view.wide || stage.w < 560) return wideView(goal, f);
+    const at = turn.goal != null ? turn.goal : turn.a, rig = pts => pts.map(p => p.clone().applyAxisAngle(V.Y, -at));
+    if (f === 'pour' && pourPts) { goal.fov = portrait ? 30 : 24; goal.az = 0; goal.el = 0.36; frame(goal, rig(pourPts), portrait ? 0.06 : 0.09, 0.12, 0.08); return; }
     goal.fov = portrait ? 30 : 24;
     goal.az = S.object === 'both' ? (f === 'can' ? 0.08 : -0.1) : 0;
     goal.el = f === 'can' ? 0.66 : (f === 'fan' ? 0.34 : 0.7);
-    let pts = finalPoints(f);
-    /* a phone-sized stage: the other object and the plinth stay in the picture (no can cut off at the edge, no box
-       that seems to float because its support is out of frame) */
-    if (stage.w < 560 && S.object === 'both') {
-      const other = f === 'can' ? items.box : items.can;
-      pts = pts.concat(boxPts(other, [], 0.05, 0), circlePts(0, S.ph, 0, plinthR * 0.92, 16, []));
-      goal.el = Math.min(goal.el, 0.55); goal.az = 0;
-    }
-    frame(goal, pts, portrait ? 0.05 : 0.09, 0.07, 0.07);
+    frame(goal, rig(finalPoints(f)), portrait ? 0.05 : 0.09, 0.07, 0.07);
   }
 
-  function heroBounds(goal) {
-    const c = new T.PerspectiveCamera(goal.fov, Math.max(0.3, stage.w / stage.h), 0.1, 200);
-    c.position.set(goal.tx + Math.sin(goal.az) * Math.cos(goal.el) * goal.dist, goal.ty + Math.sin(goal.el) * goal.dist, goal.tz + Math.cos(goal.az) * Math.cos(goal.el) * goal.dist);
-    c.lookAt(goal.tx, goal.ty, goal.tz); c.updateMatrixWorld(); c.updateProjectionMatrix();
-    const pl = new T.Plane(new T.Vector3(0, 0, 1), 0), r = new T.Ray(), hit = new T.Vector3();
-    const at = (x, y, p = pl) => { r.origin.copy(c.position); r.direction.set(x, y, 0.5).unproject(c).sub(c.position).normalize(); return r.intersectPlane(p, hit) ? hit.clone() : null; };
-    /* the side walls follow the frame where it is narrowest for a thrown object: in front of the plinth's middle, low
-       down (a can that lands on the table in front stays whole in the picture) */
-    const front = new T.Plane(new T.Vector3(0, 0, 1), -Math.min(1.4, plinthR * 0.45));
-    const L = at(-1, 0.2), Rr = at(1, 0.2), Tp = at(0, 1), Lf = at(-1, -0.45, front), Rf = at(1, -0.45, front);
-    bounds.xmin = Math.max(-12, L ? L.x + 0.15 : -5, Lf ? Lf.x + 0.1 : -12); bounds.xmax = Math.min(12, Rr ? Rr.x - 0.15 : 5, Rf ? Rf.x - 0.1 : 12);
-    bounds.ytop = Tp ? Tp.y : 6;
-    bounds.zf = plinthR + 0.9; bounds.zb = -plinthR - 1.0;
-    placeWalls();
-  }
   function smoothDamp(key, target, smoothTime, dt) {
     const v = camVel[key] || 0, omega = 2 / smoothTime, x = omega * dt, ex = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
     const change = cam[key] - target, temp = (v + omega * change) * dt;
@@ -716,14 +682,10 @@ function mount(el, opts = {}) {
   function updateCamera(dt) {
     const before = cam.tx + cam.ty * 3.1 + cam.tz * 7.3 + cam.az * 11 + cam.el * 13 + cam.dist * 17 + cam.fov * 19 + view.par[0] * 23 + view.par[1] * 29;
     const idleFor = time - lastInput;
-    if (!grab && ptr.mode !== 'orbit' && idleFor > 3.5) {             /* the view drifts back to its composition */
-      const k = 1 - Math.exp(-dt * 1.2); view.userAz -= view.userAz * k; view.userEl -= view.userEl * k;
+    if (ptr.mode !== 'turn' && idleFor > 3.5) {             /* a tilted view drifts back to its composition */
+      const k = 1 - Math.exp(-dt * 1.2); view.userEl -= view.userEl * k;
     }
-    if (!grab && ptr.mode !== 'orbit' && (view.userVaz || view.userVel)) {   /* orbit inertia */
-      view.userAz = clamp(view.userAz + view.userVaz * dt, -0.75, 0.75); view.userEl = clamp(view.userEl + view.userVel * dt, -0.18, 0.42);
-      const d = Math.exp(-dt * 4); view.userVaz *= d; view.userVel *= d;
-      if (Math.abs(view.userVaz) < 1e-3) view.userVaz = 0; if (Math.abs(view.userVel) < 1e-3) view.userVel = 0;
-    }
+    stepTurn(dt, idleFor);
     const pk = 1 - Math.exp(-dt * 3);
     view.par[0] += (view.parGoal[0] - view.par[0]) * pk; view.par[1] += (view.parGoal[1] - view.par[1]) * pk;
     const g = camGoal;
@@ -732,211 +694,66 @@ function mount(el, opts = {}) {
       const st = view.focus === 'hero' ? 0.75 : 0.6;
       ['tx', 'ty', 'tz', 'az', 'el', 'dist', 'fov'].forEach(k => { cam[k] = smoothDamp(k, g[k], st, Math.min(dt, 0.05)); });
     }
-    const az = cam.az + view.userAz + view.par[0] * 0.07, el = clamp(cam.el + view.userEl - view.par[1] * 0.04, 0.05, 1.25);
+    const az = cam.az + view.par[0] * 0.07, el = clamp(cam.el + view.userEl - view.par[1] * 0.04, 0.05, 1.25);
     camera.fov = cam.fov; camera.aspect = stage.w / stage.h;
-    camera.position.set(cam.tx + Math.sin(az) * Math.cos(el) * cam.dist, cam.ty + Math.sin(el) * cam.dist, cam.tz + Math.cos(az) * Math.cos(el) * cam.dist);
-    camera.lookAt(cam.tx, cam.ty, cam.tz);
+    /* the camera in the turntable's frame, then the whole studio turned round the plinth's axis */
+    V.cp.set(cam.tx + Math.sin(az) * Math.cos(el) * cam.dist, cam.ty + Math.sin(el) * cam.dist, cam.tz + Math.cos(az) * Math.cos(el) * cam.dist).applyAxisAngle(V.Y, turn.a);
+    V.ct.set(cam.tx, cam.ty, cam.tz).applyAxisAngle(V.Y, turn.a);
+    camera.position.copy(V.cp); camera.lookAt(V.ct);
     camera.updateProjectionMatrix();
-    const after = cam.tx + cam.ty * 3.1 + cam.tz * 7.3 + cam.az * 11 + cam.el * 13 + cam.dist * 17 + cam.fov * 19 + view.par[0] * 23 + view.par[1] * 29;
-    if (Math.abs(after - before) > 1e-6 || view.userVaz || view.userVel) dirty = true;
+    if (turn.applied !== turn.a) applyTurn();
+    const after = cam.tx + cam.ty * 3.1 + cam.tz * 7.3 + cam.az * 11 + cam.el * 13 + cam.dist * 17 + cam.fov * 19 + view.par[0] * 23 + view.par[1] * 29 + turn.a * 31;
+    if (Math.abs(after - before) > 1e-6) dirty = true;
+  }
+  /* the studio turns with the view: the lights and the environment keep their place relative to the camera, so the
+     plinth turns under unchanged light (and the shadows move over it the way they would on a real turntable) */
+  let rigBase = null;
+  function rigSave() { rigBase = [key.position, key.target.position, rim.position, rim.target.position, fill.position].map(v => v.clone()); }
+  function applyTurn() {
+    turn.applied = turn.a;
+    if (rigBase) [key.position, key.target.position, rim.position, rim.target.position, fill.position].forEach((v, i) => v.copy(rigBase[i]).applyAxisAngle(V.Y, turn.a));
+    key.target.updateMatrixWorld(); rim.target.updateMatrixWorld();
+    if (scene.environmentRotation) scene.environmentRotation.y = turn.a;
+    if (pour && pour.setTurn) pour.setTurn(turn.a);
+    shadowDirty = dirty = true;
+  }
+  /* a drag turns it (onMove); let go while moving and it coasts, slowing gently; the keys, Home and the pour glide it
+     to an angle on a critically damped spring; after a quiet while it turns back to the front by the short way */
+  function stepTurn(dt, idleFor) {
+    if (ptr.mode === 'turn') return;
+    if (turn.goal == null && !turn.v && Math.abs(wrapPi(turn.a)) > 0.003 && idleFor > 8 && ptr.id === null && !stage.reduced && !pourBusy() && !tweens.length) {
+      turn.a = wrapPi(turn.a); turn.goal = 0; turn.w = 1.7; turn.sv = 0;
+    }
+    if (turn.goal != null) {
+      const h = Math.min(dt, 0.05), w = turn.w;
+      turn.sv += (w * w * (turn.goal - turn.a) - 2 * w * turn.sv) * h;
+      turn.a += turn.sv * h;
+      if (Math.abs(turn.goal - turn.a) < 0.0008 && Math.abs(turn.sv) < 0.01) { turn.a = turn.goal; turn.goal = null; turn.sv = 0; }
+    } else if (turn.v) {
+      turn.a += turn.v * dt;
+      turn.v *= Math.exp(-dt * 2.4);
+      if (Math.abs(turn.v) < 0.03) turn.v = 0;
+    }
+  }
+  function turnTo(a, w) {
+    turn.v = 0;
+    if (stage.reduced) { turn.a = a; turn.goal = null; turn.sv = 0; dirty = true; invalidate(); return; }
+    turn.goal = a; turn.w = w || 7; turn.sv = 0;
+    invalidate();
   }
   function setFocus(f) {
     if (view.focus === f) return;
     view.focus = f; focusView(camGoal); dirty = true;
   }
 
-  /* ================= physics ================= */
-  async function startPhysics() {
-    if (physicsState !== 'off' || !S.physics || stage.reduced || stage.destroyed) return;
-    physicsState = 'loading';
-    try { RA = await loadRapier(); } catch (e) { physicsState = 'failed'; return; }
-    if (stage.destroyed || stage.reduced) { physicsState = 'off'; return; }
-    rebuildWorld();
-    physicsState = 'on';
-  }
-  function rebuildWorld() {
-    if (!RA) return;
-    if (world) { Object.values(items).forEach(it => (it.body = null)); world.free(); world = null; }
-    world = new RA.World({ x: 0, y: -GRAV, z: 0 });
-    world.timestep = HSTEP;
-    try { world.integrationParameters.numSolverIterations = 8; } catch (e) { /* older builds */ }
-    const fixed = (desc, x, y, z, fr = 0.6, re = 0.2) => {
-      const b = world.createRigidBody(RA.RigidBodyDesc.fixed().setTranslation(x, y, z));
-      world.createCollider(desc.setFriction(fr).setRestitution(re), b); return b;
-    };
-    fixed(RA.ColliderDesc.cuboid(40, 0.5, 40), 0, -0.5, 0, PHYS.floor.fr, PHYS.floor.re);
-    fixed(RA.ColliderDesc.cylinder(S.ph / 2, plinthR), 0, S.ph / 2, 0, PHYS.plinth.fr, PHYS.plinth.re);
-    walls = ['l', 'r', 'f', 'b'].map(k => fixed(k === 'l' || k === 'r' ? RA.ColliderDesc.cuboid(0.5, 8, 12) : RA.ColliderDesc.cuboid(12, 8, 0.5), 0, 8, 0, 0.25, 0.3));
-    placeWalls();
-    for (const it of Object.values(items)) {
-      if (!it.visible) continue;
-      const p = it.cur.p, q = it.cur.q;
-      const desc = RA.RigidBodyDesc.dynamic().setTranslation(p.x, p.y, p.z).setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-        .setCcdEnabled(true).setSleeping(true);
-      if (it.name === 'lid') { it.body = world.createRigidBody(desc.setLinearDamping(PHYS.lid.lin).setAngularDamping(PHYS.lid.ang)); it.collider = world.createCollider(lidCollider(), it.body); continue; }
-      let col;
-      if (it.name === 'can') {
-        desc.setLinearDamping(PHYS.can.lin).setAngularDamping(PHYS.can.ang);
-        col = RA.ColliderDesc.roundCylinder(M.CAN.H / 2 - 0.03, M.CAN.R + 0.02 - 0.03, 0.03).setFriction(PHYS.can.fr).setRestitution(PHYS.can.re);
-        massProps(col, canMass(paintLevel));
-      } else {
-        desc.setLinearDamping(PHYS.box.lin).setAngularDamping(PHYS.box.ang);
-        col = RA.ColliderDesc.roundCuboid(M.BOX.LW / 2 - 0.02, M.BOX.H / 2 - 0.02, M.BOX.LD / 2 - 0.02, 0.02).setFriction(PHYS.box.fr).setRestitution(PHYS.box.re);
-        if (col.setMass) col.setMass(PHYS.box.mass); else col.setDensity(PHYS.box.mass / (M.BOX.LW * M.BOX.H * M.BOX.LD));
-      }
-      combine(col);
-      it.body = world.createRigidBody(desc);
-      it.collider = world.createCollider(col, it.body);
-      if (it.state !== 'closed') freeze(it, true);
-    }
-  }
-  /* the lowest bounce wins (a cardboard box does not bounce off stone), contacts carry a thin skin (no resting jitter) */
-  function combine(col) {
-    try { if (RA.CoefficientCombineRule) col.setRestitutionCombineRule(RA.CoefficientCombineRule.Min); } catch (e) { /* older builds */ }
-    try { if (col.setContactSkin) col.setContactSkin(0.004); } catch (e) { /* older builds */ }
-    return col;
-  }
-  function massProps(col, mp) {
-    if (col.setMassProperties) col.setMassProperties(mp.m, { x: 0, y: mp.com, z: 0 }, { x: mp.ix, y: mp.iy, z: mp.ix }, { x: 0, y: 0, z: 0, w: 1 });
-    else col.setDensity(mp.m / (Math.PI * M.CAN.R * M.CAN.R * M.CAN.H));
-    return col;
-  }
-  function lidCollider() {
-    const col = RA.ColliderDesc.roundCylinder(0.03, M.CAN.R - 0.045, 0.025).setTranslation(0, -0.02, 0).setFriction(PHYS.lid.fr).setRestitution(PHYS.lid.re);
-    if (col.setMass) col.setMass(PHYS.lid.mass); else col.setDensity(0.8);
-    return combine(col);
-  }
-  /* the paint level changes the can's weight and where it sits */
+  /* ================= the paint level ================= */
   let paintLevel = 1;
   function setPaintLevel(l) {
     paintLevel = clamp(l, 0, 1);
     if (can) { can.paint.position.y = 0.06 + (M.CAN.PAINT_Y - 0.06) * paintLevel; can.paint.visible = paintLevel > 0.01; }
-    const it = items.can;
-    if (it && it.collider && it.collider.setMassProperties) { const mp = canMass(paintLevel); try { it.collider.setMassProperties(mp.m, { x: 0, y: mp.com, z: 0 }, { x: mp.ix, y: mp.iy, z: mp.ix }, { x: 0, y: 0, z: 0, w: 1 }); } catch (e) { /* keep the old mass */ } }
     dirty = true;
   }
-  const RBT = () => RA.RigidBodyType;
-  /* invisible walls just inside the visible frame at the plinth's depth (recomputed with the hero view) */
-  let walls = null;
-  function placeWalls() {
-    if (!walls) return;
-    const b = bounds;
-    if (!isFinite(b.xmin + b.xmax + b.zf + b.zb)) return;
-    walls[0].setTranslation({ x: b.xmin - 0.5, y: 8, z: 0 }, true);
-    walls[1].setTranslation({ x: b.xmax + 0.5, y: 8, z: 0 }, true);
-    walls[2].setTranslation({ x: 0, y: 8, z: b.zf + 0.5 }, true);
-    walls[3].setTranslation({ x: 0, y: 8, z: b.zb - 0.5 }, true);
-  }
-  function freeze(it, on) {
-    it.frozen = on;
-    if (!it.body) return;
-    if (on) { it.body.setBodyType(RBT().KinematicPositionBased, true); it.body.setLinvel({ x: 0, y: 0, z: 0 }, false); it.body.setAngvel({ x: 0, y: 0, z: 0 }, false); }
-    else { it.body.setBodyType(RBT().Dynamic, true); it.body.setLinvel({ x: 0, y: 0, z: 0 }, false); it.body.setAngvel({ x: 0, y: 0, z: 0 }, false); it.body.sleep(); }
-  }
-  function anyActive() {
-    if (grab) return true;
-    for (const it of Object.values(items)) if (it.body && it.visible && (it.glide || !it.body.isSleeping())) return true;
-    return false;
-  }
-  function stepPhysics(dt) {
-    if (!world) return;
-    if (!anyActive()) { acc = 0; alpha = 1; for (const it of Object.values(items)) { it.prev.p.copy(it.cur.p); it.prev.q.copy(it.cur.q); } return; }
-    acc += Math.min(dt, 0.1);
-    let n = 0;
-    while (acc >= HSTEP && n < 8) {
-      for (const it of Object.values(items)) if (it.body) { it.prev.p.copy(it.cur.p); it.prev.q.copy(it.cur.q); }
-      preStep(HSTEP);
-      try { world.step(); } catch (e) { physicsFault(); return; }
-      readBodies();
-      acc -= HSTEP; n++;
-    }
-    if (n >= 8) acc = 0;
-    alpha = acc / HSTEP;
-  }
-  let faults = 0;
-  function physicsFault() {
-    faults++; physicsFaults = faults;
-    grab = null; acc = 0;
-    const old = world; world = null;
-    for (const it of Object.values(items)) {
-      it.body = null; it.glide = null;
-      if (!isFinite(it.cur.p.x + it.cur.p.y + it.cur.p.z + it.cur.q.x + it.cur.q.y + it.cur.q.z + it.cur.q.w)) { it.cur.p.copy(it.home.p); it.cur.q.copy(it.home.q); }
-      it.prev.p.copy(it.cur.p); it.prev.q.copy(it.cur.q);
-    }
-    try { old && old.free(); } catch (e) { /* the old world may be unusable */ }
-    if (faults > 3) { physicsState = 'failed'; return; }
-    try { rebuildWorld(); } catch (e) { world = null; physicsState = 'failed'; }
-    dirty = shadowDirty = contactDirty = true;
-  }
-  function readBodies() {
-    for (const it of Object.values(items)) {
-      if (!it.body || !it.visible) continue;
-      const t = it.body.translation(), r = it.body.rotation();
-      if (!isFinite(t.x) || t.y < -6 || Math.abs(t.x) > 30 || Math.abs(t.z) > 30) { rescue(it); continue; }
-      it.cur.p.set(t.x, t.y, t.z); it.cur.q.set(r.x, r.y, r.z, r.w);
-    }
-  }
-  function rescue(it) {
-    it.body.setTranslation({ x: it.home.p.x, y: it.home.p.y + 0.6, z: it.home.p.z }, true);
-    it.body.setRotation({ x: it.home.q.x, y: it.home.q.y, z: it.home.q.z, w: it.home.q.w }, true);
-    it.body.setLinvel({ x: 0, y: 0, z: 0 }, true); it.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
-    it.cur.p.copy(it.home.p); it.cur.q.copy(it.home.q);
-  }
-  function preStep(h) {
-    /* grab spring at the anchor point: critically damped, gravity compensated, applied as an impulse at the point */
-    if (grab && grab.item.body && !grab.item.glide) {
-      const b = grab.item.body, m = b.mass();
-      const t = b.translation(), r = b.rotation(), lv = b.linvel(), av = b.angvel();
-      const q = V.q.set(r.x, r.y, r.z, r.w);
-      const pa = V.a.copy(grab.local).applyQuaternion(q).add(V.b.set(t.x, t.y, t.z));
-      const rx = pa.x - t.x, ry = pa.y - t.y, rz = pa.z - t.z;
-      const vx = lv.x + av.y * rz - av.z * ry, vy = lv.y + av.z * rx - av.x * rz, vz = lv.z + av.x * ry - av.y * rx;
-      grab.lift += (0.35 - grab.lift) * Math.min(1, h * 9);
-      const tgt = V.c.copy(grab.target); tgt.y += grab.lift;
-      const w0 = 13, z = 0.62;            /* a hand, not a vice: the object follows with a little lag and swings */
-      let ax = w0 * w0 * (tgt.x - pa.x) - 2 * z * w0 * vx, ay = w0 * w0 * (tgt.y - pa.y) - 2 * z * w0 * vy + GRAV, az = w0 * w0 * (tgt.z - pa.z) - 2 * z * w0 * vz;
-      const am = Math.hypot(ax, ay, az), lim = 1100;
-      if (am > lim) { ax *= lim / am; ay *= lim / am; az *= lim / am; }
-      if (isFinite(am) && isFinite(pa.x + pa.y + pa.z)) b.applyImpulseAtPoint({ x: ax * m * h, y: ay * m * h, z: az * m * h }, { x: pa.x, y: pa.y, z: pa.z }, true);
-    }
-    for (const it of Object.values(items)) {
-      if (it.glide && it.body) glideStep(it, h);
-      else if (it.body) { rollResist(it, h); if (it.name === 'lid') lidLanding(it, h); }
-    }
-  }
-  /* a thin metal lid comes down flat with a clack and stops within a hand's breadth (its curled rim bites into the
-     stone); only on the landing after it pops, a lid thrown by hand later moves freely */
-  function lidLanding(it, h) {
-    const b = it.body;
-    if (b.isSleeping() || (grab && grab.item === it)) return;
-    const t = b.translation(), ground = Math.hypot(t.x, t.z) < plinthR ? S.ph : 0;
-    if (!it.landedAt) {
-      /* the lowest point of the (tilted) lid reaches the ground: the first touch */
-      const r = b.rotation(), upY = 1 - 2 * (r.x * r.x + r.z * r.z);
-      const low = t.y - M.CAN.R * Math.sqrt(Math.max(0, 1 - upY * upY)) - 0.07 * Math.abs(upY);
-      if (low - ground > 0.035) return;
-      it.landedAt = time;
-      /* the clack: the turn stops dead (left spinning it would roll back into the can) */
-      const w0 = b.angvel(), v0 = b.linvel();
-      b.setAngvel({ x: w0.x * 0.12, y: w0.y * 0.3, z: w0.z * 0.12 }, true);
-      b.setLinvel({ x: v0.x * 0.4, y: v0.y, z: v0.z * 0.4 }, true);
-    }
-    if (time - it.landedAt > 0.7) return;
-    const k = Math.exp(-h * 48), v = b.linvel(), w = b.angvel();
-    b.setLinvel({ x: v.x * k, y: v.y, z: v.z * k }, true);
-    b.setAngvel({ x: w.x * k, y: w.y * k, z: w.z * k }, true);
-  }
-  /* rolling resistance on the plinth or the table: a can rolling on its side or a lid running on its rim slows down */
-  function rollResist(it, h) {
-    const P = PHYS[it.name], b = it.body;
-    if (!P || !P.roll || it.frozen || b.isSleeping() || (grab && grab.item === it)) return;
-    const t = b.translation(), ground = Math.hypot(t.x, t.z) < plinthR ? S.ph : 0;
-    if (t.y - ground > Math.max(it.half.x, it.half.y) + 0.12) return;          /* in the air */
-    const w = b.angvel(), wm = Math.hypot(w.x, w.z);
-    if (wm < 1e-3) return;
-    const k = Math.max(0, wm - P.roll * h) / wm;
-    b.setAngvel({ x: w.x * k, y: w.y, z: w.z * k }, true);
-  }
+  function freeze(it, on) { it.frozen = on; }
 
   /* glide back to a pose: kinematic arc (lift, turn upright, set down softly) */
   function glideTo(it, p1, q1, done, delay = 0, opt) {
@@ -958,7 +775,6 @@ function mount(el, opts = {}) {
     if (opt) { if (opt.lift != null) lift = opt.lift; if (opt.T) T1 = opt.T; }
     if (stage.reduced) { place(it, p1, q1); done && done(); return; }
     it.glide = { t: 0, T: T1, delay, p0, q0, p1: p1.clone(), q1: q1.clone(), lift, done, r0: opt && opt.r0 != null ? opt.r0 : 0.06, r1: opt && opt.r1 != null ? opt.r1 : 0.72, pivot: opt && opt.pivot };
-    if (it.body) it.body.setBodyType(RBT().KinematicPositionBased, true);
   }
   function distSeg2D(c, a, b) {
     const abx = b.x - a.x, abz = b.z - a.z, l2 = abx * abx + abz * abz;
@@ -976,20 +792,7 @@ function mount(el, opts = {}) {
     outP.lerpVectors(g.p0, g.p1, e); outP.y += g.lift * Math.sin(Math.PI * Math.min(1, e * 1.08));
     outQ.slerpQuaternions(g.q0, g.q1, sstep(g.r0 == null ? 0.06 : g.r0, g.r1 == null ? 0.72 : g.r1, k));
   }
-  function glideStep(it, h) {
-    const g = it.glide; g.t += h;
-    let k = clamp((g.t - g.delay) / g.T, 0, 1);
-    glidePose(g, k, V.d, V.q2);
-    if (!isFinite(V.d.x + V.d.y + V.d.z + V.q2.x + V.q2.y + V.q2.z + V.q2.w)) { V.d.copy(g.p1); V.q2.copy(g.q1); k = 1; }
-    it.body.setNextKinematicTranslation({ x: V.d.x, y: V.d.y, z: V.d.z });
-    it.body.setNextKinematicRotation({ x: V.q2.x, y: V.q2.y, z: V.q2.z, w: V.q2.w });
-    if (k >= 1) {
-      it.glide = null; it.glideEnd = time;
-      if (!it.frozen) { it.body.setBodyType(RBT().Dynamic, true); it.body.setLinvel({ x: 0, y: 0, z: 0 }, false); it.body.setAngvel({ x: 0, y: 0, z: 0 }, false); it.body.sleep(); }
-      g.done && setTimeout(g.done, 0);
-    }
-  }
-  /* no-physics glide (reduced motion off, physics off): tween the visual pose */
+  /* a glide: the visual pose follows the arc (all motion is scripted) */
   function tweenGlide(it, dt) {
     const g = it.glide; g.t += dt;
     const k = clamp((g.t - g.delay) / g.T, 0, 1);
@@ -998,40 +801,12 @@ function mount(el, opts = {}) {
   }
   function place(it, p, q) {
     it.cur.p.copy(p); it.cur.q.copy(q); it.prev.p.copy(p); it.prev.q.copy(q);
-    if (it.body) {
-      it.body.setTranslation({ x: p.x, y: p.y, z: p.z }, false); it.body.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, false);
-      it.body.setLinvel({ x: 0, y: 0, z: 0 }, false); it.body.setAngvel({ x: 0, y: 0, z: 0 }, false);
-      if (!it.frozen) it.body.sleep();
-    }
     dirty = shadowDirty = contactDirty = true;
   }
+  /* off its place on the plinth (only an interrupted pour leaves the can elsewhere) */
   function displaced(it) {
     if (!it.visible || it.name === 'lid') return false;
-    return it.cur.p.distanceTo(it.home.p) > 0.12 || it.cur.q.angleTo(it.home.q) > 0.12 || !footInside(it);
-  }
-  /* the whole footprint stands on the plinth (nothing overhangs the edge, where it would look as if it floats) */
-  function footInside(it, margin = 0.06) {
-    const h = it.half, pts = it.name === 'can' ? 10 : 4;
-    for (let i = 0; i < pts; i++) {
-      if (it.name === 'can') { const a = i / pts * Math.PI * 2; V.c.set(Math.cos(a) * M.CAN.R, -h.y, Math.sin(a) * M.CAN.R); }
-      else V.c.set(i & 1 ? h.x : -h.x, -h.y, i & 2 ? h.z : -h.z);
-      V.c.applyQuaternion(it.cur.q).add(it.cur.p);
-      if (Math.hypot(V.c.x, V.c.z) > plinthR - margin) return false;
-    }
-    return true;
-  }
-  function settled(it) {
-    const up = V.a.set(0, 1, 0).applyQuaternion(it.cur.q).y;
-    const onTop = Math.abs(it.cur.p.y - (S.ph + it.com)) < 0.05 && footInside(it);
-    const still = !it.body || it.frozen || it.body.isSleeping() || (Math.hypot(...Object.values(it.body.linvel())) < 0.05);
-    return up > 0.995 && onTop && still && !it.glide;
-  }
-  function autoArrange() {
-    const list = Object.values(items).filter(it => it.visible && it.name !== 'lid' && it.state === 'closed' && !it.glide && displaced(it) && time - (it.glideEnd || -9) > 3);
-    if (!list.length) return;
-    if (list.some(it => it.body && !it.body.isSleeping() && Math.hypot(...Object.values(it.body.linvel())) > 0.3)) return;
-    list.sort((a, b) => b.cur.p.distanceTo(b.home.p) - a.cur.p.distanceTo(a.home.p));
-    list.forEach((it, i) => glideTo(it, it.home.p, it.home.q, null, i * 0.35));
+    return it.cur.p.distanceTo(it.home.p) > 0.05 || it.cur.q.angleTo(it.home.q) > 0.05;
   }
 
   /* ================= pour (pack2/pour.js, loaded the first time the can opens) =================
@@ -1050,9 +825,10 @@ function mount(el, opts = {}) {
       pour = pm.createPour(T, R, {
         tier: stage.reduced ? 'low' : tier, reduced: stage.reduced, scene, can: C, plinth: { get r() { return plinthR; }, get top() { return S.ph; } }, max: 660,
         paintTex: () => coat.albedo, bumpTex: () => coat.data, paintTile: M.PAINT_TILE, getCan: pourCan, getSolids: pourSolids, onLevel: l => setPaintLevel(l),
-        stillAt: S.object === 'both' ? { x: -1.6, z: 1.3 } : { x: 0, z: Math.min(plinthR - 0.35, 1.2) }
+        stillAt: { x: SPOTS[S.object].pour[0], z: SPOTS[S.object].pour[1] }
       });
       pour.setGranules(coat.albedo, coat.data);
+      if (pour.setTurn) pour.setTurn(turn.a);
       if (pour.precompile) pour.precompile(camera, R);
       syncPourBtn();
       return pour;
@@ -1062,8 +838,7 @@ function mount(el, opts = {}) {
   function pourCan(Vv) {
     const it = items.can;
     Vv.p.copy(it.root.position); Vv.q.copy(it.root.quaternion);
-    if (it.body && world) { const lv = it.body.linvel(), av = it.body.angvel(); Vv.v.set(lv.x, lv.y, lv.z); Vv.w.set(av.x, av.y, av.z); }
-    else { Vv.v.set(0, 0, 0); Vv.w.set(0, 0, 0); }
+    Vv.v.set(0, 0, 0); Vv.w.set(0, 0, 0);
     return { open: it.state === 'open' };
   }
   const solidsBuf = { plinth: null, can: null, box: null, lid: null, floor: 0, bound: 9, wakeAt: null };
@@ -1075,7 +850,7 @@ function mount(el, opts = {}) {
     solidsBuf.lid = l ? arr(l, [M.CAN.R - 0.02, 0.05]) : null;
     /* whatever moves through the settled puddle wakes the paint it touches */
     const wake = [];
-    for (const it of [c, b, l]) if (it && it.body && !it.body.isSleeping()) wake.push(it.root.position.x, it.root.position.y, it.root.position.z, 1.6);
+    for (const it of [c, b, l]) if (it && it.glide) wake.push(it.root.position.x, it.root.position.y, it.root.position.z, 1.6);
     solidsBuf.wakeAt = wake.length ? wake : null;
     return solidsBuf;
   }
@@ -1093,13 +868,11 @@ function mount(el, opts = {}) {
     if (!pour || pourBusy() || it.state !== 'open' || paintLevel <= 0.08) return;
     hideHint(); lastInput = time;
     emit('dv3d:pour', { state: 'start' });
-    if (pour.mode === 'still' || stage.reduced || !world) {
-      /* the finished pool beside the open can: the whole plinth in view, and the lid hovering over the can */
+    if (pour.mode === 'still' || stage.reduced) {
+      /* the finished pool beside the open can, the whole plinth in view */
       pour.still();
-      pourPts = circlePts(0, S.ph, 0, plinthR, 24, []); boxPts(it, pourPts, 0.1, 0.1);
-      const lp = can.lid.getWorldPosition(new T.Vector3()), lr = M.CAN.R + 0.05;
-      pourPts.push(lp.clone().add(new T.Vector3(lr, 0.2, 0)), lp.clone().add(new T.Vector3(-lr, 0.2, 0)), lp.clone().add(new T.Vector3(0, 0.5, lr)), lp.clone().add(new T.Vector3(0, 0.5, -lr)));   /* it hovers tilted */
-      view.focus = ''; setFocus('pour');
+      pourPts = [];
+      view.focus = ''; view.wide = true; setFocus('pour');
       announce(L.poured); emit('dv3d:pour', { state: 'end' }); syncPourBtn(); dirty = true; invalidate(); return;
     }
     /* the puddle goes where the plinth is free (front left, clear of the box, the lid and the can's own spot). The can
@@ -1107,7 +880,7 @@ function mount(el, opts = {}) {
        then turned over its own lip: the lip comes straight down over the spot while the can tips, so the rope always
        falls on the same place and the paint pools round it */
     const home = it.home.p;
-    const spot = S.object === 'both' ? new T.Vector3(-1.6, S.ph, 1.3) : new T.Vector3(0, S.ph, Math.min(plinthR - 0.35, 1.2));
+    const sp = SPOTS[S.object].pour, spot = new T.Vector3(sp[0], S.ph, sp[1]);
     const dir = new T.Vector3(spot.x - home.x, 0, spot.z - home.z);
     if (dir.lengthSq() < 1e-4) dir.set(0, 0, 1);
     dir.normalize();
@@ -1126,9 +899,11 @@ function mount(el, opts = {}) {
     pourPts = [];
     [[pT, qT], [p1, q1]].forEach(([p, q]) => { it.cur.p.copy(p); it.cur.q.copy(q); boxPts(it, pourPts, 0.1, 0.15); });
     it.cur.p.lerpVectors(home, p1, 0.5).add(new T.Vector3(0, 0.3, 0)); it.cur.q.copy(it.home.q); boxPts(it, pourPts, 0.1, 0.15);
-    circlePts(spot.x, S.ph, spot.z, 1.25, 16, pourPts); boxPts(items.box, pourPts, 0.05, 0);
+    circlePts(spot.x, S.ph, spot.z, 1.25, 16, pourPts); if (items.box.visible) boxPts(items.box, pourPts, 0.05, 0);
     it.cur.p.copy(save.p); it.cur.q.copy(save.q);
-    view.focus = ''; setFocus('pour');
+    /* the plinth turns to the front while the can is lifted: the pour is seen from where it was composed */
+    turn.a = wrapPi(turn.a); turnTo(0, 3);
+    view.focus = ''; view.wide = false; setFocus('pour');
     pourSeq = { phase: 'tilt', t: 0 };
     pour.block(false);
     /* lifted (clear of the lid lying near it), carried and turned a little; then over the lip */
@@ -1180,41 +955,15 @@ function mount(el, opts = {}) {
     }
     dirty = shadowDirty = contactDirty = true;
   }
-  /* can lid: pop, lift, tilt towards the viewer, hover */
-  const lidOpen = new Float32Array(2), lidFrom = { p: null, r: null };
-  function canLid(k) {
-    const lid = can.lid;
-    const pop = sstep(0, 0.16, k) * (1 - sstep(0.16, 0.4, k));
-    const m = easeOutBack(sstep(0.1, 1, k), 1.15);
-    lidOpen[0] = m; lidOpen[1] = time;
-    lid.position.set(0.12 * m, M.CAN.LID_Y + 0.03 * pop + 1.18 * m, -0.62 * m);
-    lid.rotation.set(0.62 * m + 0.05 * pop, 0, 0.1 * m);
-  }
-  function canLidClose(k) {             /* from wherever the hovering lid is, down onto the can, seated with a tiny tap */
-    const lid = can.lid, e = easeInOut(k), tap = 0.012 * Math.sin(Math.PI * sstep(0.86, 1, k));
-    lidOpen[0] = 1 - e;
-    lid.position.set(lidFrom.p.x * (1 - e), M.CAN.LID_Y + (lidFrom.p.y - M.CAN.LID_Y) * (1 - e) + tap, lidFrom.p.z * (1 - e));
-    lid.rotation.set(lidFrom.r.x * (1 - e), 0, lidFrom.r.z * (1 - e));
-  }
-  function lidHover() {
-    if (lidOpen[0] < 0.999 || items.can.state !== 'open') return;
-    const w = stage.reduced ? 0 : sstep(0, 1.2, time - lidOpen[1]), t = time - lidOpen[1];
-    can.lid.position.y = M.CAN.LID_Y + 1.18 + 0.03 * Math.sin(t * 1.3) * w;
-    can.lid.rotation.x = 0.62 + 0.025 * Math.sin(t * 0.9) * w;
-    can.lid.rotation.z = 0.1 + 0.02 * Math.sin(t * 0.7 + 1.2) * w;
-  }
   function openCan(homed) {
     const it = items.can;
     if (!it.visible || it.state !== 'closed') return;
     if (it.glide) { it.glide.done = () => openCan(true); return; }
-    if (!homed && !settled(it) && !stage.reduced) { glideTo(it, it.home.p, it.home.q, () => openCan(true)); return; }
-    if (stage.reduced && displaced(it)) place(it, it.home.p, it.home.q);
-    it.state = 'open'; freeze(it, true);
+    if (!homed && displaced(it)) { if (stage.reduced) place(it, it.home.p, it.home.q); else { glideTo(it, it.home.p, it.home.q, () => openCan(true)); return; } }
+    it.state = 'open';
     can.paint.visible = paintLevel > 0.01;
-    /* with physics the lid pops off as its own body and lands where it lands; without, it lifts and hovers */
-    if (world && !stage.reduced && !items.lid) popLid();
-    else tween({ key: 'canlid', T: 1.25, fn: k => canLid(k) });
-    setFocus('can'); labelButtons(); announce(L.canOpened); emit('dv3d:open', { object: 'can' });
+    if (!items.lid) popLid();
+    view.wide = false; setFocus('can'); labelButtons(); announce(L.canOpened); emit('dv3d:open', { object: 'can' });
     onCanOpen();
   }
   function closeCan(fast) {
@@ -1224,16 +973,10 @@ function mount(el, opts = {}) {
     if (pourBusy()) return;                             /* not in the middle of a pour */
     it.state = 'closing';
     onCanClose();
-    const done = () => { it.state = 'closed'; if (!(grab && grab.item === it)) freeze(it, false); labelButtons(); };
-    if (items.lid) {
-      /* the can stands up at home first, then the lid flies back onto it and seats */
-      const back = () => { freeze(it, true); returnLid(fast, done); };
-      if (world && !stage.reduced && !settled(it)) { freeze(it, false); glideTo(it, it.home.p, it.home.q, back); }
-      else back();
-    } else {
-      lidFrom.p = can.lid.position.clone(); lidFrom.r = can.lid.rotation.clone();
-      tween({ key: 'canlid', T: fast ? 0.32 : 0.75, fn: k => canLidClose(k), done });
-    }
+    const done = () => { it.state = 'closed'; labelButtons(); };
+    /* the can stands at home, then the lid flies back onto it and seats */
+    const back = () => returnLid(fast, done);
+    if (displaced(it) && !stage.reduced) glideTo(it, it.home.p, it.home.q, back); else back();
     if (view.focus === 'can') setFocus('hero');
     announce(L.canClosed); emit('dv3d:close', { object: 'can' });
   }
@@ -1242,34 +985,46 @@ function mount(el, opts = {}) {
     can.root.position.copy(items.can.cur.p); can.root.quaternion.copy(items.can.cur.q); can.root.updateMatrixWorld(true);
     outP.set(0, M.CAN.LID_Y - M.CAN.COM, 0).applyMatrix4(can.root.matrixWorld); outQ.copy(items.can.cur.q);
   }
+  /* the lid pops off: straight up off the rim, then an arc with half a turn onto the free plinth (it lands face down),
+     a clack and a little rock as it settles. Scripted, so it lands in the same place every time */
+  const LID_REST = 0.024;              /* face down, the lid's centre stands this far above what it lies on */
   function popLid() {
     const lid = can.lid;
-    /* it starts just clear of the rim (a seated lid would drag on it and lose its spin) */
-    lid.position.set(0, M.CAN.LID_Y + 0.07, 0); lid.rotation.set(0, 0, 0);
+    lid.position.set(0, M.CAN.LID_Y, 0); lid.rotation.set(0, 0, 0);
+    can.root.position.copy(items.can.cur.p); can.root.quaternion.copy(items.can.cur.q);
     can.root.updateMatrixWorld(true);
     scene.attach(lid);
     const it = makeItem('lid', { root: lid, half: new T.Vector3(M.CAN.R, 0.06, M.CAN.R) }, 0);
-    it.cur.p.copy(lid.position); it.cur.q.copy(lid.quaternion); it.prev.p.copy(it.cur.p); it.prev.q.copy(it.cur.q);
-    it.home.p.copy(it.cur.p); it.home.q.copy(it.cur.q);
+    place(it, lid.position, lid.quaternion);
     items.lid = it;
     lid.traverse(o => { if (o.isMesh) o.layers.enable(LAYER_DYN); });
-    const desc = RA.RigidBodyDesc.dynamic().setTranslation(it.cur.p.x, it.cur.p.y, it.cur.p.z).setRotation({ x: it.cur.q.x, y: it.cur.q.y, z: it.cur.q.z, w: it.cur.q.w })
-      .setCcdEnabled(true).setLinearDamping(PHYS.lid.lin).setAngularDamping(PHYS.lid.ang);
-    it.body = world.createRigidBody(desc);
-    it.collider = world.createCollider(lidCollider(), it.body);
-    /* pops up off the can and turns over on its way to the free plinth in front (or to the table in front of a
-       lone can's small plinth): half a turn in the air, so it lands flat (on its rim it would roll away), clear of
-       the can and of the plinth's edge */
-    const cp = items.can.cur.p, onPlinth = S.object === 'both';
-    const tx = onPlinth ? 0.1 : cp.x - 0.3, tz = onPlinth ? 2.15 : cp.z + plinthR + 0.8;
-    const dx = tx - it.cur.p.x, dz = tz - it.cur.p.z, dist = Math.hypot(dx, dz) || 1;
-    const vy = 17, h0 = Math.max(0.2, it.cur.p.y - (onPlinth ? S.ph : 0) - 0.08);   /* high enough that the turning lid clears the rim */
-    const tf = vy / GRAV + Math.sqrt(2 * (vy * vy / (2 * GRAV) + h0) / GRAV), vh = dist / tf;
-    const sx = dx / dist, sz = dz / dist, r1 = Math.random() - 0.5, r2 = Math.random() - 0.5;
-    /* half a turn, backwards (its back edge drops as it goes): it lands face down and the landing eats its speed */
-    const w = Math.PI / tf * (1 + PHYS.lid.ang * tf * 0.5) * (1 + 0.01 * r1);
-    it.body.setLinvel({ x: sx * vh, y: vy, z: sz * vh }, true);
-    it.body.setAngvel({ x: -sz * w, y: 0.5 * r2, z: sx * w }, true);
+    const sp = SPOTS[S.object] && SPOTS[S.object].lid;
+    const cp = items.can.cur.p, tx = sp ? sp[0] : cp.x - 0.3, tz = sp ? sp[1] : cp.z + plinthR + 0.8;
+    const ground = Math.hypot(tx, tz) < plinthR ? S.ph : 0;
+    const p0 = it.cur.p.clone(), q0 = it.cur.q.clone(), p1 = new T.Vector3(tx, ground + LID_REST, tz);
+    const dx = p1.x - p0.x, dz = p1.z - p0.z, dist = Math.hypot(dx, dz) || 1, ax = new T.Vector3(-dz / dist, 0, dx / dist);
+    /* lifted 0.07 dm clear of the rim first, then the arc: up at 12 dm/s, down under gravity onto the spot */
+    const vy = 12, h0 = p0.y + 0.07 - p1.y, tf = vy / GRAV + Math.sqrt(2 * (vy * vy / (2 * GRAV) + h0) / GRAV);
+    const yaw = (Math.random() - 0.5) * 0.5, qa = new T.Quaternion(), qy = new T.Quaternion();
+    if (stage.reduced) { place(it, p1, new T.Quaternion().setFromAxisAngle(ax, Math.PI).multiply(q0)); it.home.p.copy(it.cur.p); it.home.q.copy(it.cur.q); emit('dv3d:lid', { state: 'off' }); return; }
+    const T0 = 0.06, T1 = T0 + tf, T2 = T1 + 0.42;
+    tween({ key: 'lidpop', T: T2, fn: k => {
+      const t = k * T2;
+      if (t < T0) {                                   /* off the rim */
+        const e = t / T0; it.cur.p.copy(p0); it.cur.p.y += 0.07 * e * e; it.cur.q.copy(q0);
+      } else if (t < T1) {                            /* the arc and half a turn backwards */
+        const s = t - T0, f = s / tf;
+        it.cur.p.set(p0.x + dx * f, p0.y + 0.07 + vy * s - 0.5 * GRAV * s * s, p0.z + dz * f);
+        qa.setFromAxisAngle(ax, Math.PI * f); qy.setFromAxisAngle(V.Y, yaw * f);
+        it.cur.q.copy(qy).multiply(qa).multiply(q0);
+      } else {                                        /* the clack: a short rock about the landing edge, settling */
+        const s = t - T1, tilt = 0.075 * Math.exp(-s * 13) * Math.sin(s * 34), hop = 0.018 * Math.exp(-s * 20) * Math.abs(Math.sin(s * 30));
+        qa.setFromAxisAngle(ax, Math.PI + tilt); qy.setFromAxisAngle(V.Y, yaw);
+        it.cur.q.copy(qy).multiply(qa).multiply(q0);
+        it.cur.p.copy(p1); it.cur.p.y += hop + Math.sin(Math.abs(tilt)) * M.CAN.R;
+      }
+      it.prev.p.copy(it.cur.p); it.prev.q.copy(it.cur.q);
+    }, done: () => { it.home.p.copy(it.cur.p); it.home.q.copy(it.cur.q); } });
     emit('dv3d:lid', { state: 'off' });
   }
   function returnLid(fast, done) {
@@ -1278,21 +1033,21 @@ function mount(el, opts = {}) {
     const p = new T.Vector3(), q = new T.Quaternion();
     lidSeat(p, q);
     const seat = () => {
-      /* back on the can: one body less, the lid rides with the can again */
-      if (it.body && world) { try { world.removeRigidBody(it.body); } catch (e) { /* gone with the world */ } }
-      it.body = null; delete items.lid;
+      /* back on the can: the lid rides with the can again */
+      delete items.lid;
       can.body.attach(can.lid);
       can.lid.position.set(0, M.CAN.LID_Y, 0); can.lid.rotation.set(0, 0, 0);
       dirty = shadowDirty = contactDirty = true;
       emit('dv3d:lid', { state: 'on' });
       done && done();
     };
+    tweens = tweens.filter(o => o.key !== 'lidpop');
     if (stage.reduced) { seat(); return; }
     glideTo(it, p, q, seat, 0, { lift: 0.75, T: fast ? 0.5 : 0.95 });
   }
   /* box: hinged lid with a soft overshoot; fan rises, tilts towards the viewer, strips spread with a stagger */
   const FAN_OPEN = { x: -1.05, y: 0.95, z: 0.55, rx: -0.38 }, MAXA = 1.92;
-  function boxLid(k) { box.hinge.rotation.x = -1.86 * k; }
+  function boxLid(k) { box.hinge.rotation.x = -BOX_OPEN * k; }
   function fanPose(k) {
     const f = box.fan, e = easeInOut(sstep(0, 0.55, k));
     f.root.position.set(-1.22 + (FAN_OPEN.x + 1.22) * e, (M.BOX.BED + 0.005) + (FAN_OPEN.y - M.BOX.BED - 0.005) * e + 0.25 * Math.sin(Math.PI * e), FAN_OPEN.z * e);
@@ -1318,26 +1073,24 @@ function mount(el, opts = {}) {
     const it = items.box;
     if (!it.visible || it.state !== 'closed') return;
     if (it.glide) { it.glide.done = () => openBox(true); return; }
-    if (!homed && !settled(it) && !stage.reduced) { glideTo(it, it.home.p, it.home.q, () => openBox(true)); return; }
-    if (stage.reduced && displaced(it)) place(it, it.home.p, it.home.q);
     ensureStrips();
-    it.state = 'open'; freeze(it, true);
+    it.state = 'open';
     tween({ key: 'boxlid', T: 1.15, fn: k => boxLid(easeOutBack(k, 1.05)) });
-    setFocus('box'); labelButtons(); announce(L.boxOpened); emit('dv3d:open', { object: 'box' });
+    view.wide = false; setFocus('box'); labelButtons(); announce(L.boxOpened); emit('dv3d:open', { object: 'box' });
   }
   function fanOut() {
     const it = items.box;
     if (it.state !== 'open') return;
     it.state = 'fan'; fanSel = -1;
     tween({ key: 'fan', T: 1.6, fn: k => fanPose(k) });
-    setFocus('fan'); labelButtons(); announce(L.fanOpened); emit('dv3d:open', { object: 'fan' });
+    view.wide = false; setFocus('fan'); labelButtons(); announce(L.fanOpened); emit('dv3d:open', { object: 'fan' });
   }
   function closeBox(fast) {
     const it = items.box;
     if (it.state === 'closed') return;
     const wasFan = it.state === 'fan';
     it.state = 'closing'; fanSel = -1; hoverStrip = -1;
-    const lidClose = () => tween({ key: 'boxlid', T: fast ? 0.3 : 0.75, fn: k => boxLid(1 - easeInOut(k)), done: () => { it.state = 'closed'; if (!(grab && grab.item === it)) freeze(it, false); labelButtons(); } });
+    const lidClose = () => tween({ key: 'boxlid', T: fast ? 0.3 : 0.75, fn: k => boxLid(1 - easeInOut(k)), done: () => { it.state = 'closed'; labelButtons(); } });
     if (wasFan) tween({ key: 'fan', T: fast ? 0.3 : 0.8, fn: k => fanPose(1 - k), done: lidClose });
     else lidClose();
     if (view.focus === 'box' || view.focus === 'fan') setFocus('hero');
@@ -1345,15 +1098,14 @@ function mount(el, opts = {}) {
   }
   function seatLidNow() {
     const it = items.lid; if (!it) return;
-    if (it.body && world) { try { world.removeRigidBody(it.body); } catch (e) { /* gone with the world */ } }
-    it.body = null; delete items.lid;
+    delete items.lid;
     can.body.attach(can.lid); can.lid.position.set(0, M.CAN.LID_Y, 0); can.lid.rotation.set(0, 0, 0);
   }
   function closeNow(it) {
     if (!can) return;
     if (it.name === 'can') seatLidNow();
-    tweens = tweens.filter(o => !(it.name === 'can' ? o.key === 'canlid' : (o.key === 'boxlid' || o.key === 'fan')));
-    if (it.name === 'can') { canLid(0); lidOpen[0] = 0; }
+    tweens = tweens.filter(o => !(it.name === 'can' ? (o.key === 'lidpop' || o.key === 'refill') : (o.key === 'boxlid' || o.key === 'fan')));
+    if (it.name === 'can') { can.lid.position.set(0, M.CAN.LID_Y, 0); can.lid.rotation.set(0, 0, 0); }
     else { boxLid(0); fanPose(0); fanSel = -1; }
     it.state = 'closed';
   }
@@ -1372,7 +1124,7 @@ function mount(el, opts = {}) {
     invalidate();
   }
   /* every touch of the paint rings out and twists the granules (four at a time, the oldest gives way) */
-  let ripK = 0, lastStir = -1;
+  let ripK = 0;
   function ripple(p, amp = 1) {
     const loc = can.paint.worldToLocal(p.clone());
     const U = paintMat.userData.U, r = U.uRad.value, R4 = U.uRips.value[ripK];
@@ -1381,13 +1133,6 @@ function mount(el, opts = {}) {
     U.uRip = { value: R4 };
     dirty = true; invalidate();
     emit('dv3d:paint', { x: +R4.x.toFixed(3), y: +R4.y.toFixed(3) });
-  }
-  /* dragging across the open paint stirs it: a trail of small rings and twists */
-  function stirAt(x, y) {
-    if (time - lastStir < 0.06) return;
-    V.ray.setFromCamera(toNdc(x, y), camera);
-    const h = V.ray.intersectObject(can.paint, false)[0];
-    if (h) { lastStir = time; ripple(h.point, 0.55); }
   }
   function pickStrip(i) {
     const f = S.fan[i]; if (!f) return;
@@ -1491,30 +1236,17 @@ function mount(el, opts = {}) {
     wrap.removeEventListener('pointercancel', onCancel); wrap.removeEventListener('pointerleave', onLeave);
     wrap.removeEventListener('touchmove', onTouchMove); wrap.removeEventListener('contextmenu', onContext);
   }
-  function onContext(e) { if (ptr.mode === 'grab' || ptr.mode === 'press' || ptr.mode === 'hold') e.preventDefault(); }
-  function onTouchMove(e) { if (ptr.mode === 'grab' || ptr.mode === 'hold' || ptr.mode === 'turn' || ptr.mode === 'spin' || ptr.mode === 'orbit' || ptr.mode === 'stir') { if (e.cancelable) e.preventDefault(); } }
+  function onContext(e) { if (ptr.touch && ptr.mode === 'press') e.preventDefault(); }
+  function onTouchMove(e) { if (ptr.mode === 'turn' && e.cancelable) e.preventDefault(); }
+  /* a press becomes a tap (open, close, a ripple in the paint, a fan strip) or a turn of the plinth: a drag sideways
+     (with a mouse, any drag); on touch a mostly vertical swipe is left to the page, which scrolls */
   function onDown(e) {
     if (!built || ptr.id !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
     touchInput();
-    if (e.pointerType === 'mouse') wantPhysics();       /* a touch asks for it only once it is not a page scroll */
     const hit = pick(e.clientX, e.clientY), t = evT(e);
-    Object.assign(ptr, { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t0: t, lt: t, vx: 0, vy: 0, hit, touch: e.pointerType !== 'mouse', mode: hit ? 'press' : 'idle', hist: [[t, e.clientX, e.clientY]] });
+    Object.assign(ptr, { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t0: t, lt: t, vx: 0, vy: 0, hit, touch: e.pointerType !== 'mouse', mode: 'press', hist: [[t, e.clientX, e.clientY]] });
     try { wrap.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-    if (ptr.touch && hit && hit.strip == null) {
-      clearTimeout(ptr.hold);
-      /* press and hold lifts the object; the grab itself starts on the next frame, so a tap whose release
-         was queued behind a long frame still counts as a tap */
-      ptr.hold = setTimeout(() => {
-        if (ptr.mode !== 'press' || Math.hypot(ptr.x - ptr.x0, ptr.y - ptr.y0) >= 10) return;
-        ptr.mode = 'hold'; wantPhysics();
-        const id = ptr.id;
-        requestAnimationFrame(() => {
-          if (ptr.mode !== 'hold' || ptr.id !== id) return;
-          beginGrab();
-          if (navigator.vibrate) try { navigator.vibrate(8); } catch (_) { /* ignore */ }
-        });
-      }, 190);
-    }
+    turn.v = 0;                                   /* a hand on the coasting plinth stops it */
     stage.start();
   }
   function onMove(e) {
@@ -1528,74 +1260,39 @@ function mount(el, opts = {}) {
     if (e.pointerId !== ptr.id) return;
     const now = evT(e), dtm = Math.max(1, now - ptr.lt);
     ptr.vx = ptr.vx * 0.6 + ((e.clientX - ptr.lx) / dtm) * 0.4; ptr.vy = ptr.vy * 0.6 + ((e.clientY - ptr.ly) / dtm) * 0.4;
-    const dx = e.clientX - ptr.lx, dy = e.clientY - ptr.ly;
+    const dx = e.clientX - ptr.lx;
     ptr.lx = ptr.x = e.clientX; ptr.ly = ptr.y = e.clientY; ptr.lt = now;
     track(now, e.clientX, e.clientY);
     const tdx = ptr.x - ptr.x0, tdy = ptr.y - ptr.y0, moved = Math.hypot(tdx, tdy);
     lastInput = time;
-    if (ptr.mode === 'hold') {
-      if (now - ptr.t0 < 190) { if (moved > 9) ptr.mode = 'press'; }   /* the finger moved before the hold threshold (the timer ran late): a swipe */
-      else if (moved > 2) beginGrab();
+    if (ptr.mode === 'press' && moved > (ptr.touch ? 9 : 4)) {
+      if (!ptr.touch || Math.abs(tdx) > Math.abs(tdy) * 1.1) beginTurn();
+      else ptr.mode = 'scroll';
     }
-    const onPaint = ptr.hit && ptr.hit.object === can.paint && items.can.state === 'open';
-    if (ptr.mode === 'press' && onPaint) {
-      /* a drag that starts on the open paint stirs it (on touch only a sideways one; an upward one still scrolls) */
-      if (moved > (ptr.touch ? 9 : 4)) { clearTimeout(ptr.hold); ptr.mode = !ptr.touch || Math.abs(tdx) > Math.abs(tdy) * 1.1 ? 'stir' : 'scroll'; }
-    } else if (ptr.mode === 'press') {
-      if (ptr.touch) {
-        if (moved > 9) {
-          clearTimeout(ptr.hold);
-          if (Math.abs(tdx) > Math.abs(tdy) * 1.1 && ptr.hit.strip == null) { ptr.mode = 'spin'; }
-          else { ptr.mode = 'scroll'; }
-        }
-      } else if (moved > 4 && ptr.hit.strip == null) beginGrab();
-    } else if (ptr.mode === 'idle') {
-      if (moved > (ptr.touch ? 9 : 3)) ptr.mode = (!ptr.touch || Math.abs(tdx) > Math.abs(tdy)) ? 'orbit' : 'scroll';
-    }
-    if (ptr.mode === 'stir') stirAt(e.clientX, e.clientY);
-    else if (ptr.mode === 'grab') moveGrab(e.clientX, e.clientY);
-    else if (ptr.mode === 'turn' || ptr.mode === 'spin') turnBy(ptr.hit.item, dx * 5.5 / Math.max(320, wrap.clientWidth));
-    else if (ptr.mode === 'orbit') {
-      const k = 3.2 / Math.max(360, wrap.clientWidth);
-      view.userAz = clamp(view.userAz - dx * k, -0.75, 0.75);
-      view.userEl = clamp(view.userEl + dy * k * 0.7, -0.18, 0.42);
-      view.userVaz = 0; view.userVel = 0;
-      wrap.classList.add('is-orbit'); dirty = true;
-    }
-    if (ptr.mode === 'spin' || ptr.mode === 'orbit' || ptr.mode === 'grab' || ptr.mode === 'turn') wantPhysics();
+    if (ptr.mode === 'turn') turnBy(dx);
     stage.start();
   }
   function onUp(e) {
     if (e.pointerId !== ptr.id) return;
-    clearTimeout(ptr.hold);
-    const tUp = evT(e), held = tUp - ptr.t0, mode = ptr.mode, hit = ptr.hit;
+    const tUp = evT(e), mode = ptr.mode, hit = ptr.hit;
     if (e.clientX !== ptr.lx || e.clientY !== ptr.ly) track(tUp, e.clientX, e.clientY);
     const rv = releaseVel(tUp); ptr.vx = rv[0]; ptr.vy = rv[1];
-    if ((mode === 'press' || (mode === 'hold' && held < 330)) && hit) {
-      wantPhysics();
+    if (mode === 'press' && hit) {
       if (hit.strip != null) pickStrip(hit.strip);
       else activate(hit.item.name, hit);
-    } else if (mode === 'grab') endGrab();
-    else if (mode === 'spin' && ptr.touch && held < 450 && Math.abs(ptr.vx) > 0.6 && Math.abs(ptr.vx) > Math.abs(ptr.vy) && toss(hit.item, ptr.vx)) { /* flicked */ }
-    else if (mode === 'spin' || mode === 'turn') endTurn(hit.item);
-    else if (mode === 'orbit') {
-      const k = 3.2 / Math.max(360, wrap.clientWidth) * 1000;
-      view.userVaz = clamp(-ptr.vx * k, -3, 3); view.userVel = clamp(ptr.vy * k * 0.7, -2, 2);
-    }
+    } else if (mode === 'turn') endTurn();
     releasePtr(e);
   }
   function onCancel(e) {
     if (e.pointerId !== ptr.id) return;
-    clearTimeout(ptr.hold);
-    if (ptr.mode === 'grab') endGrab();
-    if (ptr.mode === 'spin' || ptr.mode === 'turn') endTurn(ptr.hit.item);
+    if (ptr.mode === 'turn') { ptr.vx = 0; endTurn(); }
     releasePtr(e);
   }
   function onLeave(e) { if (e.pointerType === 'mouse' && ptr.id === null) { view.parGoal[0] = view.parGoal[1] = 0; setHover(null); } }
   function releasePtr(e) {
     try { wrap.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
     ptr.id = null; ptr.mode = null; ptr.hit = null;
-    wrap.classList.remove('is-grabbing', 'is-orbit');
+    wrap.classList.remove('is-turning');
     lastInput = time; stage.start();
   }
   let hoverRaf = 0, hoverEvt = null;
@@ -1603,102 +1300,36 @@ function mount(el, opts = {}) {
     if (e.pointerType !== 'mouse') return;
     hoverEvt = e;
     if (hoverRaf) return;
-    hoverRaf = requestAnimationFrame(() => { hoverRaf = 0; if (hoverEvt) setHover(pick(hoverEvt.clientX, hoverEvt.clientY)); });
+    hoverRaf = requestAnimationFrame(() => { hoverRaf = 0; if (hoverEvt && ptr.id === null) setHover(pick(hoverEvt.clientX, hoverEvt.clientY)); });
   }
   function setHover(h) {
     const strip = h && h.strip != null ? h.strip : -1;
     if (strip !== hoverStrip) { hoverStrip = strip; dirty = true; invalidate(); }
     wrap.classList.toggle('is-point', strip >= 0);
     wrap.classList.toggle('is-hover', !!h && strip < 0);
-    if (h) wantPhysics();
   }
-
-  /* grab: the object hangs from the point you took it by, follows the pointer on a plane facing the camera */
-  function beginGrab() {
-    const hit = ptr.hit, it = hit && hit.item;
-    if (!it) return;
-    if (!world || !it.body || stage.reduced) { ptr.mode = 'turn'; wrap.classList.add('is-grabbing'); return; }
-    /* an open can stays open in the hand: tip it and the paint pours; an open box closes first */
-    if (it.name === 'box' && it.state !== 'closed') closeBox(true);
-    if (it.name === 'can' && (it.state === 'closing' || pourReset)) return;
-    if (it.name === 'can' && pourSeq) pourSeq = null;     /* taking the can out of the pour: it is now in the hand */
-    if (it.glide) { it.glide = null; }
-    it.frozen = false;
-    it.body.setBodyType(RBT().Dynamic, true);
-    it.body.wakeUp();
-    it.body.setAngularDamping(PHYS[it.name].held); it.body.setLinearDamping(0.25);
-    const local = hit.point.clone().sub(it.cur.p).applyQuaternion(it.cur.q.clone().invert());
-    const n = new T.Vector3(); camera.getWorldDirection(n); n.y = 0; n.normalize();
-    grab = { item: it, local, target: hit.point.clone(), lift: 0, dy: hit.point.y - it.cur.p.y, plane: new T.Plane().setFromNormalAndCoplanarPoint(n, hit.point) };
-    ptr.mode = 'grab'; wrap.classList.add('is-grabbing'); wrap.classList.remove('is-hover');
-    if (view.focus !== 'hero') setFocus('hero');
+  /* turning the plinth by hand: 1.6 stage widths of drag for a whole turn */
+  const turnK = () => (Math.PI * 2) / (1.6 * Math.max(320, wrap.clientWidth));
+  function beginTurn() {
+    ptr.mode = 'turn'; turn.goal = null; turn.v = 0; turn.sv = 0;
+    wrap.classList.add('is-turning'); wrap.classList.remove('is-hover', 'is-point');
     hideHint();
+    if (!view.wide) { view.wide = true; focusView(camGoal); }        /* a close-up gives way to the whole turntable */
   }
-  function moveGrab(x, y) {
-    if (!grab) return;
-    V.ray.setFromCamera(toNdc(x, y), camera);
-    const p = V.ray.ray.intersectPlane(grab.plane, V.d);
-    if (!p) return;
-    /* the target is the point you hold: the object's top stays inside the frame, and it can always be lifted clear */
-    const b = bounds, it = grab.item, h = it.half.x;
-    const comMax = Math.max(S.ph + it.com + 0.9, b.ytop - it.half.y * 1.15);
-    grab.target.set(clamp(p.x, b.xmin + h, b.xmax - h), clamp(p.y, 0.3, comMax + grab.dy), clamp(p.z, b.zb + h, b.zf - h));
+  function turnBy(dx) {
+    turn.a -= dx * turnK();
+    dirty = true; invalidate();
   }
-  function endGrab() {
-    if (!grab) return;
-    const it = grab.item, b = it.body;
-    grab = null;
-    if (b) {
-      b.setAngularDamping(PHYS[it.name].ang); b.setLinearDamping(PHYS[it.name].lin);
-      const v = b.linvel(), w = b.angvel(), vm = Math.hypot(v.x, v.y, v.z), wm = Math.hypot(w.x, w.y, w.z);
-      if (vm > 40) { v.x *= 40 / vm; v.y *= 40 / vm; v.z *= 40 / vm; }
-      /* a throw never leaves the frame through the top: cap the upward speed by the room above */
-      const room = Math.max(0.3, bounds.ytop - b.translation().y - it.half.y * 1.2), vyMax = Math.sqrt(2 * GRAV * room);
-      if (v.y > vyMax) v.y = vyMax;
-      b.setLinvel({ x: v.x, y: v.y, z: v.z }, true);
-      if (wm > 24) b.setAngvel({ x: w.x * 24 / wm, y: w.y * 24 / wm, z: w.z * 24 / wm }, true);
-      /* an open can that was tipped and let go stays a physical can (it can roll and spill); it is no longer frozen */
-      if (it.name === 'can' && it.state === 'open') it.frozen = false;
-    }
+  function endTurn() {
+    turn.v = stage.reduced ? 0 : clamp(-ptr.vx * 1000 * turnK(), -7, 7);
+    if (Math.abs(turn.v) < 0.15) turn.v = 0;
+    lastInput = time;
+    emit('dv3d:turn', { angle: +wrapPi(turn.a).toFixed(3) });
   }
-  /* turning by hand (drag without physics, a horizontal swipe on touch): yaw around the vertical axis;
-     with physics the swipe speed becomes a real spin that friction slows down */
-  function turnBy(it, da) {
-    if (!it || it.glide) return;
-    if (it.state !== 'closed') return;
-    const q = V.q.setFromAxisAngle(V.a.set(0, 1, 0), da);
-    it.cur.q.premultiply(q); it.prev.q.copy(it.cur.q);
-    if (stage.reduced || !world) it.home.q.premultiply(q);       /* no physics: the turn is the new pose */
-    if (it.body) { it.body.setRotation({ x: it.cur.q.x, y: it.cur.q.y, z: it.cur.q.z, w: it.cur.q.w }, false); }
-    dirty = shadowDirty = contactDirty = true;
-    invalidate();
-  }
-  function endTurn(it) {
-    if (it && world && it.body && !stage.reduced && it.state === 'closed' && !it.glide) {
-      const yawV = clamp(ptr.vx * 1000 * 5.5 / Math.max(320, wrap.clientWidth), -14, 14);
-      if (Math.abs(yawV) > 0.4) { it.body.wakeUp(); const w = it.body.angvel(); it.body.setAngvel({ x: w.x, y: w.y + yawV, z: w.z }, true); }
-    }
-  }
-  function toss(it, vx) {
-    if (!it || !world || !it.body || stage.reduced || it.state !== 'closed') return false;
-    if (it.glide) { it.glide = null; it.body.setBodyType(RBT().Dynamic, true); }
-    const right = new T.Vector3(1, 0, 0).applyQuaternion(camera.quaternion); right.y = 0; right.normalize();
-    const dir = Math.sign(vx), k = clamp(Math.abs(vx) / 2.2, 0.4, 1);
-    it.body.wakeUp();
-    it.body.setLinvel({ x: right.x * dir * 13 * k, y: 8 + 7 * k, z: right.z * dir * 13 * k - 1.2 }, true);
-    it.body.setAngvel({ x: -3 * k, y: dir * 6 * k, z: -dir * 5 * k }, true);
-    lastInput = time; dirty = true; invalidate();
-    hideHint(); emit('dv3d:toss', { object: it.name });
-    return true;
-  }
-  function spinKey(it, dir) {
-    if (!it || !it.visible) return;
-    if (world && it.body && !stage.reduced && it.state === 'closed') {
-      if (it.glide) return;
-      const q1 = it.cur.q.clone().premultiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), dir * 0.35));
-      glideTo(it, it.cur.p.clone(), q1, null, 0, { lift: 0.015, T: 0.42 });
-    } else turnBy(it, dir * 0.35);
-    invalidate();
+  function turnKey(dir) {
+    if (!view.wide) { view.wide = true; focusView(camGoal); }
+    turnTo((turn.goal != null ? turn.goal : turn.a) - dir * Math.PI / 9, 7);
+    emit('dv3d:turn', { angle: +wrapPi(turn.goal != null ? turn.goal : turn.a).toFixed(3) });
   }
   function onKey(e, name) {
     const it = items[name];
@@ -1711,7 +1342,7 @@ function mount(el, opts = {}) {
         fanSel = fanSel < 0 ? (dir > 0 ? N - 1 : 0) : (fanSel - dir + N) % N;     /* left = towards the darker strips */
         announce(L.strip.replace('{name}', S.fan[fanSel].name));
         dirty = true; invalidate();
-      } else spinKey(it, dir);
+      } else turnKey(dir);
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
       view.userEl = clamp(view.userEl + (e.key === 'ArrowUp' ? 0.07 : -0.07), -0.18, 0.42);
@@ -1736,21 +1367,15 @@ function mount(el, opts = {}) {
     time += dt;
     if (S.hint && !hintShown && lastInput < 0 && hint.classList.contains('is-on') && time - hintT > 9) hideHint();
     /* physics or tweened glides */
-    if (world && !stage.reduced) stepPhysics(dt);
-    for (const it of Object.values(items)) if (it.glide && !it.body) { tweenGlide(it, dt); dirty = true; }
-    if (stage.reduced && grab) endGrab();
+    for (const it of Object.values(items)) if (it.glide) { tweenGlide(it, dt); dirty = true; }
     stepTweens(dt);
     stepTransitions(dt);
     stepPour(dt);
-    lidHover();
     if (box) stripLift(dt);
     /* visual poses (interpolated between physics steps) */
     for (const it of Object.values(items)) {
       if (!it.visible) continue;
-      if (it.body && world && !stage.reduced) {
-        it.root.position.lerpVectors(it.prev.p, it.cur.p, alpha);
-        it.root.quaternion.slerpQuaternions(it.prev.q, it.cur.q, alpha);
-      } else { it.root.position.copy(it.cur.p); it.root.quaternion.copy(it.cur.q); }
+      it.root.position.copy(it.cur.p); it.root.quaternion.copy(it.cur.q);
       if (it.root.position.distanceToSquared(it.last.p) > 1e-10 || Math.abs(it.root.quaternion.dot(it.last.q)) < 1 - 1e-9) {
         it.last.p.copy(it.root.position); it.last.q.copy(it.root.quaternion);
         dirty = shadowDirty = contactDirty = true;
@@ -1762,14 +1387,13 @@ function mount(el, opts = {}) {
       dirty = true;
     }
     /* a long pause: back to the hero picture (an open can or box closes, the puddle soaks away first) */
-    if (time - lastInput > 24 && !grab && ptr.id === null && !tweens.length && !pourBusy() && (items.can.state === 'open' || items.box.state === 'open' || items.box.state === 'fan')) {
+    if (time - lastInput > 24 && ptr.id === null && !tweens.length && !pourBusy() && (items.can.state === 'open' || items.box.state === 'open' || items.box.state === 'fan')) {
       if (items.can.state === 'open') closeCan();
       if (items.box.state === 'open' || items.box.state === 'fan') closeBox();
     }
-    /* idle: arrange and recompose */
-    if (time - lastInput > 4.5 && !grab && ptr.id === null && !tweens.length) {
-      if (world && !stage.reduced) autoArrange();
-      else for (const it of Object.values(items)) if (it.visible && !it.glide && it.state === 'closed' && displaced(it) && !stage.reduced) glideTo(it, it.home.p, it.home.q);
+    /* idle: anything off its place (an interrupted pour) goes home */
+    if (time - lastInput > 4.5 && ptr.id === null && !tweens.length && !pourBusy() && !stage.reduced) {
+      for (const it of Object.values(items)) if (it.visible && !it.glide && it.state === 'closed' && displaced(it)) glideTo(it, it.home.p, it.home.q);
     }
     updateCamera(dt);
   }
@@ -1835,8 +1459,6 @@ function mount(el, opts = {}) {
 
   function dispose() {
     unbindInput();
-    clearTimeout(ptr.hold);
-    if (world) { world.free(); world = null; }
     const seen = new Set();
     scene && scene.traverse(o => {
       if (o.geometry) o.geometry.dispose();
@@ -1861,7 +1483,7 @@ function mount(el, opts = {}) {
       if (gate && opts.poster !== false && !opts.poster) gate.querySelector('img').src = posterFor(name);
       if (stage && opts.poster !== false && !opts.poster) stage.setPoster(posterFor(name));
       if (!built) return;
-      const apply = () => { grab = null; layout(false); Object.assign(cam, camGoal); };
+      const apply = () => { layout(false); Object.assign(cam, camGoal); };
       crossfade(stage, () => { dirty = true; update(stage.t, 0); render(); }, apply, 0.8);
       dirty = true;
     },
@@ -1893,14 +1515,15 @@ function mount(el, opts = {}) {
     reset() {
       if (!built) return;
       closeCan(); closeBox();
-      view.userAz = view.userEl = 0;
+      view.userEl = 0; view.wide = true; focusView(camGoal);
+      turn.a = wrapPi(turn.a); turnTo(0, 3);
       Object.values(items).forEach((it, i) => { if (displaced(it)) { if (stage.reduced) place(it, it.home.p, it.home.q); else glideTo(it, it.home.p, it.home.q, null, i * 0.3); } });
       invalidate();
     },
     stats() {
-      return Object.assign({}, stage ? stage.stats : {}, { object: S.object, physics: physicsState, can: items.can && items.can.state, box: items.box && items.box.state,
+      return Object.assign({}, stage ? stage.stats : {}, { object: S.object, physics: 'none', turn: +wrapPi(turn.a).toFixed(3), can: items.can && items.can.state, box: items.box && items.box.state,
         calls: post ? post.S.calls : 0, tris: post ? post.S.tris : 0, samples: post ? post.S.samples : 0, steps: buildSteps, programs: R ? R.info.programs.length : 0,
-        tier, tierWhy, gated: !!gate, pr: R ? +R.getPixelRatio().toFixed(2) : 0, drawFps: drawn.length, frames: drawCount, dprCap: dprBoost && stage && stage.w * stage.h < 280000 ? Math.max(TC.dpr, dprBoost) : TC.dpr, physicsFaults,
+        tier, tierWhy, gated: !!gate, pr: R ? +R.getPixelRatio().toFixed(2) : 0, drawFps: drawn.length, frames: drawCount, dprCap: dprBoost && stage && stage.w * stage.h < 280000 ? Math.max(TC.dpr, dprBoost) : TC.dpr,
         lid: items.lid ? 'off' : 'on', level: +paintLevel.toFixed(3), pour: pour ? (pour.pouring ? 'pouring' : (pour.busy ? 'poured' : 'idle')) : 'none' });
     },
     renderFrame() { if (stage && stage.ready) { dirty = true; update(stage.t, 0); render(); } },
@@ -1917,26 +1540,40 @@ function mount(el, opts = {}) {
         const v = p.project(camera), r = wrap.getBoundingClientRect();
         return { x: r.left + (v.x * 0.5 + 0.5) * r.width, y: r.top + (-v.y * 0.5 + 0.5) * r.height };
       },
-      pose(name) { const it = items[name]; return it && { p: it.cur.p.toArray().map(v => +v.toFixed(3)), q: it.cur.q.toArray().map(v => +v.toFixed(3)), state: it.state, sleeping: it.body ? it.body.isSleeping() : null, glide: !!it.glide }; },
-      physics: () => physicsState,
-      startPhysics: () => { startPhysics(); return physicsState; },     /* checks: physics without a gesture */
+      pose(name) { const it = items[name]; return it && { p: it.cur.p.toArray().map(v => +v.toFixed(3)), q: it.cur.q.toArray().map(v => +v.toFixed(3)), state: it.state, glide: !!it.glide }; },
+      /* the turntable: read, or set at once (tests, recordings); spin(v) sets it coasting */
+      turn(a) { if (a != null) { if (!view.wide) { view.wide = true; focusView(camGoal); } turn.a = a; turn.v = 0; turn.goal = null; turn.sv = 0; lastInput = time; dirty = true; invalidate(); } return +turn.a.toFixed(4); },
+      spin(v) { turn.v = v; turn.goal = null; lastInput = time; invalidate(); return v; },
+      /* checks: every vertex of every visible object, in the world: how far it reaches from the plinth's axis (against the
+         plinth's radius) and where it falls on the screen (normalised device coordinates, the frame is -1..1) */
+      extent() {
+        const out = { plinthR: +plinthR.toFixed(3) }, v = new T.Vector3();
+        camera.updateMatrixWorld();
+        for (const it of Object.values(items)) {
+          if (!it.visible) continue;
+          it.root.updateMatrixWorld(true);
+          let r = 0, x0 = 9, x1 = -9, y0 = 9, y1 = -9, low = 9;
+          it.root.traverse(o => {
+            if (!o.isMesh || !o.visible || !o.geometry || !o.geometry.attributes.position) return;
+            let vis = true; for (let q = o; q; q = q.parent) if (!q.visible) { vis = false; break; }
+            if (!vis) return;
+            const P = o.geometry.attributes.position, step = Math.max(1, Math.floor(P.count / 1500));
+            for (let i = 0; i < P.count; i += step) {
+              v.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld);
+              r = Math.max(r, Math.hypot(v.x, v.z)); low = Math.min(low, v.y);
+              v.project(camera); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y);
+            }
+          });
+          out[it.name] = { r: +r.toFixed(3), margin: +(plinthR - r).toFixed(3), low: +(low - S.ph).toFixed(3), ndc: [+x0.toFixed(3), +x1.toFixed(3), +y0.toFixed(3), +y1.toFixed(3)], inFrame: x0 > -1 && x1 < 1 && y0 > -1 && y1 < 1 };
+        }
+        return out;
+      },
+      turnState: () => ({ a: +turn.a.toFixed(4), v: +turn.v.toFixed(3), goal: turn.goal, wide: view.wide, focus: view.focus }),
       pourState: () => pour ? { mode: pour.mode, level: +paintLevel.toFixed(3), pouring: pour.pouring, busy: pour.busy, settled: pour.settled, particles: pour.particles, active: pour.fluid ? pour.fluid.active : 0, sleeping: pour.fluid ? pour.fluid.sleeping : null, seq: pourSeq && pourSeq.phase, reset: pourReset } : null,
       resetPour: () => startPourReset(),
       always(on) { forceRender = !!on; },
       idle(sec) { lastInput = quietFrom = time - sec; return true; },
       paint() { const U = paintMat && paintMat.userData.U; return U ? { time: +U.uTime.value.toFixed(2), ripple: (U.uRip ? U.uRip.value : U.uRips.value[0]).toArray().map(v => +v.toFixed(2)), rings: U.uRips.value.filter(v => U.uTime.value - v.z < 7).length, mix: U.uMix.value } : null; },
-      throwAll() {
-        if (!world) return false;
-        Object.values(items).forEach((it, i) => {
-          if (!it.body || !it.visible || it.state !== 'closed') return;
-          if (it.glide) { it.glide = null; it.body.setBodyType(RBT().Dynamic, true); }
-          it.body.wakeUp();
-          it.body.setLinvel({ x: (i ? 1 : -1) * 2.5, y: 15 + i * 2, z: 0.6 }, true);
-          it.body.setAngvel({ x: 2.5 - i * 4, y: 3 + i, z: -2 + i * 3 }, true);
-        });
-        lastInput = time;
-        return true;
-      },
       tune(o) {
         if (o.envRot != null || o.panel) { if (o.envRot != null) ENV.rot = o.envRot; if (o.panel) Object.assign(ENV.panel, o.panel); buildEnv(); }
         if (o.envInt != null) scene.environmentIntensity = o.envInt;
@@ -1953,8 +1590,8 @@ function mount(el, opts = {}) {
         shadowDirty = contactDirty = dirty = true; invalidate();
         return { envRot: scene.environmentRotation.y, envInt: scene.environmentIntensity, post: post.S };
       },
-      get world() { return world; }, get pour() { return pour; },
-      frameInfo(f) { const pts = finalPoints(f || view.focus); const out = pts.map(p => { const v = p.clone().project(camera); return [+v.x.toFixed(2), +v.y.toFixed(2)]; }); return { goal: Object.assign({}, camGoal), cam: Object.assign({}, cam), view: { focus: view.focus, userAz: view.userAz, userEl: view.userEl }, ndc: out }; }
+      get pour() { return pour; },
+      frameInfo(f) { const pts = finalPoints(f || view.focus); const out = pts.map(p => { const v = p.clone().project(camera); return [+v.x.toFixed(2), +v.y.toFixed(2)]; }); return { goal: Object.assign({}, camGoal), cam: Object.assign({}, cam), view: { focus: view.focus, wide: view.wide, turn: turn.a, userEl: view.userEl }, ndc: out }; }
     }
   };
   el.dv3d = ctl;

@@ -43,9 +43,10 @@ export function createPour(T, R, ctx) {
       clearcoat: 1, clearcoatRoughness: 0.09, envMapIntensity: 0.7 });
     const U = { uFlow: { value: 0 } };
     paintMat.onBeforeCompile = sh => {
-      sh.uniforms.uFlow = U.uFlow;
+      sh.uniforms.uFlow = U.uFlow; sh.uniforms.uTurn = field.uniforms.uTurn;
       sh.vertexShader = sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv.y += uFlow;\n#endif\n#ifdef USE_BUMPMAP\nvBumpMapUv.y += uFlow;\n#endif')
         .replace('#include <common>', '#include <common>\nuniform float uFlow;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uTurn;');
       sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>' + WET)
         .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>' + SHEEN);
     };
@@ -285,6 +286,8 @@ export function createPour(T, R, ctx) {
   return {
     update, still, reset, group, precompile,
     setLevel(v) { level = Math.max(0, Math.min(1, v)); },
+    /* the turntable's angle: the studio's soft box in the paint's gloss turns with the view */
+    setTurn(a) { field.uniforms.uTurn.value = a; },
     /* the can is being lifted away: whatever is left stays in it */
     block(on) { blocked = !!on; },
     setGranules(tex, bump) { field.setMap(tex, bump); if (paintMat) { paintMat.map = tex; if (bump) paintMat.bumpMap = bump; paintMat.needsUpdate = true; } },

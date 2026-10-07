@@ -1,15 +1,16 @@
 /* Dvatone packaging v2: the Designer Box block in 3D. The can and the Designer Box on a plinth coated with the
-   composition: real physics (grab, toss, topple), the lid that pops off and goes back on, the paint that answers every
-   touch and can be poured out, the colour fan.
+   composition. The plinth is a turntable (drag sideways to turn it); a tap opens the box on its hinge or pops the can's
+   lid off, the paint answers every tap and can be poured out, the colour fan rises from the open box.
 
    This file is the small entry the page loads with its own <script type="module">; it holds no 3D at all. Everything
    heavy waits until the block comes near the viewport, step by step:
      about 1.5 screens away  the scene module (pack2/scene.js) mounts the block: its poster (a lazy image) and the stage
      about 300 px away       three.js, the scene parts and the studio HDR (the stage's own lazy start in core.js)
-     the first touch         the physics (Rapier, WASM); once the can is open, the pour (pour.js, the fluid worker)
+     the can first opened    the pour (pour.js, puddle.js; on the high tier the paint solver in a worker)
+   There is no physics engine: every motion is scripted.
    Until the scene has mounted, the block shows its poster (loaded lazily by the browser as well).
 
-   DVPack2.mount(el, { object:'can'|'box'|'both', colors:[{hex,share}], physics:true, theme:'dark'|'light'|'auto',
+   DVPack2.mount(el, { object:'can'|'box'|'both', colors:[{hex,share}], theme:'dark'|'light'|'auto',
                        labels:{...}, lang:'uk'|'en', poster:url|false, fan:[{name, colors}], plinth:'coating'|'dark'|colors,
                        hint:true })
      -> { ready, setColors(colors), setObject(name), open(which?), close(which?), pour(), setTheme(t), reset(), stats(),
@@ -18,11 +19,11 @@
      the scene is there are applied when it is.
    DVPack2.load() -> a promise of the scene module.
    Events on el: dv3d:ready, dv3d:fallback, dv3d:open {object}, dv3d:close {object}, dv3d:pick {name, colors},
-   dv3d:pour {state}, dv3d:lid {state}, dv3d:paint.
-   Declarative: <div data-dv3d="pack2" data-object="both" data-colors='[...]' data-physics="true"></div>
-   Keyboard: Tab to the can or the box; arrows turn it (or pick a fan strip), Up/Down tilt the view, Enter opens,
-   Escape closes, Home re-arranges, P pours. prefers-reduced-motion: no physics, static beauty pose, instant changes.
-   No WebGL2: the poster stays. */
+   dv3d:pour {state}, dv3d:lid {state}, dv3d:paint, dv3d:turn {angle}.
+   Declarative: <div data-dv3d="pack2" data-object="both" data-colors='[...]'></div>
+   Keyboard: Tab to the can or the box; Left/Right turn the plinth (or walk the fan strips), Up/Down tilt the view,
+   Enter opens, Escape closes, Home turns the front back, P pours. prefers-reduced-motion: static beauty pose, instant
+   changes, no coasting. No WebGL2: the poster stays. */
 const OBJECTS = ['can', 'box', 'both'];
 const BASE = import.meta.url;
 

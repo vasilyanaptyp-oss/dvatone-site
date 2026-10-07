@@ -8,7 +8,9 @@ export const CAN = { R: 0.875, H: 1.93, COM: 0.965, PAINT_Y: 1.64, LID_Y: 1.83 }
 /* the paint's granules: one repeat of the coating bake (128 granule cells) spans this many decimetres, so a granule is
    about 1.7 mm: the multicolour grain shows at close range, in the can and wherever the paint is poured */
 export const PAINT_TILE = 2.2;
-export const BOX = { W: 3.1, D: 2.2, H: 0.85, COM: 0.425, LW: 3.16, LD: 2.26, BED: 0.36, HINGE_Y: 0.85, HINGE_Z: -1.13 };
+/* the lid hinges on the bottom edge of its back wall, where that wall meets the base's back wall (a cloth hinge):
+   opened, its back wall folds out flat as a spine and the lid stands on it, joined to the base all along the edge */
+export const BOX = { W: 3.1, D: 2.2, H: 0.85, COM: 0.425, LW: 3.16, LD: 2.26, BED: 0.36, HINGE_Y: 0.51, HINGE_Z: -1.13 };
 export const FAN = { L: 2.45, W: 0.5, T: 0.01, PIV: 0.22, N: 12 };
 
 /* linear copper F0, tuned so that a mid reflection reads as the brand copper (#c4935c ... #dcba94), never pink */
@@ -408,6 +410,10 @@ export function makeBox(T, mats, chipMats, stripMats) {
   bed.position.y = BOX.BED - 0.015; bed.receiveShadow = true; body.add(bed);
   /* hinged lid: pivot on the back top edge */
   const hinge = new T.Group(); hinge.position.set(0, BOX.HINGE_Y, BOX.HINGE_Z); body.add(hinge);
+  /* the cloth hinge: a soft rolled bead along the back, on the base, at the bottom edge of the lid's back wall */
+  const bead = new T.Mesh(new T.CylinderGeometry(0.019, 0.019, BOX.LW - 0.07, 14, 1).rotateZ(Math.PI / 2), mats.paper);
+  bead.position.set(0, BOX.HINGE_Y + 0.004, BOX.HINGE_Z - 0.008); bead.castShadow = bead.receiveShadow = true;
+  body.add(bead); parts.push(bead);
   const lid = new T.Group(); lid.position.set(0, -BOX.HINGE_Y, -BOX.HINGE_Z); hinge.add(lid);
   const skirt = new T.Mesh(trayGeometry(T, BOX.LW, BOX.LD, 0.31, 0.026, 0.032, 0), [mats.paper, mats.inside, mats.edge]);
   skirt.position.y = 0.51; skirt.castShadow = skirt.receiveShadow = true; lid.add(skirt); parts.push(skirt);

@@ -19,6 +19,9 @@ export const SHEEN = `
 #ifdef USE_CLEARCOAT
   {
     vec3 Rw = normalize((vec4(reflect(-geometryViewDir, geometryClearcoatNormal), 0.0) * viewMatrix).xyz);
+    /* the soft box belongs to the studio, which turns with the view (the turntable): into the studio's frame */
+    float cT = cos(uTurn), sT = sin(uTurn);
+    Rw.xz = vec2(cT * Rw.x - sT * Rw.z, sT * Rw.x + cT * Rw.z);
     float az = atan(Rw.x, -Rw.z);
     float box = smoothstep(0.02, 0.16, Rw.y) * (1.0 - smoothstep(0.42, 0.62, Rw.y)) * (1.0 - smoothstep(0.55, 0.95, abs(az)));
     /* a warm box, a little of the paint's colour in its reflection: wet gloss over the grain, not chrome */
@@ -37,7 +40,7 @@ export function createPuddle(T, o = {}) {
   let bb = null, shown = null;
   const U = {
     tH: { value: tex }, uOrigin: { value: new T.Vector2(x0, z0) }, uSpan: { value: span }, uTexel: { value: 1 / N },
-    uTile: { value: o.tile || 0.9 }, uFade: { value: 1 }, uFadeH: { value: 1 }, uThr: { value: 0.006 }, uHalo: { value: 0.9 }, uSrc: { value: new T.Vector2() }
+    uTile: { value: o.tile || 0.9 }, uFade: { value: 1 }, uFadeH: { value: 1 }, uThr: { value: 0.006 }, uHalo: { value: 0.9 }, uSrc: { value: new T.Vector2() }, uTurn: { value: 0 }
   };
 
   /* the paint: the scene's physical shading, its normal from the height field, opaque inside a crisp soft outline */
@@ -51,7 +54,7 @@ export function createPuddle(T, o = {}) {
       .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\n  vMapUv = (modelMatrix * vec4(position, 1.0)).xz / uTile;\n#endif\n#ifdef USE_BUMPMAP\n  vBumpMapUv = (modelMatrix * vec4(position, 1.0)).xz / uTile;\n#endif')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWxz = (modelMatrix * vec4(position, 1.0)).xz;\n  vHUv = (vWxz - uOrigin) / uSpan;\n  transformed.y += textureLod(tH, vHUv, 0.0).r * uFadeH;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D tH; uniform float uSpan; uniform float uTexel; uniform float uFade; uniform float uFadeH; uniform float uThr; uniform float uTile; uniform vec2 uSrc; varying vec2 vHUv; varying vec2 vWxz;')
+      .replace('#include <common>', '#include <common>\nuniform sampler2D tH; uniform float uSpan; uniform float uTexel; uniform float uFade; uniform float uFadeH; uniform float uThr; uniform float uTile; uniform vec2 uSrc; uniform float uTurn; varying vec2 vHUv; varying vec2 vWxz;')
       .replace('#include <clipping_planes_fragment>', 'float hC = texture2D(tH, vHUv).r;\n  if (hC < uThr) discard;\n#include <clipping_planes_fragment>')
       .replace('#include <map_fragment>', '#include <map_fragment>' + WET + '\n  diffuseColor.a = smoothstep(uThr, uThr + 0.014, hC) * uFade;')
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
