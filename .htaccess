@@ -1,5 +1,6 @@
 # Dvatone: Apache / LiteSpeed (typical shared hosting). Upload to the web root next to index.html.
 # Everything here is optional; each block is guarded so a missing module cannot break the site.
+# After upload, check the answers with curl -I (DEPLOY.md, section 6).
 
 DirectoryIndex index.html
 Options -Indexes
@@ -21,16 +22,35 @@ ErrorDocument 404 /404.html
   AddType image/webp .webp
   AddType video/mp4 .mp4
   AddType text/javascript .js .mjs
+  AddType model/gltf-binary .glb
+  AddType image/vnd.radiance .hdr
 </IfModule>
 
-# Compression
+# Compression (Apache 2.4 keeps AddOutputFilterByType in mod_filter). The 3D models (.glb) and HDR studio lights are
+# included: meshopt data is made to be gzipped and comes out about 30 % smaller (the first-screen room: 794 KB to 548 KB).
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json application/manifest+json image/svg+xml text/plain application/xml
+  <IfModule mod_filter.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json application/manifest+json image/svg+xml text/plain application/xml model/gltf-binary image/vnd.radiance
+  </IfModule>
 </IfModule>
 
-# Caching. HTML always revalidates; css/js carry ?v=<hash> in the page, so they may be cached for a year;
-# fonts never change; images and 3D files get a week (replace a texture, and visitors see it within a week;
-# add a new file name for an instant change).
+# Revalidate by date, not by ETag. Apache's compression appends -gzip to the ETag and then never answers a revalidation
+# with 304 (the switch for that, DeflateAlterETag, works only in the server config). Without ETags the browser asks with
+# If-Modified-Since, so unchanged pages and 3D files come back as a short 304 instead of a full download.
+FileETag None
+<IfModule mod_headers.c>
+  Header unset ETag
+</IfModule>
+
+# Caching. HTML always revalidates. CSS and JS are loaded with ?v=<hash of the file>, and the build changes the hash
+# whenever a file changes, so they may be cached for a year. Fonts never change. Images and video get a week
+# (replace a picture, and visitors see it within a week; give it a new file name for an instant change).
+# Two exceptions are checked with the server on every visit (a short 304 answer while nothing has changed),
+# so an update reaches every visitor at once:
+#   assets/3d/            no ?v= here: the modules import each other by plain file name, and the room data, models
+#                         and textures are made for those modules, so the whole folder must arrive as one set;
+#   assets/js/config.js   holds the form address and is edited on the server without a rebuild, so its ?v= stays the same.
+# The last matching block wins: keep the two exceptions after the other blocks.
 <IfModule mod_headers.c>
   <FilesMatch "\.html$">
     Header set Cache-Control "no-cache"
@@ -50,10 +70,15 @@ ErrorDocument 404 /404.html
   <FilesMatch "\.(xml|txt|webmanifest)$">
     Header set Cache-Control "public, max-age=3600"
   </FilesMatch>
-  # The 3D modules import each other by plain file name (no ?v=): keep them on a short cache
-  <FilesMatch "^(core|hero|interior|pack)\.js$">
-    Header set Cache-Control "public, max-age=3600"
+  <FilesMatch "^config\.js$">
+    Header set Cache-Control "no-cache"
   </FilesMatch>
+  <IfModule mod_setenvif.c>
+    SetEnvIf Request_URI "^/assets/3d/" DV_REVALIDATE
+    <FilesMatch ".">
+      Header set Cache-Control "no-cache" env=DV_REVALIDATE
+    </FilesMatch>
+  </IfModule>
 
   Header always set X-Content-Type-Options "nosniff"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"

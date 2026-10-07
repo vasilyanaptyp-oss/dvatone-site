@@ -18,7 +18,6 @@
   var TEX = {}; (C.tex || []).forEach(function (h) { TEX[h] = 1; });
   var MAXPICK = 6, CHUNK = 30, MAXWIN = 150, AHEAD = 900;   // cards per chunk (rounded up to whole rows), cards kept at most, px to load ahead
   var NS = window.DVATONE || {};
-  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   var mq = window.matchMedia ? matchMedia('(max-width:760px)') : null;   // phones: filter sheet, longer first page
   var LS = {
     uk: { copiedBtn: 'Скопійовано', copyFail: 'Не вдалося скопіювати автоматично. Виділіть текст і скопіюйте його вручну.', dvFound: 'Знайдено в колекції DV: {n}', dvGo: 'Переглянути колекцію DV',
@@ -45,7 +44,15 @@
     var st = document.createElement('style'); st.setAttribute('data-dv-cat', '');
     st.textContent = '.cx__num{white-space:nowrap}' +   // a narrow card may put "NCS" above the code, the code itself never breaks at its hyphen
       '.cx__sw img{transition:opacity .35s var(--ease,ease)}.cx__sw img:not(.is-ok){opacity:0}' +   // a photo shows once it has loaded; the shade colour fills the card meanwhile
-      '@media (hover:none){.cxd__acts .btn--line-l:hover{background:none;color:var(--tl);border-color:var(--line-l2)}}';   // phones keep :hover on a tapped button: the outline "Remove" state must show at once
+      '@media (hover:none){.cxd__acts .btn--line-l:hover{background:none;color:var(--tl);border-color:var(--line-l2)}}' +   // phones keep :hover on a tapped button: the outline "Remove" state must show at once
+      // every position on this page is kept by hand (the spacer, the search field, the results under the stuck bar); the browser's own
+      // scroll anchoring would latch on to "Show more" or the closing band and follow it down with every chunk of cards added above it
+      'html{overflow-anchor:none}' +
+      // the shade dialog's way on to the generator sits above the actions, so they never move under the finger or the pointer: on phones
+      // the action bar is pinned to the bottom edge and grows upwards; on wider screens the link keeps its row while there are no picks
+      '.cxd__acts .cxd__go{order:-1;flex:0 0 auto;justify-content:center;gap:10px;height:44px;font-size:10.5px}' +
+      '.cxd__go svg{flex:none;width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.4}.cxd__acts .cxd__go.is-off{visibility:hidden}' +
+      '@media (max-width:700px){.cxd__acts .cxd__go{flex:1 1 100%}.cxd__acts .cxd__go.is-off{display:none}}';
     document.head.appendChild(st);
   })();
 
@@ -102,6 +109,7 @@
   /* ---------- cards ---------- */
   var plus = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg>';
   var copyIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="1.5"/><path d="M15.5 8.5v-2a1.5 1.5 0 0 0-1.5-1.5H6.5A1.5 1.5 0 0 0 5 6.5V14a1.5 1.5 0 0 0 1.5 1.5h2"/></svg>';
+  var arrow = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';   // the same arrow as the tray's "go" button
   var texOk = {};   // photos that have loaded once: rows rebuilt while scrolling back show them at once, without a second fade
   function swatchHTML(it) {
     if (!TEX[it.hex]) return '<span class="cx__flat" style="background:#' + it.hex + '"></span>';
@@ -200,8 +208,13 @@
   var fillSoon = function () { if (!fillRaf) fillRaf = requestAnimationFrame(fill); };
   window.addEventListener('scroll', fillSoon, { passive: true }); window.addEventListener('resize', fillSoon);
 
-  function apply() {
+  function apply(byReader) {
     var nq = normQ(q);
+    // The DV collection follows the search too. It sits above the toolbar, so while it shrinks or grows (and while a shorter
+    // grid pulls the page end up) the search field keeps its place on screen. Measured before anything changes: a bar in its
+    // own place moves with the page around it, a stuck bar only once the page pushes it down off its stuck place
+    var y0 = si ? si.getBoundingClientRect().top : NaN, vh = window.innerHeight, wrap = tool && tool.parentNode, w0 = wrap ? wrap.getBoundingClientRect().top : 0;
+    var stuck = !!tool && Math.abs(tool.getBoundingClientRect().top - (parseFloat(getComputedStyle(tool).top) || 0)) < 1.5;
     list = items.filter(function (it) {
       if (filter !== 'all' && SYS[it.sys].toLowerCase() !== filter) return false;
       return !nq || it.key.indexOf(nq) > -1;
@@ -210,22 +223,33 @@
     cap = pageSize();
     appendChunk(); status(); fill();
     if (live && (nq || filter !== 'all')) { clearTimeout(apply._t); apply._t = setTimeout(function () { live.textContent = fmt(LS.results, { n: nf(list.length) }); }, 400); }
-    // DV collection follows the search too. It sits above the toolbar, so while it shrinks or grows the search field keeps
-    // its place on screen (Safari has no scroll anchoring: clearing a search used to drop the reader into the DV cards)
-    var y0 = si ? si.getBoundingClientRect().top : NaN, vh = window.innerHeight;
     var dvHit = 0;
     $$('[data-dv-card]').forEach(function (c) {
       var t = strip(c.getAttribute('data-dv-card')), ok = !nq || t.indexOf(strip(q)) > -1;
       c.hidden = !ok; if (ok) dvHit++;
     });
     var dvSec = $('[data-dv-section]'); if (dvSec) dvSec.classList.toggle('is-filtered', !!nq && !dvHit);
-    if (y0 > -vh / 2 && y0 < vh) { var dy = si.getBoundingClientRect().top - y0; if (Math.abs(dy) > 1) jumpBy(dy); }   // only while the toolbar is on screen (typing, "Clear search")
+    if (y0 > -vh / 2 && y0 < vh) {   // only while the toolbar is on screen (typing, "Clear search", a standard)
+      var dy = !wrap ? si.getBoundingClientRect().top - y0 : stuck ? Math.max(0, si.getBoundingClientRect().top - y0) : wrap.getBoundingClientRect().top - w0;   // a stuck bar the page end pushed up: toResults() brings the results up under it
+      if (Math.abs(dy) > 1) jumpBy(dy);
+    }
     if (empty) {
       empty.hidden = !!list.length || dvHit > 0;   // a matching DV card is on screen above: never say "nothing found"
       $('[data-cat-empty-text]', empty).textContent = fmt(C.emptyText, { query: q });
       dvNote(!list.length && dvHit > 0 ? dvHit : 0);
     }
     sheetSync();
+    if (byReader) toResults();
+  }
+  var hdrEl = $('#hdr');
+  function toResults() {   // a new search or standard deep in the grid: the new results start right under the stuck bar, not far above it
+    if (!tool) return;
+    if (tool.getAnimations) tool.getAnimations().forEach(function (a) { try { a.finish(); } catch (e) {} });   // the bar's place still gliding with the header: take where it stops
+    var stick = parseFloat(getComputedStyle(tool).top); if (isNaN(stick)) return;   // where the bar sticks (the page may have pushed it off for now)
+    var dy = grid.getBoundingClientRect().top - (stick + tool.offsetHeight) - 12;
+    if (dy >= -1) return;   // they already do: the bar sits in its own place above the grid
+    if (hdrEl && hdrEl.classList.contains('is-hidden')) dy -= NS_inset();   // scrolling up brings a hidden header back, and the stuck bar slides down under it
+    jumpBy(dy);
   }
   var dvNoteEl = null;
   function dvNote(n) {   // "Found in the DV collection: N" with a link to the section, instead of the empty state
@@ -248,24 +272,28 @@
   });
   $$('[data-cat-filter]').forEach(function (b) {
     b.addEventListener('click', function () {
+      if (b.getAttribute('data-cat-filter') === filter) return;   // the standard already shown: the reader keeps their place in the grid
       filter = b.getAttribute('data-cat-filter');
       $$('[data-cat-filter]').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
-      apply();
+      apply(true);
     });
   });
   var si = $('[data-cat-search]');
   if (si) {
     var t = 0;
-    si.addEventListener('input', function () { clearTimeout(t); t = setTimeout(function () { q = si.value.trim(); apply(); }, 120); });
+    si.addEventListener('input', function () { clearTimeout(t); t = setTimeout(function () { var v = si.value.trim(); if (v === q) return; q = v; apply(true); }, 120); });   // a space typed after the code changes nothing
     var rst = $('[data-cat-reset]');
-    if (rst) rst.addEventListener('click', function () { si.value = ''; q = ''; apply(); si.focus(); });   // clears the search only, as the button says: the chosen standard stays
+    if (rst) rst.addEventListener('click', function () { si.value = ''; q = ''; apply(true); si.focus(); });   // clears the search only, as the button says: the chosen standard stays
   }
   // deep link from the generator or the home page: ?q=RAL 1039
   var dl = /[?&]q=([^&]+)/.exec(location.search); if (dl && si) { try { si.value = q = decodeURIComponent(dl[1].replace(/\+/g, ' ')); } catch (e) {} }
 
   /* ---------- modal helpers: scroll lock, Esc (native) and the Back button close the top dialog ---------- */
   var skipPop = 0, modals = [];
-  function lockScroll(on) { document.documentElement.style.overflow = on ? 'hidden' : ''; }
+  // the lock goes on the body: on the root it would turn the body (overflow-x:hidden) into a scroller, and the sticky search bar
+  // behind the modal would come unstuck
+  function lockScroll(on) { document.body.style.overflow = on ? 'hidden' : ''; }
+  function scrollMode(m) { try { if ('scrollRestoration' in history) history.scrollRestoration = m; } catch (e) {} }
   function bindModal(d) {
     modals.push(d);
     d.addEventListener('close', function () {
@@ -277,12 +305,15 @@
     if (d.open) return;
     if (d.showModal) d.showModal(); else d.setAttribute('open', '');
     lockScroll(true);
+    scrollMode('manual');   // the step back that closes the modal must not scroll the page back to where it stood when the modal opened
     try { history.pushState({ dvModal: 1 }, ''); d._dvPush = true; } catch (e) {}
   }
   window.addEventListener('popstate', function () {
-    if (skipPop > 0) { skipPop--; return; }
-    modals.forEach(function (d) { if (d.open) { d._dvPush = false; if (d.close) d.close(); } });
+    if (skipPop > 0) skipPop--;
+    else modals.forEach(function (d) { if (d.open) { d._dvPush = false; if (d.close) d.close(); } });
+    setTimeout(function () { if (!modals.some(function (d) { return d.open; })) scrollMode('auto'); }, 0);   // back on the page's own entry: a reload restores the position again
   });
+  window.addEventListener('pagehide', function () { scrollMode('auto'); });   // leaving with a modal open (the dialog's link to the generator): coming back restores the position
 
   /* ---------- filters: on phones the colour-standard pills live in a bottom sheet ---------- */
   var tool = $('.ctool'), fbox = $('.ctool__f'), fbtn = null, sheet = null, sheetOk = null, sheetBody = null;
@@ -328,10 +359,7 @@
     var shut = function () { if (sheet.open) sheet.close(); };
     $('.dvsheet__x', sheet).addEventListener('click', shut); sheetOk.addEventListener('click', shut);
     sheet.addEventListener('click', function (e) { if (e.target === sheet) shut(); });   // a tap on the dimmed backdrop
-    sheet.addEventListener('close', function () {
-      sheet.style.transform = ''; sheet.style.transition = '';
-      var top = offTop(grid) - NS_inset() - 16; if (window.scrollY > top + 40) window.scrollTo({ top: Math.max(0, top), behavior: reduce ? 'auto' : 'smooth' });   // results start at the top of the grid
-    });
+    sheet.addEventListener('close', function () { sheet.style.transform = ''; sheet.style.transition = ''; });   // a new standard has already brought its results up under the bar (apply); closing alone leaves the reader where they were
     var head = $('.dvsheet__head', sheet), y0 = null, dy = 0;   // drag the handle down to dismiss
     head.addEventListener('pointerdown', function (e) { if (e.target.closest('button')) return; y0 = e.clientY; dy = 0; try { head.setPointerCapture(e.pointerId); } catch (x) {} });
     head.addEventListener('pointermove', function (e) { if (y0 == null) return; dy = Math.max(0, e.clientY - y0); sheet.style.transition = 'none'; sheet.style.transform = 'translateY(' + dy + 'px)'; });
@@ -377,7 +405,8 @@
       body = '<p class="cxd__sys">' + esc(C.standard) + ': ' + SYS[it.sys] + '</p><h2 class="cxd__code">' + esc(it.label) + '</h2>' +
         '<dl class="cxd__dl"><div><dt>HEX</dt><dd>#' + it.hex + '</dd></div><div><dt>RGB</dt><dd>' + c.join(' · ') + '</dd></div></dl>' +
         '<p class="cxd__note">' + esc(TEX[it.hex] ? C.noteTex : C.noteFlat) + '</p>' +
-        '<div class="cxd__acts"><button type="button" class="btn btn--ink btn--sm" data-dlg-add="' + esc(it.id) + '"><span></span></button><button type="button" class="btn btn--line-l btn--sm" data-copy="' + esc(it.label) + '"><span>' + esc(C.copyCode) + '</span></button></div>';
+        '<div class="cxd__acts"><button type="button" class="btn btn--ink btn--sm" data-dlg-add="' + esc(it.id) + '"><span></span></button><button type="button" class="btn btn--line-l btn--sm" data-copy="' + esc(it.label) + '"><span>' + esc(C.copyCode) + '</span></button>' +
+        '<a class="btn-text cxd__go is-off" data-dlg-go href="' + esc(C.generator || 'generator.html') + '"><span></span>' + arrow + '</a></div>';
     }
     $('[data-cxd-vis]', dlg).innerHTML = vis; $('[data-cxd-body]', dlg).innerHTML = body;
     syncDialogAdd();
@@ -388,9 +417,8 @@
     var on = picks.indexOf(b.getAttribute('data-dlg-add')) > -1;
     b.classList.toggle('btn--ink', !on); b.classList.toggle('btn--line-l', on);
     $('span', b).textContent = on ? LS.unpick : C.add;
-    var go = $('[data-dlg-go]', dlg);   // a way on to the generator while there are picks: on phones the full-screen dialog covers the tray
-    if (!picks.length) { if (go) go.remove(); return; }
-    if (!go) { go = document.createElement('a'); go.className = 'btn-text'; go.setAttribute('data-dlg-go', ''); go.innerHTML = '<span></span>'; b.parentNode.appendChild(go); }
+    var go = $('[data-dlg-go]', dlg); if (!go) return;   // a way on to the generator while there are picks: on phones the full-screen dialog covers the tray
+    go.classList.toggle('is-off', !picks.length);   // switched off, not removed: the buttons below it keep their place
     go.setAttribute('href', genHref()); $('span', go).textContent = fmt(LS.toGen, { n: picks.length });
   }
   if (dlg) {

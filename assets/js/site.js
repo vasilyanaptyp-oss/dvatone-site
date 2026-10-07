@@ -7,7 +7,23 @@
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
-  document.documentElement.classList.add('dv-js');   // lets CSS hide half-loaded swatch photos (only when this script runs)
+  document.documentElement.classList.add('dv-js');   // also set by the inline head script before the first paint: lets CSS hide reveal blocks and unloaded photos
+
+  /* ---------- reveal on scroll: set up before anything else in this file, so an error further down never leaves a block hidden ---------- */
+  var rv = $$('[data-reveal]');
+  if ('IntersectionObserver' in window && !reduce) {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); } });
+    }, { rootMargin: matchMedia('(max-width: 760px)').matches ? '0px 0px 25% 0px' : '0px 0px -8% 0px', threshold: 0.06 });   // phones: start before the block scrolls in, so fast flicks never show faded text
+    rv.forEach(function (el) { io.observe(el); });
+  } else { rv.forEach(function (el) { el.classList.add('is-in'); }); }
+
+  /* ---------- digital-catalogue strip: a photo appears only once fully loaded (its swatch colour shows meanwhile),
+     so slow phones never see half-painted strips (the catalogue's sample leaves have their own loader, LEAF_JS in build_inner.py) ---------- */
+  $$('.sws img').forEach(function (im) {
+    var ok = function () { im.classList.add('is-ok'); };
+    if (im.complete && im.naturalWidth) ok(); else im.addEventListener('load', ok);   // a failed photo stays hidden: its colour tile remains, never a broken-image icon
+  });
 
   /* ---------- shared helpers for generator.js / catalogue.js (window.DVATONE): toast, clipboard, label flash, area parser ---------- */
   var NS = (window.DVATONE = window.DVATONE || {});
@@ -32,24 +48,39 @@
     st.textContent =
       '.dvt{position:fixed;left:50%;bottom:24px;z-index:2147483000;display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;box-sizing:border-box;width:max-content;max-width:min(560px,calc(100vw - 32px));' +
       'padding:12px 16px;background:var(--ink,#191511);color:var(--td,#ede6da);border:1px solid var(--line-d2,rgba(255,255,255,.2));border-radius:var(--r-1,2px);box-shadow:0 12px 40px rgba(0,0,0,.35);' +
-      'font:400 14px/1.45 var(--f-sans,inherit);opacity:0;transform:translate(-50%,10px);transition:opacity .25s ease,transform .25s ease;pointer-events:none}' +
-      '.dvt.is-in{opacity:1;transform:translate(-50%,0)}.dvt.is-act{pointer-events:auto}.dvt--warn{border-left:3px solid var(--err,#d98a7c)}' +
+      'font:400 14px/1.45 var(--f-sans,inherit);opacity:0;visibility:hidden;transform:translate(-50%,10px);transition:opacity .25s ease,transform .25s ease,visibility 0s linear .25s;pointer-events:none}' +
+      '.dvt.is-in{opacity:1;visibility:visible;transform:translate(-50%,0);transition-delay:0s}.dvt.is-act{pointer-events:auto}.dvt--warn{border-left:3px solid var(--err,#d98a7c)}' +
       '.dvt__m{flex:1 1 220px;min-width:0}.dvt__c{flex:1 1 100%;order:3;box-sizing:border-box;width:100%;padding:8px 10px;border:1px solid var(--line-d2,rgba(255,255,255,.2));border-radius:var(--r-1,2px);background:rgba(255,255,255,.06);color:inherit;font:400 13px/1.45 var(--f-mono,monospace);resize:none}' +
       '.dvt__x{flex:none;width:32px;height:32px;margin:-6px -8px -6px 0;color:inherit;font-size:20px;line-height:1;border-radius:50%}.dvt__x:hover{background:rgba(255,255,255,.12)}' +
+      '.dvt__a{flex:none;min-height:32px;margin:-6px -6px -6px 0;padding:0 8px;border-radius:var(--r-1,2px);color:var(--copper-hi,#dcba94);font:600 13px/1.2 var(--f-sans,inherit);text-decoration:underline;text-underline-offset:3px}.dvt__a:hover{background:rgba(255,255,255,.1)}' +
       '.is-limit{color:var(--err,#d98a7c)!important;font-weight:600}.mixrow__ico[data-lock="true"]{box-shadow:inset 0 0 0 1.5px var(--copper-hi,#c9915c);border-radius:50%}' +
-      '@media (max-width:760px){.dvt{bottom:72px}}@media (prefers-reduced-motion:reduce){.dvt{transition:none}}';
+      '@media (pointer:coarse){.dvt__a{min-height:44px;margin-block:-12px}}@media (max-width:760px){.dvt{bottom:72px}}@media (prefers-reduced-motion:reduce){.dvt{transition:none}}';
     document.head.appendChild(st);
   })();
-  var toastEl = null, toastT = 0;
-  NS.toast = function (msg, o) {
+  var toastEl = null, toastT = 0, toastFx = false;
+  NS.toast = function (msg, o) {   // o: kind ('warn'), ms, copyText (text to copy by hand), action ({label, run}: one button, e.g. undo)
     o = o || {};
-    var host = document.querySelector('dialog[open]') || document.body, act = !!o.copyText;
-    if (!toastEl) toastEl = document.createElement('div');
-    clearTimeout(toastT); toastEl.className = 'dvt' + (o.kind === 'warn' ? ' dvt--warn' : '') + (act ? ' is-act' : '');
+    var host = document.querySelector('dialog[open]') || document.body, act = !!o.copyText, fx = o.action && o.action.label && typeof o.action.run === 'function' ? o.action : null;
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      var over = false, hold = function () { if (toastFx) clearTimeout(toastT); };   // a toast with an action waits while a mouse is over it or focus is in it
+      var resume = function () { if (toastFx && !over && toastEl.classList.contains('is-in') && !toastEl.contains(document.activeElement)) { clearTimeout(toastT); toastT = setTimeout(hideToast, 2400); } };
+      toastEl.addEventListener('pointerenter', function (e) { if (e.pointerType !== 'touch') { over = true; hold(); } });
+      toastEl.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'touch') { over = false; resume(); } });
+      toastEl.addEventListener('focusin', hold); toastEl.addEventListener('focusout', function () { setTimeout(resume, 0); });
+    }
+    toastFx = !!fx;
+    clearTimeout(toastT); toastEl.className = 'dvt' + (o.kind === 'warn' ? ' dvt--warn' : '') + (act || fx ? ' is-act' : '');
     while (toastEl.firstChild) toastEl.removeChild(toastEl.firstChild);
     if (act || host !== document.body) { toastEl.setAttribute('role', act ? 'alert' : 'status'); toastEl.removeAttribute('aria-hidden'); }   // inside a modal dialog the page's .sr live region is inert, so the toast itself must announce
+    else if (fx) { toastEl.removeAttribute('role'); toastEl.removeAttribute('aria-hidden'); }   // its button stays reachable; the message itself is announced by the caller's live region
     else { toastEl.removeAttribute('role'); toastEl.setAttribute('aria-hidden', 'true'); }   // on the page a plain toast is only the visual copy of the .sr live region
     var m = document.createElement('span'); m.className = 'dvt__m'; m.textContent = msg; toastEl.appendChild(m);
+    if (fx) {
+      var ab = document.createElement('button'); ab.type = 'button'; ab.className = 'dvt__a'; ab.textContent = fx.label;
+      ab.addEventListener('click', function () { hideToast(); fx.run(); });
+      toastEl.appendChild(ab);
+    }
     var ta = null;
     if (act) {
       ta = document.createElement('textarea'); ta.className = 'dvt__c'; ta.readOnly = true; ta.value = o.copyText; ta.rows = Math.min(5, o.copyText.split('\n').length); ta.setAttribute('aria-label', msg);
@@ -62,7 +93,7 @@
     if (tray && host === document.body) { var tr = tray.getBoundingClientRect(); if (tr.height) bottom = Math.round(window.innerHeight - tr.top + 12) + 'px'; }
     toastEl.style.bottom = bottom;
     requestAnimationFrame(function () { toastEl.classList.add('is-in'); if (ta) { try { ta.focus({ preventScroll: true }); ta.select(); } catch (e) {} } });
-    toastT = setTimeout(hideToast, o.ms || (act ? 14000 : 2800));
+    toastT = setTimeout(hideToast, fx ? Math.max(o.ms || 0, 8000) : o.ms || (act ? 14000 : 2800));
   };
   function hideToast() { if (!toastEl) return; clearTimeout(toastT); toastEl.classList.remove('is-in'); }
   NS.copyText = function (text) {   // resolves true/false: never claims success it cannot confirm
@@ -239,15 +270,6 @@
     ['pointerenter', 'pointerdown', 'focus', 'click'].forEach(function (t) { a.addEventListener(t, sync); });
   });
 
-  /* ---------- reveal on scroll ---------- */
-  var rv = $$('[data-reveal]');
-  if ('IntersectionObserver' in window && !reduce) {
-    var io = new IntersectionObserver(function (es) {
-      es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); } });
-    }, { rootMargin: matchMedia('(max-width: 760px)').matches ? '0px 0px 25% 0px' : '0px 0px -8% 0px', threshold: 0.06 });   // phones: start before the block scrolls in, so fast flicks never show faded text
-    rv.forEach(function (el) { io.observe(el); });
-  } else { rv.forEach(function (el) { el.classList.add('is-in'); }); }
-
   /* ---------- legal pages: the sticky contents list marks the section being read: the one crossing the line just under
      the header (where a click on the list lands a section, so a short one is never skipped), the next one while the line
      is in the gap between two, and the last one once the page cannot scroll further ---------- */
@@ -268,13 +290,6 @@
     var spySoon = function () { if (!tocRaf) tocRaf = requestAnimationFrame(spy); };
     window.addEventListener('scroll', spySoon, { passive: true }); window.addEventListener('resize', spySoon); spy();
   }
-
-  /* ---------- digital-catalogue strip: a photo appears only once fully loaded (its swatch colour shows meanwhile),
-     so slow phones never see half-painted strips ---------- */
-  $$('.sws img').forEach(function (im) {
-    var ok = function () { im.classList.add('is-ok'); };
-    if (im.complete && im.naturalWidth) ok(); else im.addEventListener('load', ok);   // a failed photo stays hidden: its colour tile remains, never a broken-image icon
-  });
 
   /* ---------- count-up figures ---------- */
   $$('[data-count]').forEach(function (el) {
@@ -377,11 +392,15 @@
       $('#genId').textContent = '#' + (id % 65536).toString(16).toUpperCase().padStart(4, '0');
       $('#genMix').innerHTML = cur.cols.map(function (c, k) { return '<div><i style="background:#' + c[1] + '"></i><span>' + c[0] + '</span><span>' + SHARE[k] + '%</span></div>'; }).join('');
       $('#genBase').textContent = cur.cols[0][0];
+      var go = $('#generator .gen__cta a[href]');   // the button opens the generator with this composition
+      if (go) go.setAttribute('href', go.getAttribute('href').split('?')[0] + '?mix=' + cur.cols.map(function (c, k) { return c[1].toUpperCase() + ':' + SHARE[k]; }).join(','));
     };
     $$('#genSw .sw').forEach(function (b) {
       b.addEventListener('click', function () {
         $$('#genSw .sw').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
-        cur.cols[0] = [b.getAttribute('data-code'), b.getAttribute('data-hex')]; paint();
+        var pick = [b.getAttribute('data-code'), b.getAttribute('data-hex')];
+        for (var j = 1; j < cur.cols.length; j++) if (cur.cols[j][1] === pick[1]) cur.cols[j] = cur.cols[0];   // a shade already in the mix swaps places with the base: no code shows twice
+        cur.cols[0] = pick; paint();
       });
     });
     $$('#genPresets .chip').forEach(function (b) {
@@ -607,6 +626,7 @@
       f.title = b.getAttribute('aria-label'); f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen'; f.allowFullscreen = true; f.setAttribute('loading', 'lazy');
       var d = document.createElement('div'); d.className = 'vplay'; d.appendChild(f);
       b.replaceWith(d); try { f.focus({ preventScroll: true }); } catch (e) {}
+      collide = null; tickPillSoon();   // the player replaces the button: the pill's keep-clear list picks it up
     });
   });
 
@@ -620,6 +640,7 @@
       v.setAttribute('aria-label', b.getAttribute('aria-label')); v.setAttribute('tabindex', '-1');
       var d = document.createElement('div'); d.className = 'vplay is-playing'; d.appendChild(v);
       b.replaceWith(d); try { v.focus({ preventScroll: true }); } catch (e) {}
+      collide = null; tickPillSoon();   // the player (with its control bar) replaces the button: the pill's keep-clear list picks it up
       if (!lite) { var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); }   // data saver: the viewer starts it with the native play button
     });
   });
@@ -797,9 +818,9 @@
     if (open) { skyCtl.classList.remove('is-away'); if (toFirst) { var t = $('#skyTime'); if (t) t.focus(); } } else tickPill();
   }
   var tickRaf = 0, collide = null;
-  var ZONES = [['form,.btn,.gb__actions,.gacts,.tray', 80], ['.acc,.faqnav,.ftr__top,.ftr__bot', 16], ['.cgrid', 8]];   // what the pill keeps clear of, and by how many px (a whole FAQ list, not row by row, so the pill does not blink in and out while reading)
+  var ZONES = [['form,.btn,.gb__actions,.gacts,.tray', 80], ['.acc,.faqnav,.ftr__top,.ftr__bot', 16], ['.cgrid,.sws,.leaves,.link-arrow,.vplay', 8]];   // what the pill keeps clear of, and by how many px (a whole FAQ list, not row by row, so the pill does not blink in and out while reading)
   function tickPillSoon() { if (!tickRaf) tickRaf = requestAnimationFrame(function () { tickRaf = 0; tickPill(); }); }
-  function tickPill() {  // never sit on top of the hero, a colour composition, a form, a button, the generator action row, the catalogue grid, a FAQ list or the footer
+  function tickPill() {  // never sit on top of the hero, a colour composition, a form, a button, the generator action row, the catalogue grid, a sample strip, an arrow link, a video, a FAQ list or the footer
     if (!skyCtl || skyOpen) return;
     var pill = $('#skyPill'), pr = pill.getBoundingClientRect(), hit = false, h = hero ? hero.getBoundingClientRect() : null;
     var tf = /^matrix\((.+)\)$/.exec(getComputedStyle(skyCtl).transform || ''), dy = tf ? parseFloat(tf[1].split(',')[5]) || 0 : 0;

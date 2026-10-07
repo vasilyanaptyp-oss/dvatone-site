@@ -34,8 +34,9 @@
       copiedBtn: 'Скопійовано', copyFail: 'Не вдалося скопіювати автоматично. Виділіть текст і скопіюйте його вручну.',
       lockBase: 'Зафіксувати основний колір', unlockBase: 'Зняти фіксацію', lockOn: 'Основний колір зафіксовано', lockOff: 'Фіксацію знято',
       lockedKeep: 'Основний колір зафіксовано. Зніміть фіксацію, щоб змінити його.',
-      areaErr: 'Вкажіть площу числом більшим за нуль, наприклад 24 або 12,5', areaBig: SHS.areaBig || 'Для площі понад 10 000 м² напишіть нам.',
-      areaEstimate: 'Орієнтовно, за базової витрати 200 мл/м². Точний об’єм підтвердимо після вашого запиту.',
+      areaErr: 'Вкажіть площу числом, більшим за нуль, наприклад 24 або 12,5', areaBig: SHS.areaBig || 'Для площі понад 10 000 м² напишіть нам.',
+      areaEstimate: 'Орієнтовно, за базової витрати 200\u00a0мл/\u2060м². Точний об’єм підтвердимо після вашого запиту.',   // \u2060: the unit never splits after the slash
+      areaRequest: 'Надіслати запит на розрахунок', reqArea: 'Прошу розрахувати, скільки покриття потрібно для цієї композиції.',
       exportUnavailable: 'Файли підготуємо за вашим запитом.', exportRequest: 'Надіслати запит на файли',
       reqPassport: 'Прошу підготувати паспорт кольору (PDF) для цієї композиції.', reqTexture: 'Прошу підготувати текстуру у форматі 3ds Max для цієї композиції.',
       presetOn: 'Застосовано поєднання «{name}»', shuffleOn: 'Нове випадкове поєднання', undoHint: 'Попередню композицію можна повернути.', undoDone: 'Попередню композицію повернуто',
@@ -47,7 +48,8 @@
       lockBase: 'Lock the base', unlockBase: 'Unlock the base', lockOn: 'Base locked', lockOff: 'Base unlocked',
       lockedKeep: 'The base is locked. Unlock it to change it.',
       areaErr: 'Please enter an area as a number greater than zero, for example 24 or 12.5', areaBig: SHS.areaBig || 'For areas over 10,000 m² please write to us.',
-      areaEstimate: 'An estimate at the base rate of 200 ml/m². We will confirm the exact volume after your request.',
+      areaEstimate: 'An estimate at the base rate of 200\u00a0ml/\u2060m². We will confirm the exact volume after your request.',
+      areaRequest: 'Request a calculation', reqArea: 'Please work out how much coating I need for this composition.',
       exportUnavailable: 'We prepare the files on request.', exportRequest: 'Send a request for the files',
       reqPassport: 'Please prepare the colour passport (PDF) for this composition.', reqTexture: 'Please prepare the 3ds Max texture for this composition.',
       presetOn: '“{name}” applied', shuffleOn: 'A new random combination', undoHint: 'You can restore the previous composition.', undoDone: 'Previous composition restored',
@@ -370,7 +372,14 @@
     resetExport();
     if (areaIn) {
       var bad = !!String(state.area).trim() && a == null;
-      if (areaErr) { areaErr.hidden = !bad; areaErr.textContent = pa.err === 'big' ? tx('areaBig') : tx('areaErr'); }
+      if (areaErr) {
+        areaErr.hidden = !bad; areaErr.textContent = pa.err === 'big' ? tx('areaBig') : tx('areaErr');
+        if (bad && pa.err === 'big') {   // "write to us" for a large area: a link that carries the area and the recipe (laid out like the request link under the files)
+          var rq = requestLink('quantity', tx('reqArea'), tx('areaRequest'));
+          rq.style.cssText = 'display:flex;width:max-content;max-width:100%;margin-top:10px;color:var(--td)';
+          areaErr.appendChild(document.createTextNode(' ')); areaErr.appendChild(rq);
+        }
+      }
       areaIn.setAttribute('aria-invalid', bad ? 'true' : 'false');
     }
     var vEl = areaRes && $('[data-dv-area-volume]', areaRes), vBox = vEl && vEl.parentNode, nEl = areaRes && $('[data-dv-area-note]', areaRes);
@@ -388,9 +397,26 @@
     }
     updateExportState();
   }
+  /* the way forward wherever the page says "on request" or "write to us": the contact form, with the request and the recipe
+     in the query (contacts.html?topic=&msg=, a relative link, so it works from / and /en/) */
+  function requestLink(topic, ask, label) {
+    var ln = document.createElement('a'), sp = document.createElement('span');
+    var mk = function () { ln.href = 'contacts.html?topic=' + topic + '&msg=' + encodeURIComponent(ask + '\n\n' + recipeText()); };
+    ln.className = 'link-arrow'; mk();
+    ['pointerdown', 'focus', 'click'].forEach(function (n) { ln.addEventListener(n, mk); });   // the recipe as it is when the link is used, not when it appeared
+    sp.textContent = label; ln.appendChild(sp); ln.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>');
+    return ln;
+  }
   function exportStatus(kind, st, msg) {
     $$('[data-dv-export="' + kind + '"]').forEach(function (b) { b.setAttribute('data-state', st); });
-    var s = $('[data-dv-export-status]'); if (s) { s.setAttribute('data-state', st); if (st === 'idle') updateExportState(); else s.textContent = msg || ''; }
+    var s = $('[data-dv-export-status]'); if (!s) return;
+    s.setAttribute('data-state', st);
+    if (st === 'idle') { updateExportState(); return; }
+    s.textContent = msg || '';
+    if (st === 'unavailable' || st === 'error') {   // files on request, or a file that failed: a request for this file, with the recipe
+      s.appendChild(document.createTextNode(' '));
+      s.appendChild(requestLink(kind === 'texture' ? 'other' : 'quantity', tx(kind === 'texture' ? 'reqTexture' : 'reqPassport'), tx('exportRequest')));
+    }
   }
   var settled = {};   // exportDone / exportFail calls per kind: tells doExport whether a listener settled its export inside the event
   function doExport(kind) {
@@ -405,14 +431,7 @@
       exportStatus(kind, 'preparing', T.exportPreparing);
       Promise.resolve().then(function () { return mod.export(kind, detail.state, detail.area); }).then(function (r) { NS.generator.exportDone(kind, r); }, function () { NS.generator.exportFail(kind); });
     } else {
-      exportStatus(kind, 'unavailable', tx('exportUnavailable'));   // no module attached yet: a neutral, honest line (no fake "preparing", no red error)
-      var s = $('[data-dv-export-status]');   // ...and a way forward: the contact form, with the request and the recipe in the query (works from / and /en/)
-      if (s) {
-        var ln = document.createElement('a'), sp = document.createElement('span');
-        ln.className = 'link-arrow'; ln.href = 'contacts.html?topic=' + (kind === 'texture' ? 'other' : 'quantity') + '&msg=' + encodeURIComponent(tx(kind === 'texture' ? 'reqTexture' : 'reqPassport') + '\n\n' + recipeText());
-        sp.textContent = tx('exportRequest'); ln.appendChild(sp); ln.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>');
-        s.appendChild(document.createTextNode(' ')); s.appendChild(ln);
-      }
+      exportStatus(kind, 'unavailable', tx('exportUnavailable'));   // no module attached yet: a neutral, honest line (no fake "preparing", no red error) and the request link
     }
   }
 

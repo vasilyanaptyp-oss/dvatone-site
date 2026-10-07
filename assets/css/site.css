@@ -383,7 +383,7 @@ em{font-style:normal}
 .fig{position:relative;padding:clamp(28px,3vw,48px) clamp(20px,2.4vw,40px) clamp(28px,3vw,44px) 0;display:flex;flex-direction:column}
 .fig+.fig{padding-left:clamp(20px,2.4vw,40px);border-left:1px solid var(--line-l)}
 .fig__n{display:flex;align-items:baseline;gap:10px;font-weight:200;font-size:var(--fs-fig);line-height:1;letter-spacing:-.05em;color:var(--tl);font-variant-numeric:tabular-nums;white-space:nowrap}
-.fig__n small{font-size:var(--fs-micro);letter-spacing:.04em;font-weight:600;color:var(--copper-lo);text-transform:none}
+.fig__n small{font-size:clamp(20px,2.2vw,34px);letter-spacing:-.02em;font-weight:300;color:var(--copper-lo);text-transform:none}   /* "менше", "від": set like the unit, so "менше 30 г/л" reads as one phrase */
 .fig__n .u{font-size:clamp(20px,2.2vw,34px);font-weight:300;letter-spacing:-.02em;color:var(--ml)}
 .fig h3{margin-top:var(--s-5);font-weight:500;font-size:var(--fs-h4);letter-spacing:-.01em}
 .fig__n .lt{align-self:baseline;font-size:1em;margin-right:.06em;color:var(--copper-lo);font-weight:200}
@@ -1681,8 +1681,13 @@ button.mixrow__ico.is-on:hover{color:var(--copper-hi)}
 .hero__cap a{pointer-events:auto;font-size:12px;letter-spacing:var(--ls-caps);text-transform:uppercase;font-weight:600;color:var(--copper-hi);border-bottom:1px solid currentColor;padding-block:12px 4px}
 @media (prefers-reduced-motion:reduce){.hero-track{height:auto}.hero__cap{display:none}}
 
-/* interiors 3D stage: the whole room fits on large screens */
-@media (min-width:761px){.rooms__stage--3d,#interiors .rooms__ui,#interiors .rooms__stage--3d+div{max-width:min(100%,max(1120px,calc(78vh * 16 / 9)));margin-inline:auto}}
+/* interiors 3D stage: the whole room fits under the header on every laptop (wave 5: the box is capped by the screen height as
+   well as by the column, so a 1366x768 or 1280x720 laptop sees the whole frame); the controls row shares the box, and when the
+   room tabs and the presets no longer fit side by side the presets move to a line of their own */
+@media (min-width:761px){
+  .rooms__stage--3d,#interiors .rooms__ui,#interiors .rooms__stage--3d+div{max-width:min(100%,calc((100vh - var(--hdr) - 24px) * 16 / 9));max-width:min(100%,calc((100svh - var(--hdr) - 24px) * 16 / 9));margin-inline:auto}
+  #interiors .rooms__ui{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:var(--s-4) var(--s-5)}
+}
 
 /* application before/after: draggable (06.10). The visible handle stays .edge::after; .app__knob is the focusable hit target on top of it. */
 .app__vis[data-sweep]{touch-action:pan-y;cursor:ew-resize;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
@@ -1709,8 +1714,11 @@ button.mixrow__ico.is-on:hover{color:var(--copper-hi)}
 .hero-track .hero__shade{opacity:clamp(0,calc(1 - var(--p) * 2.2),1)}
 .hero-track .hero__cap::before{content:"";position:absolute;z-index:-1;left:calc(var(--pad) * -1);right:calc(var(--pad) * -1);
   bottom:calc(clamp(28px,6vh,56px) * -1);height:calc(100% + clamp(28px,6vh,56px) + 96px);pointer-events:none;
-  background:linear-gradient(0deg,rgba(14,12,10,.6) 0%,rgba(14,12,10,.46) 45%,rgba(14,12,10,0) 100%)}
+  background:linear-gradient(0deg,rgba(14,12,10,.72) 0%,rgba(14,12,10,.58) 50%,rgba(14,12,10,0) 100%)}
 .hero-track .hero__cap span,.hero-track .hero__cap a{text-shadow:0 1px 2px rgba(14,12,10,.5),0 0 16px rgba(14,12,10,.45)}
+/* wave 5 (07.10): the end-of-story link is light text on a copper rule; copper text over the bright floor and chair was about 2:1 */
+.hero-track .hero__cap a{color:var(--td);border-bottom-color:var(--copper-hi);transition:border-color var(--dur-1)}
+@media (hover:hover){.hero-track .hero__cap a:hover{border-bottom-color:var(--td)}}
 /* ==== end hero2 story end ==== */
 
 /* video block: the second tile is the client's colour-fan clip (06.10); one tile fills the side column on desktops */
@@ -1763,8 +1771,8 @@ body:has([data-dv-generator]) .skyctl{display:none}
 }
 .origin:first-child{margin-top:0}
 
-/* ---- phones: secondary copy at 16px (MOBILE_STRATEGY 1) ---- */
-@media (max-width:760px){
+/* ---- phones and tablets: secondary copy at 16px (MOBILE_STRATEGY 1; wave 5: tablets too, up to the 1100px layout step) ---- */
+@media (max-width:1100px){
   .spec p,.fig p,.feat p,.ticks:not(.ticks--l) li,.dl div,.steps p,.mini li,.faqmore p,.dvc__txt p:last-child{font-size:16px;line-height:1.55}
 }
 
@@ -1841,11 +1849,41 @@ body:has([data-dv-generator]) .skyctl{display:none}
   .tray__n{flex:none}
   .tray .btn{flex:1 1 100%;width:auto}
 }
-/* search and the standard filter stay in reach while browsing the grid (tablets and desktops; on phones the toolbar has two
-   rows and would take 15% of the screen, so it stays in the flow there) */
-@media (min-width:761px){
-  #digital .ctool{position:sticky;top:var(--hdr);z-index:6;padding-top:10px;background:var(--sky-top);background:color-mix(in srgb,var(--sky-top) 66%,var(--sky-mid));transition:top .7s var(--ease)}
-  body:has(#hdr.is-hidden) #digital .ctool{top:0}
+/* search and the standard filter stay in reach while browsing the grid, on every screen (wave 5: phones too).
+   The band behind the stuck toolbar repeats the live sky (the .sky gradient and sun glow, as seen at the band's place on the
+   screen) and runs edge to edge, so it reads as the page background, not as a grey slab with hard ends. --ctop is where the bar
+   sticks; it slides with the header. Where scroll-state queries exist (Chrome, Android) the band is drawn only while the bar is
+   stuck; elsewhere it is a fixed background (exact at any scroll position), and on iOS, which paints fixed backgrounds as scroll,
+   it is mapped to the stuck position. */
+@property --ctop{syntax:"<length>";inherits:true;initial-value:0px}
+#digital .ctool{--ctop:var(--hdr);position:sticky;top:var(--ctop);z-index:6;padding-top:10px;transition:--ctop .7s var(--ease)}
+body:has(#hdr.is-hidden) #digital .ctool{--ctop:0px}
+#digital .ctool::before{content:"";position:absolute;z-index:-1;top:0;bottom:0;left:calc(50% - 50vw);right:calc(50% - 50vw);pointer-events:none;
+  background:radial-gradient(circle 64vmax at var(--sky-gx) calc(var(--sky-gy) * 1.2 - 10vh),var(--sky-glow),rgba(255,255,255,0)) fixed,
+    linear-gradient(180deg,var(--sky-top) 0%,var(--sky-mid) 52%,var(--sky-bot) 100%) 0 -10vh/100% 120vh no-repeat fixed,var(--sky-mid)}
+@supports (-webkit-touch-callout:none){
+  #digital .ctool::before{background:radial-gradient(circle 64vmax at var(--sky-gx) calc(var(--sky-gy) * 1.2 - 10vh),var(--sky-glow),rgba(255,255,255,0)) 0 calc(var(--ctop) * -1)/100% 100vh no-repeat,
+    linear-gradient(180deg,var(--sky-top) 0%,var(--sky-mid) 52%,var(--sky-bot) 100%) 0 calc(-10vh - var(--ctop))/100% 120vh no-repeat,var(--sky-mid)}
+}
+@supports (container-type:scroll-state){
+  #digital .ctool{container-type:scroll-state}
+  #digital .ctool::before{background:none}
+  @container scroll-state(stuck:top){
+    #digital .ctool::before{background:radial-gradient(circle 64vmax at var(--sky-gx) calc(var(--sky-gy) * 1.2 - 10vh),var(--sky-glow),rgba(255,255,255,0)) 0 calc(var(--ctop) * -1)/100% 100vh no-repeat,
+      linear-gradient(180deg,var(--sky-top) 0%,var(--sky-mid) 52%,var(--sky-bot) 100%) 0 calc(-10vh - var(--ctop))/100% 120vh no-repeat,var(--sky-mid)}
+  }
+}
+/* phones: one row, the search and a compact standard button ("Усі", "RAL"); the count sits above it and slides under the header
+   while the bar is stuck, so the stuck bar is a single 46px row */
+@media (max-width:760px){
+  #digital .ctool.has-sheet{--ctop:calc(var(--hdr) - 26px);display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"n n" "s f";gap:8px;align-items:center;
+    padding-top:6px;padding-bottom:10px}
+  body:has(#hdr.is-hidden) #digital .ctool.has-sheet{--ctop:-26px}
+  #digital .ctool.has-sheet .ctool__n{grid-area:n;margin:0;width:auto;height:20px;font-size:13px;line-height:20px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #digital .ctool.has-sheet .csearch{grid-area:s;order:0;max-width:none}
+  #digital .ctool.has-sheet .dvfbtn{grid-area:f;padding:0 16px 0 14px}
+  #digital .ctool.has-sheet .dvfbtn>span{font-size:0}   /* the "Стандарт:" prefix stays the button's accessible name, only the value shows */
+  #digital .ctool.has-sheet .dvfbtn__v{font-size:13px;text-transform:capitalize}
 }
 /* label / value rows stack on phones */
 @media (max-width:700px){.dl div{grid-template-columns:minmax(0,1fr);gap:2px}}
@@ -1865,10 +1903,13 @@ body:has([data-dv-generator]) .skyctl{display:none}
 .dvc__vis:focus-visible{outline-offset:-3px}
 /* sample strip with the 18th "all shades" tile (build_inner.py): 3 / 6 / 9 columns, every row full */
 .leaves:has(>.leaf--all){grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-flow:row}
-@media (min-width:701px){
-  .leaves:has(>.leaf--all){grid-template-columns:repeat(6,minmax(0,1fr))}
-  .leaves:has(>.leaf--all) .leaf b{white-space:nowrap}
-}
+@media (min-width:701px){.leaves:has(>.leaf--all){grid-template-columns:repeat(6,minmax(0,1fr))}}
+/* a code is never split (no "NCS S 3020-" / "R90B"): one line, and on the narrowest tiles (360px phones, 701-760px) the code
+   steps down just enough to fit the tile (wave 5) */
+.leaves:has(>.leaf--all) .leaf{container-type:inline-size}
+.leaves:has(>.leaf--all) .leaf figcaption{padding-inline:5px}
+.leaves:has(>.leaf--all) .leaf b{white-space:nowrap;font-size:min(10.5px,calc((100cqi - 10px) / 8.6))}
+@media (max-width:760px){.leaves:has(>.leaf--all) .leaf b{font-size:min(11.5px,calc((100cqi - 10px) / 8.6))}}
 @media (min-width:1241px){.leaves:has(>.leaf--all){grid-template-columns:repeat(9,minmax(0,1fr))}}
 @media (min-width:1480px){.leaves:has(>.leaf--all) .leaf img{aspect-ratio:1/2}}
 .leaf--all{justify-content:flex-end;gap:12px;padding:16px 12px;background:var(--ink);color:var(--td);font-size:13px;font-weight:500;line-height:1.3}
@@ -1907,3 +1948,25 @@ body:has([data-dv-generator]) .skyctl{display:none}
 .gc__photo,.gc__photo>picture{position:absolute;inset:0}
 .gc__poster{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;user-select:none}
 @media (max-width:700px) and (orientation:portrait){.gc__photo{inset:auto 0;top:50%;aspect-ratio:4/5;margin-top:-62.5%}}
+
+/* =========================================================
+   32. WAVE 5 (css owner, 07.10): open items from qa/wave4/RESULT.json that need site.css
+   ========================================================= */
+
+/* ---- menu: the page you are on (layout.py marks the row with aria-current="page") ---- */
+.mnav__links a[aria-current="page"] span{color:var(--copper-hi)}
+
+/* ---- shade dialog: after "Додати" the button turns into the outline "Прибрати з композиції"; under a mouse pointer its hover
+        must not be the same ink fill, or the click looks like it did nothing ---- */
+@media (hover:hover){.cxd__acts .btn--line-l:hover{background:rgba(25,21,17,.06);color:var(--tl);border-color:var(--tl)}}
+
+/* ---- home: the six catalogue swatches are links to their shade in the digital catalogue (build_home.py); the photo eases in a
+        little and the code turns copper under the pointer ---- */
+.sws>a{display:block;min-width:0;color:inherit}
+.sws>a img,.dv-js .sws>a img{transition:opacity .35s var(--ease),transform 1.2s var(--ease)}
+.sws>a figcaption b{transition:color var(--dur-1)}
+@media (hover:hover){
+  .sws>a:hover img{transform:scale(1.05)}
+  .sws>a:hover figcaption b{color:var(--copper-lo)}
+}
+.sws>a:focus-visible{outline-offset:4px}
