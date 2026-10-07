@@ -5,6 +5,9 @@
 import { roundedBox } from '../core.js';
 
 export const CAN = { R: 0.875, H: 1.93, COM: 0.965, PAINT_Y: 1.64, LID_Y: 1.83 };
+/* the paint's granules: one repeat of the coating bake (128 granule cells) spans this many decimetres, so a granule is
+   about 1.7 mm: the multicolour grain shows at close range, in the can and wherever the paint is poured */
+export const PAINT_TILE = 2.2;
 export const BOX = { W: 3.1, D: 2.2, H: 0.85, COM: 0.425, LW: 3.16, LD: 2.26, BED: 0.36, HINGE_Y: 0.85, HINGE_Z: -1.13 };
 export const FAN = { L: 2.45, W: 0.5, T: 0.01, PIV: 0.22, N: 12 };
 
@@ -169,16 +172,41 @@ export function paperGrain(T, R) {
   return t;
 }
 
+/* brushed metal: fine circumferential lines (the lathe's u runs around the can), as a roughness map (G channel) */
+function brushedMap(T, R) {
+  const W = 1024, H = 256, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'), im = g.createImageData(W, H);
+  let s = 987654321;
+  const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const rows = new Float32Array(H);
+  for (let y = 0; y < H; y++) rows[y] = rnd();
+  for (let y = 0; y < H; y++) {
+    /* each line keeps its own value along u with a slow drift and a little grain */
+    const base = 0.62 + 0.3 * (rows[y] * 0.65 + rows[(y + 1) % H] * 0.2 + rows[(y + H - 1) % H] * 0.15);
+    for (let x = 0; x < W; x++) {
+      const v = Math.max(0, Math.min(1, base + (rnd() - 0.5) * 0.08 + 0.04 * Math.sin(x / W * Math.PI * 6 + rows[y] * 9)));
+      const k = (y * W + x) * 4, q = Math.round(v * 255);
+      im.data[k] = q; im.data[k + 1] = q; im.data[k + 2] = q; im.data[k + 3] = 255;
+    }
+  }
+  g.putImageData(im, 0, 0);
+  const t = new T.CanvasTexture(c);
+  t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(1, 6); t.colorSpace = T.NoColorSpace;
+  t.anisotropy = Math.min(8, R.capabilities.getMaxAnisotropy());
+  return t;
+}
 /* ---------------- materials ---------------- */
 export function makeMaterials(T, R, tex) {
   const P = o => new T.MeshPhysicalMaterial(o);
   const m = {};
+  const brushed = brushedMap(T, R);
   m.canBody = P({ map: tex.canA, roughnessMap: tex.canD, metalnessMap: tex.canD, bumpMap: tex.canD, bumpScale: 1.2,
     roughness: 1, metalness: 1, clearcoat: 0.32, clearcoatRoughness: 0.38 });
   m.blackMetal = P({ color: lin(T, 0.012, 0.012, 0.013), metalness: 0.75, roughness: 0.34, clearcoat: 0.3, clearcoatRoughness: 0.3 });
   m.copper = P({ color: lin(T, ...COPPER), metalness: 1, roughness: 0.27 });
-  m.copperLid = P({ color: lin(T, ...COPPER), metalness: 1, roughness: 0.22 });
-  m.tin = P({ color: lin(T, ...TIN), metalness: 1, roughness: 0.3 });
+  /* the lid and the tin parts are brushed: the highlight stretches around them in fine rings */
+  m.copperLid = P({ color: lin(T, ...COPPER), metalness: 1, roughness: 0.34, roughnessMap: brushed, anisotropy: 0.65, anisotropyRotation: 0 });
+  m.tin = P({ color: lin(T, ...TIN), metalness: 1, roughness: 0.42, roughnessMap: brushed, anisotropy: 0.55, anisotropyRotation: 0 });
   m.grip = P({ color: lin(T, 0.01, 0.01, 0.01), roughness: 0.72 });
   m.paper = P({ color: lin(T, 0.0085, 0.0085, 0.009), roughness: 0.74, bumpMap: tex.paper, bumpScale: 0.35,
     sheen: 0.6, sheenRoughness: 0.55, sheenColor: lin(T, 0.05, 0.048, 0.046) });
@@ -197,23 +225,37 @@ export function makeMaterials(T, R, tex) {
    uMix/uOld cross-dissolve granule by granule when the composition changes; the paint adds a wet clearcoat
    whose normal slowly undulates (the living sheen), climbs the can wall (meniscus) and ripples where clicked. */
 const COAT_HEAD = `
-uniform float uMix; uniform sampler2D uOld; uniform float uSwirl; uniform float uTime; uniform vec4 uRip; uniform float uSheen;
+uniform float uMix; uniform sampler2D uOld; uniform float uSwirl; uniform float uTime; uniform vec4 uRips[4]; uniform float uSheen; uniform float uRad;
 varying vec2 vDisc; varying vec3 vTx; varying vec3 vTz;
 float paintH(vec2 p, float t){
   float h = 0.010 * sin(p.x * 2.1 + t * 0.13 + 1.3 * sin(p.y * 1.6 - t * 0.07))
           + 0.008 * sin(p.y * 2.7 - t * 0.10 + 1.1 * sin(p.x * 1.9 + t * 0.05))
           + 0.004 * sin((p.x + p.y) * 5.3 + t * 0.21);
-  float dt = t - uRip.z;
-  if (dt > 0.0 && dt < 7.0) {
-    float d = length(p - uRip.xy);
-    float front = dt * 0.55;
-    h += uRip.w * 0.016 * sin((d - front) * 24.0) * exp(-abs(d - front) * 5.0) * exp(-dt * 0.75) * smoothstep(0.0, 0.25, dt);
+  for (int k = 0; k < 4; k++) {                 /* up to four touches ring out at once */
+    vec4 R = uRips[k]; float dt = t - R.z;
+    if (dt > 0.0 && dt < 7.0) {
+      float d = length(p - R.xy), front = dt * 0.55;
+      h += R.w * 0.016 * sin((d - front) * 24.0) * exp(-abs(d - front) * 5.0) * exp(-dt * 0.75) * smoothstep(0.0, 0.25, dt);
+    }
   }
   return h;
+}
+/* stirring: every touch twists the granules around it, and the twist eases out as the thick paint settles */
+vec2 stir(vec2 p, float t){
+  for (int k = 0; k < 4; k++) {
+    vec4 R = uRips[k]; float dt = t - R.z;
+    if (dt > 0.0 && dt < 9.0) {
+      vec2 o = p - R.xy;
+      float a = R.w * 1.4 * exp(-dot(o, o) * 7.0) * exp(-dt * 0.5) * (1.0 - exp(-dt * 5.0));
+      float c = cos(a), s = sin(a); p = R.xy + mat2(c, s, -s, c) * o;
+    }
+  }
+  return p;
 }`;
 const COAT_MAP = `
 #ifdef USE_MAP
-  vec4 sampledDiffuseColor = texture2D( map, vMapUv );
+  vec2 uvS = uSheen > 0.5 ? stir(vDisc, uTime) * (uRad / ${PAINT_TILE.toFixed(3)}) : vMapUv;
+  vec4 sampledDiffuseColor = texture2D( map, uvS );
   if (uMix < 0.999) {
     float r = clamp(length(vDisc), 0.0, 1.0);
     float ang = uSwirl * (1.0 - uMix) * (1.0 - r) * 2.6;
@@ -240,7 +282,7 @@ const COAT_CC = `
 export function coatMaterial(T, bake, o = {}) {
   const U = {
     uMix: { value: 1 }, uOld: { value: bake.albedo }, uSwirl: { value: o.swirl ? 1 : 0 }, uTime: { value: 0 },
-    uRip: { value: new T.Vector4(0, 0, -100, 0) }, uSheen: { value: o.paint ? 1 : 0 }, uRad: { value: o.radius || 1 }
+    uRips: { value: [0, 1, 2, 3].map(() => new T.Vector4(0, 0, -100, 0)) }, uSheen: { value: o.paint ? 1 : 0 }, uRad: { value: o.radius || 1 }
   };
   const m = new T.MeshPhysicalMaterial(Object.assign({
     map: bake.albedo, bumpMap: bake.data, bumpScale: o.bump == null ? 0.5 : o.bump,
@@ -332,7 +374,7 @@ export function makeCan(T, mats, paintMat) {
     [R - 0.13, 1.83], [R - 0.142, 1.838], [R - 0.155, 1.832], [R - 0.16, 1.81], [R - 0.162, CAN.PAINT_Y - 0.02]], mats.tin), false);
   /* paint */
   const pr = R - 0.161, pg = new T.CircleGeometry(pr, 120).rotateX(-Math.PI / 2);
-  const tile = 0.9, uv = pg.attributes.uv, pp = pg.attributes.position;
+  const tile = PAINT_TILE, uv = pg.attributes.uv, pp = pg.attributes.position;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, pp.getX(i) / tile, pp.getZ(i) / tile);
   const paint = new T.Mesh(pg, paintMat); paint.position.y = CAN.PAINT_Y; paint.receiveShadow = true; body.add(paint);
   paintMat.userData.U.uRad.value = pr;

@@ -84,7 +84,7 @@ export function createStage(el, cfg) {
     stats: { fps: 0, ms: 0, pr: 1, w: 0, h: 0, calls: 0, tris: 0, buildMs: 0, firstFrameMs: 0, quality: 1 },
     invalidate, setPoster, fail, readyP: null, _step: step
   };
-  let raf = 0, last = 0, ema = 16.7, sinceCheck = 0, warm = 0, slow = 0, fast = 0, badQ = 9, badT = -1e9, needFrame = true, t0 = performance.now();
+  let raf = 0, ticking = false, last = 0, ema = 16.7, sinceCheck = 0, warm = 0, slow = 0, fast = 0, badQ = 9, badT = -1e9, needFrame = true, t0 = performance.now();
   let resolveReady; st.readyP = new Promise(r => (resolveReady = r));
 
   function setPoster(src) { if (src) { poster.style.display = ''; poster.src = src; } }
@@ -180,7 +180,9 @@ export function createStage(el, cfg) {
     if (G.capture) return;
     if (running() && (wantsLoop() || needFrame)) start(); else if (!running()) stop();
   }
-  function start() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); } }
+  /* `ticking`: an invalidate() from inside update/render must not start a second rAF loop (every frame was then
+     drawn twice); tick() itself schedules the next frame once it is done (found by the pack2 agent, 07.10) */
+  function start() { if (!raf && !ticking) { last = performance.now(); raf = requestAnimationFrame(tick); } }
   function stop() { if (raf) cancelAnimationFrame(raf); raf = 0; }
   function invalidate() { needFrame = true; if (!G.capture) sync(); }
 
@@ -197,7 +199,8 @@ export function createStage(el, cfg) {
     const raw = (now - last) / 1000; last = now;
     const dt = Math.min(raw, 0.1);                 /* animation step never jumps */
     needFrame = false;
-    frame(dt);
+    ticking = true;
+    try { frame(dt); } finally { ticking = false; }
     /* adaptive resolution: EMA of the real frame interval, checked about once a second after a warm-up */
     if (raw > 0 && raw < 0.5 && wantsLoop() && !G.noAdapt) {
       ema = ema * 0.9 + raw * 1000 * 0.1; warm += raw; sinceCheck += raw;
@@ -222,7 +225,7 @@ export function createStage(el, cfg) {
         }
       }
     }
-    if (wantsLoop()) raf = requestAnimationFrame(tick);
+    if (!raf && (wantsLoop() || needFrame)) raf = requestAnimationFrame(tick);   /* needFrame: invalidated during this frame */
   }
   function step(dt) {               /* deterministic capture: DV3D.step(1/30) */
     if (!st.ready || st.failed) return;

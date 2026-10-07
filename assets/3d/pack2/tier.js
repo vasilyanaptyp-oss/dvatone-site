@@ -9,10 +9,11 @@
 const KEY = 'dv3d.tier';
 const TIERS = ['low', 'mid', 'high'];
 
+/* env: the studio HDRI, 512x256 (392 KB) on the high tier, the same light at 256x128 (100 KB) on phones */
 export const TIER_CFG = {
-  high: { dpr: 2, msaa: 4, msaaSmall: 2, post: 'full', bloomScale: 2, shadow: 1024, contact: 512, bake: 1024, strips: 384, labels: 2048, fps30: false },
-  mid: { dpr: 1.5, msaa: 2, msaaSmall: 2, post: 'full', bloomScale: 4, shadow: 512, contact: 256, bake: 512, strips: 256, labels: 2048, fps30: false },
-  low: { dpr: 1, msaa: 0, msaaSmall: 0, post: 'direct', bloomScale: 4, shadow: 512, contact: 256, bake: 512, strips: 256, labels: 1024, fps30: true }
+  high: { dpr: 2, msaa: 4, msaaSmall: 2, post: 'full', bloomScale: 2, shadow: 1024, contact: 512, bake: 1024, strips: 512, labels: 2048, fps30: false, env: 'studio.hdr' },
+  mid: { dpr: 1.5, msaa: 2, msaaSmall: 2, post: 'full', bloomScale: 4, shadow: 512, contact: 256, bake: 512, strips: 512, labels: 2048, fps30: false, env: 'studio-256.hdr' },
+  low: { dpr: 1, msaa: 0, msaaSmall: 0, post: 'direct', bloomScale: 4, shadow: 512, contact: 256, bake: 512, strips: 256, labels: 1024, fps30: true, env: 'studio-256.hdr' }
 };
 
 let gpuStr = null;

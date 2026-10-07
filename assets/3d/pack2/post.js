@@ -93,7 +93,7 @@ export function createPost(THREE, renderer, opts = {}) {
     renderer.toneMapping = THREE.NeutralToneMapping;
     return {
       direct: true, S,
-      setSize() {}, setSamples() {},
+      setSize() {}, setSamples() {}, setFluid() {},
       render(scene, camera) { renderer.toneMappingExposure = S.exposure; renderer.setRenderTarget(null); renderer.render(scene, camera); S.calls = renderer.info.render.calls; S.tris = renderer.info.render.triangles; },
       materials: [], target: null,
       dispose() {}
@@ -113,7 +113,10 @@ export function createPost(THREE, renderer, opts = {}) {
     rt.texture.generateMipmaps = false;
     return rt;
   };
-  let rtScene = mk(1, 1, { depthBuffer: true, samples: S.samples });
+  /* the scene's depth becomes a texture once the poured paint needs it (screen-space fluid, high tier) */
+  let depthTex = false, rtMerge = null, fluidPass = null;
+  const sceneRT = (w, h, n) => mk(w, h, Object.assign({ depthBuffer: true, samples: n }, depthTex ? { depthTexture: new THREE.DepthTexture(w, h) } : {}));
+  let rtScene = sceneRT(1, 1, S.samples);
   const mips = [];
   for (let i = 0; i < S.mips; i++) mips.push(mk(1, 1));
   const mat = (frag, uniforms, extra) => new THREE.ShaderMaterial(Object.assign({ vertexShader: VS, fragmentShader: frag, uniforms,
@@ -136,6 +139,7 @@ export function createPost(THREE, renderer, opts = {}) {
   function setSize(w, h) {
     W = Math.max(1, w | 0); H = Math.max(1, h | 0);
     rtScene.setSize(W, H);
+    if (rtMerge) rtMerge.setSize(W, H);
     let mw = Math.max(1, Math.ceil(W / S.bloomScale)), mh = Math.max(1, Math.ceil(H / S.bloomScale));
     nm = 0;
     for (let i = 0; i < mips.length; i++) {
@@ -148,8 +152,15 @@ export function createPost(THREE, renderer, opts = {}) {
     if (n === S.samples) return;
     S.samples = n;
     const w = rtScene.width, h = rtScene.height;
-    rtScene.dispose(); rtScene = mk(w, h, { depthBuffer: true, samples: n });
+    rtScene.dispose(); rtScene = sceneRT(w, h, n);
     mComp.uniforms.tScene.value = rtScene.texture;
+  }
+  /* fluid: fn({ sceneColor, sceneDepth, out, width, height }) draws the paint over the scene into `out` and returns
+     true, or returns false when there is nothing to draw this frame */
+  function setFluid(fn) {
+    fluidPass = fn || null;
+    if (fn && !depthTex) { depthTex = true; const w = rtScene.width, h = rtScene.height; rtScene.dispose(); rtScene = sceneRT(w, h, S.samples); }
+    if (fn && !rtMerge) rtMerge = mk(W, H);
   }
   function render(scene, camera) {
     const prevClear = renderer.getClearColor(new THREE.Color()), prevA = renderer.getClearAlpha();
@@ -158,9 +169,12 @@ export function createPost(THREE, renderer, opts = {}) {
     renderer.clear(true, true, false);
     renderer.render(scene, camera);
     S.calls = renderer.info.render.calls; S.tris = renderer.info.render.triangles;
+    let src = rtScene.texture;
+    if (fluidPass && fluidPass({ sceneColor: rtScene.texture, sceneDepth: rtScene.depthTexture, out: rtMerge, width: W, height: H })) src = rtMerge.texture;
+    mComp.uniforms.tScene.value = src;
     const bloomOn = S.bloomOn && S.bloom > 0.001 && nm > 1;
     if (bloomOn) {
-      mPre.uniforms.tSrc.value = rtScene.texture; mPre.uniforms.uTexel.value.set(1 / W, 1 / H);
+      mPre.uniforms.tSrc.value = src; mPre.uniforms.uTexel.value.set(1 / W, 1 / H);
       mPre.uniforms.uThreshold.value = S.threshold; mPre.uniforms.uKnee.value = S.knee;
       pass(mPre, mips[0]);
       for (let i = 1; i < nm; i++) {
@@ -181,8 +195,8 @@ export function createPost(THREE, renderer, opts = {}) {
     renderer.setClearColor(prevClear, prevA);
   }
   function dispose() {
-    rtScene.dispose(); mips.forEach(m => m.dispose());
+    rtScene.dispose(); mips.forEach(m => m.dispose()); if (rtMerge) rtMerge.dispose();
     [mPre, mDown, mUp, mComp].forEach(m => m.dispose()); geo.dispose(); black.dispose();
   }
-  return { direct: false, S, setSize, setSamples, render, dispose, materials: [mPre, mDown, mUp, mComp], get target() { return rtScene; } };
+  return { direct: false, S, setSize, setSamples, setFluid, render, dispose, materials: [mPre, mDown, mUp, mComp], get target() { return rtScene; } };
 }
