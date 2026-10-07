@@ -356,7 +356,7 @@ export function mountPhoto(el, opts = {}) {
     await upload(v);
     if (stage.destroyed) return;
     useView(v);
-    /* the other rooms of this orientation load quietly after the first frame: a room switch is then only a crossfade */
+    /* after the first frame the next room of the same group loads when the browser is idle (prefetchNext) */
     if (!hero) prefetchNext();
     if (/[?&]debug(&|$)/.test(location.search)) G.photo = { T, R, U, get view() { return view; }, stage };
   }

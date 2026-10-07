@@ -1706,7 +1706,7 @@ button.mixrow__ico.is-on:hover{color:var(--copper-hi)}
   .skyctl{display:none}
 }
 
-/* ==== hero2 story end: bright resting frame (hero2 agent, 06.10; hero section only) ====
+/* ==== hero2 story end: bright resting frame (hero2 agent, 06.10; hero section only; since 07.10 also the first screen) ====
    The hero's shade (.hero__shade, the dark gradient that carries the headline) used to stay at full strength to the
    end of the scroll story, so the room photograph at the end read as a dim brown image (phones: up to 96 % black
    over the lower half). It now fades out together with the headline (same rate as .hero__body); only a light, local
@@ -1719,6 +1719,33 @@ button.mixrow__ico.is-on:hover{color:var(--copper-hi)}
 /* wave 5 (07.10): the end-of-story link is light text on a copper rule; copper text over the bright floor and chair was about 2:1 */
 .hero-track .hero__cap a{color:var(--td);border-bottom-color:var(--copper-hi);transition:border-color var(--dur-1)}
 @media (hover:hover){.hero-track .hero__cap a:hover{border-bottom-color:var(--td)}}
+/* -- hero2 first screen (07.10, Artur: "сначала на тёмном фоне появляются все эти буквы, без панели сверху"). On the first
+   visit of a session, with JS on and motion allowed, <html> has dv-intro and dv-nohdr from the head script (build_home.py):
+   the page opens on the dark hero without the header; the headline comes in letter by letter (about 1.4 s), then the
+   eyebrow, the lead and the buttons; then the 3D spray coats the wall behind the text (hero2.js waits for data-intro-hold
+   on .hero__gl, which the page removes when the buttons are in). The facts and the DV 033 tag come with the coated wall
+   (dv-coated), the header slides in when the spray ends or at the first scroll, key or touch. With JS the page's own
+   photo is never shown: where 3D cannot run (no WebGL, low tier, failed start) the 3D module shows its own poster;
+   .hero.is-still brings the photo back only if the module never started. -- */
+.dv-js .hero__img{display:none}
+.dv-js .hero.is-still .hero__img{display:block}
+.dv-js .hero__lens,.dv-js .hero__ring{display:none}
+.dv-nohdr .hdr{transform:translateY(-100%)}
+.dv-nohdr .skyctl{opacity:0;pointer-events:none}
+.hero__title .w{display:inline-block;white-space:nowrap}
+.hero__title .ch{display:inline-block}
+.dv-intro .hero__title .line{overflow:visible}
+.dv-intro .hero__title .line>span{transform:none;animation:none}
+.dv-intro .hero__title .ch{animation:heroCh .8s cubic-bezier(.22,.61,.36,1) backwards;animation-delay:calc(.3s + var(--i) * 26ms)}
+@keyframes heroCh{from{opacity:0;transform:translateY(.3em);filter:blur(10px)}}
+.dv-intro .hero__eyebrow,.dv-intro .hero__lede,.dv-intro .hero__ctas{animation:heroUp .8s var(--ease) backwards}
+.dv-intro .hero__eyebrow{animation-delay:1.25s}
+.dv-intro .hero__lede{animation-delay:1.4s}
+.dv-intro .hero__ctas{animation-delay:1.55s}
+@keyframes heroUp{from{opacity:0;transform:translateY(12px)}}
+.dv-intro:not(.dv-coated) .hero__facts,.dv-intro:not(.dv-coated) .hero__tag{visibility:hidden}
+.dv-intro.dv-coated .hero__facts,.dv-intro.dv-coated .hero__tag{animation:heroUp .9s var(--ease) backwards}
+@media (prefers-reduced-motion:reduce){.hero__title .ch{animation:none!important}}
 /* ==== end hero2 story end ==== */
 
 /* video block: the second tile is the client's colour-fan clip (06.10); one tile fills the side column on desktops */
