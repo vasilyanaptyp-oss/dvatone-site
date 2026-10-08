@@ -213,7 +213,7 @@ export function buildCoat(o) {
     const slow = ty === 2 || (ty === 0 && Z[g] > 0.78);
     const i4 = i * 4;
     fA[i4] = FX[i]; fA[i4 + 1] = FY[i]; fA[i4 + 2] = TL[g]; fA[i4 + 3] = slow ? 0.62 + 0.16 * (r0 - 0.5) : 0.2 + 0.06 * (r0 - 0.5);
-    fB[i4] = ty === 2 ? Rmm * 0.9 : Rmm * (slow ? 0.62 : 0.3);      /* bead radius before it flattens */
+    fB[i4] = ty === 2 ? Rmm * 0.9 : Rmm * (slow ? 0.46 : 0.26);     /* droplet radius before it flattens (smaller since 08.10) */
     fB[i4 + 1] = ty + (slow ? 0 : 4); fB[i4 + 2] = r1; fB[i4 + 3] = slow ? 7.5 + 2.0 * r1 : 1.6;   /* air drag, 1/s: the slow ones brake hard */
     fC[i4] = CR[g]; fC[i4 + 1] = CG[g]; fC[i4 + 2] = CB[g]; fC[i4 + 3] = r2;
   }
@@ -294,9 +294,10 @@ void main(){
     vec2 td = vec2(cos(vD.z), sin(vD.z));
     col = vCol.rgb; hh = 0.6 + dot(d, td) / Rr * 0.34;
   } else {
-    col = vCol.rgb * mix(0.965, 1.0, smoothstep(1.0, 0.55, rr));
-    float lip = smoothstep(1.0, 0.5, rr);
-    hh = 0.18 + 0.45 * vD.x + 0.4 * lip * (0.75 + 0.25 * sqrt(max(0.0, 1.0 - rr * rr)));
+    /* a flat fleck (08.10, Viktor: the granules read as too voluminous): a flat top, a short soft edge, shallow layers */
+    col = vCol.rgb * mix(0.975, 1.0, smoothstep(1.0, 0.7, rr));
+    float lip = smoothstep(1.0, 0.72, rr);
+    hh = 0.2 + 0.22 * vD.x + 0.14 * lip;
   }
   float m = vnoise(pp * 4.0, n * 4, 17, uSeed) - 0.5;     /* faint mottling inside granules */
   col *= 1.0 + m * 0.05;
@@ -407,6 +408,13 @@ export function createCoatTile(T, renderer, cfg) {
     /* rebuilds the mip chain if a stamp skipped it (an empty pass into the target is enough for three.js) */
     flush() { if (mipsDirty) { draw(empty); mipsDirty = false; } },
     stampAll() { api.ground(); api.stamp(-1e9, 1e9, true); },
+    /* the stamp program compiled ahead (08.10: not at the spray's first landing) */
+    compile() {          /* the real draw path with a time window nothing lands in: the exact program is linked now */
+      for (const c of chunks) c.m.visible = true;
+      uni.uWin.value.set(1e8, 1e8 + 1); uni.uDry.value = 0;
+      setMips(false); draw(sScene); setMips(true);
+      return null;
+    },
     /* time base written with the landings (a re-spray over an existing coat starts later than its old landings) */
     setBase(b) { uni.uTlBase.value = b; },
     dispose() { rt.dispose(); gGeo.dispose(); gMat.dispose(); sMat.dispose(); chunks.forEach(c => c.g.dispose()); }

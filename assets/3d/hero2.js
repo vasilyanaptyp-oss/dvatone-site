@@ -96,6 +96,13 @@ function mount(el, opts = {}) {
   /* 'studio': the material close-up of the home page's story (07.10): an even, warm raking light over the whole frame, no
      spotlight pool, no vignette, a lifted fill; the lens and its depth of field as in the macro */
   const LOOK = opts.look || new URLSearchParams(location.search).get('look') || '';
+  /* the home page's first screen (08.10): after the spray the camera pulls back on its own, slowly, out of the macro and
+     through the room, and comes to rest on the photograph of the room (autoStory). It never traps the page: a scroll,
+     key or touch makes the rest of the move take under a second. The low tier hands over to the page's 2D opening. */
+  const AUTO = !!opts.autoStory;
+  const AU = { armed: false, wait: 0, t: 0, dur: +opts.autoDur || 7.2, e: 0, fast: false, settled: false, after: 0 };
+  const auFast = () => { if (!AU.settled) AU.fast = true; };
+  if (AUTO) ['wheel', 'touchstart', 'keydown', 'pointerdown'].forEach(ev => window.addEventListener(ev, auFast, { passive: true }));
 
   const M = { x: 0, y: 0 };                    /* macro focus point on the wall (mm); the room is built around it */
   let T, R, scene, camera, U, wallM, wallR, wallL = null, wall, tile = null, spray = null, coat = null, geo = null, room = null, gpu = null;
@@ -122,13 +129,14 @@ function mount(el, opts = {}) {
   const stage = createStage(el, {
     poster: introFirst && tier !== 'low' ? null : posterURL, label: LABEL[LANG], className: 'dv3d--hero2',
     build, update, render, resize, scene: () => scene, camera: () => camera,
+    adapt: () => !(AUTO && !AU.settled),                       /* the opening holds its resolution: a change costs a visible hitch */
     continuous: () => I.on || (ptr.on && ptr.k > 0.001), dispose,
     dpr: () => (I.on ? Math.min(Q.dpr, 1.5) : Q.dpr), fps: fpsCap,      /* the spray (motion, lens blur) does not need 2x */
     /* after load, before three.js: the 1 s frame probe may lower the tier one step (decided once per visit) */
     preInit: async () => { if (T0.forced) return; const tv = await decideTier(); if (QT[tv]) { tier = tv; Q = QT[tier]; } },
-    manual: tier === 'low' && !opts.live && !capture, liveLabel: LIVE[LANG][0], liveAria: LIVE[LANG][1]
+    manual: tier === 'low' && !opts.live && !capture && !AUTO, liveLabel: LIVE[LANG][0], liveAria: LIVE[LANG][1]
   });
-  if (introFirst && tier !== 'low' && posterURL) el.addEventListener('dv3d:fallback', () => stage.setPoster(posterURL), { once: true });
+  if (introFirst && tier !== 'low' && posterURL) el.addEventListener('dv3d:fallback', () => { if (!stage.destroyed) stage.setPoster(posterURL); }, { once: true });
   /* state for the page (data attributes on the host): whether the spray will play on its own, and where the stage is
      (manual: low tier, poster and "Live 3D"; live; fallback: no WebGL or a failed start) */
   el.dataset.dv3dIntro = introFirst && tier !== 'low' ? '1' : '0';
@@ -164,7 +172,7 @@ function mount(el, opts = {}) {
     window.addEventListener('resize', stillScroll, { passive: true });
     stillScroll();
   }
-  el.addEventListener('dv3d:fallback', startStill, { once: true });
+  el.addEventListener('dv3d:fallback', () => { if (!stage.destroyed) startStill(); }, { once: true });
   if (tier === 'low') startStill();
 
   function tileGeom() {
@@ -174,6 +182,10 @@ function mount(el, opts = {}) {
   }
 
   async function build(st) {
+    if (AUTO && tier === 'low' && !capture) throw new Error('nowebgl: low tier, the page plays its 2D opening');
+    /* the opening (spray, macro, the move) is all motion and depth of field and ends on the full-resolution photograph:
+       a large canvas renders it at 0.8 from the start, so the spray holds its frame rate on an integrated GPU */
+    if (AUTO && !capture && st.w * st.h * Math.pow(Math.min(window.devicePixelRatio || 1, Q.dpr, 1.5), 2) > 1.6e6) st.q = 0.8;
     st.applySize();                                               /* pixel-ratio cap of the final tier */
     T = st.THREE; R = st.renderer;
     R.toneMapping = T.NeutralToneMapping; R.toneMappingExposure = 0.92;   /* hue-preserving: compositions keep their colour */
@@ -193,7 +205,7 @@ function mount(el, opts = {}) {
       uLcol: { value: new T.Color().setRGB(10.3, 10.0, 9.5, T.LinearSRGBColorSpace) },
       uL2col: { value: new T.Color().setRGB(0.32, 0.38, 0.5, T.LinearSRGBColorSpace) },
       uPool: { value: new T.Vector3(0, 0, 17) }, uPoolK: { value: 1 }, uFocus: { value: 80 }, uAper: { value: Q.aper },
-      uRelief: { value: 0.11 }, uFade: { value: 0.014 }, uAmb: { value: new T.Color().setRGB(0.035, 0.036, 0.042, T.LinearSRGBColorSpace) },
+      uRelief: { value: 0.075 }, uFade: { value: 0.014 }, uAmb: { value: new T.Color().setRGB(0.035, 0.036, 0.042, T.LinearSRGBColorSpace) },
       uTime: { value: 0 }, uRes: { value: new T.Vector2(st.w, st.h) }, uSteps: { value: Q.steps },
       uClock: { value: 0 }, uWet: { value: 0 }, uVig: { value: 1 }, uRoom: { value: 0 }, uPrimer: { value: 0 }, uBomb: { value: 1 }
     }, room.uniforms);
@@ -219,6 +231,7 @@ function mount(el, opts = {}) {
       try { await R.compileAsync(tmp, camera); } catch (e) { /* compiled on first use */ }
     }
     applyCoat(await coatP);
+    if (tile.compile) { try { await tile.compile(); } catch (e) { /* compiled at the first landing */ } }
     gpu = gpuTimer(R);
     if (introFirst && Q.intro) startIntro(); else tile.stampAll();
     if (S.interactive) {
@@ -239,9 +252,9 @@ function mount(el, opts = {}) {
            seconds on a cold shader cache. The room's files are fetched into the cache now; the room itself is parsed
            after the intro or as soon as the story starts. So a visitor who scrolls during the intro still comes to rest
            on the photograph. */
-        if (photoOK()) loadPhoto();
+        if (photoOK() && !AUTO) loadPhoto();          /* autoStory: in the pause after the spray, with the room */
         living.prefetch();
-        scheduleLiving();
+        if (!AUTO) scheduleLiving();                  /* autoStory: parsed in the pause after the spray (finishIntro) */
       }
     }
   }
@@ -355,11 +368,14 @@ function mount(el, opts = {}) {
     if (!living || !RM.use || DBG.noPhoto) { PH.target = 0; }
     else {
       const frac = d / Math.max(rD, 1);
-      if (PH.ready && PH.cam && photoOK() && frac >= 0.72) PH.target = 1;
-      else if (!PH.ready || frac < 0.66 || !photoOK()) PH.target = 0;               /* hysteresis: no flicker at the edge */
+      /* autoStory: later and slower, in the camera's slow final approach (less parallax between the real-time furniture and
+         the photograph's, a longer dissolve: no visible jump) */
+      const on = AUTO ? 0.86 : 0.72, off = AUTO ? 0.8 : 0.66;
+      if (PH.ready && PH.cam && photoOK() && frac >= on) PH.target = 1;
+      else if (!PH.ready || frac < off || !photoOK()) PH.target = 0;               /* hysteresis: no flicker at the edge */
     }
     const k0 = PH.k;
-    PH.k = PH.target > PH.k ? Math.min(PH.target, PH.k + (dt || 0) / 0.6) : Math.max(PH.target, PH.k - (dt || 0) / 0.45);
+    PH.k = PH.target > PH.k ? Math.min(PH.target, PH.k + (dt || 0) / (AUTO ? 1.1 : 0.6)) : Math.max(PH.target, PH.k - (dt || 0) / 0.45);
     if (stage.reduced && PH.target !== PH.k) PH.k = PH.target;
     if (PH.host && (PH.k > 0 || k0 > 0)) {
       PH.host.style.opacity = String(PH.k * PH.k * (3 - 2 * PH.k));
@@ -376,6 +392,23 @@ function mount(el, opts = {}) {
     if (on) room.setFade(0);
   }
 
+  /* drawn to the screen (the same programs as the real frames: tone mapping is only in the screen's variant) and overdrawn
+     by this frame's own render in the same task, so it is never seen */
+  function warmRoom(pose) {
+    RM.warm = true;
+    if (!living || stage.destroyed) return;
+    const keep = { p: camera.position.clone(), q: camera.quaternion.clone(), fov: camera.fov, near: camera.near, far: camera.far, mat: wall.material, view: camera.view && camera.view.enabled ? Object.assign({}, camera.view) : null };
+    try {
+      storyCamera(pose, 1);
+      wall.material = wallL; living.setFade(1);
+      R.setRenderTarget(null); R.render(scene, camera);
+    } catch (e) { /* the real frames will do it */ }
+    living.setFade(0); wall.material = keep.mat;
+    camera.position.copy(keep.p); camera.quaternion.copy(keep.q); camera.fov = keep.fov; camera.near = keep.near; camera.far = keep.far;
+    if (keep.view) camera.setViewOffset(keep.view.fullWidth, keep.view.fullHeight, keep.view.offsetX, keep.view.offsetY, keep.view.width, keep.view.height); else camera.clearViewOffset();
+    camera.updateProjectionMatrix();
+  }
+
   /* scroll story: on with a track (a tall element that holds the sticky hero), 'auto' = only when a track exists */
   function resolveStory() {
     const so = opts.scrollStory == null ? 'auto' : opts.scrollStory;
@@ -385,8 +418,14 @@ function mount(el, opts = {}) {
       (sel && document.querySelector(sel)) || el.closest('[data-dv3d-track]');
     return so === 'auto' ? !!track : true;
   }
+  const RS = { y: NaN, h: NaN, p: 0 };
   function readScroll() {
     const vh = window.innerHeight || 1;
+    if (window.scrollY === RS.y && vh === RS.h) return RS.p;
+    RS.y = window.scrollY; RS.h = vh;
+    return (RS.p = readScroll0(vh));
+  }
+  function readScroll0(vh) {
     if (track) { const r = track.getBoundingClientRect(); return clamp(-r.top / Math.max(1, r.height - vh), 0, 1); }
     const r = el.getBoundingClientRect(); return clamp(-r.top / Math.max(1, r.height * 0.9), 0, 1);   /* no pin: plays while the hero leaves */
   }
@@ -425,6 +464,16 @@ function mount(el, opts = {}) {
     if (stage.applySize && (window.devicePixelRatio || 1) > 1.5) stage.applySize();
     tile.flush();
     if (I.over) I.cleanup = true;          /* gaps still show the old coat: crossfade to the clean new coat */
+    if (AUTO && !AU.armed) {               /* the coat dries a moment (the room is prepared meanwhile), then the camera moves */
+      AU.armed = true; AU.wait = 0.9; AU.t = 0; AU.waitT = 0;
+      /* a device that could not hold about 38 fps in the spray does not get the real-time room: the coated wall dissolves
+         into the photograph of the room instead (the page's still, a slower fade), smooth rather than a juddering move */
+      AU.light = !capture && (stage.stats.ms > 26 || /[?&]light3d\b/.test(location.search));   /* ?light3d: test switch */
+      if (!AU.light) {
+        if (living && !RM.ready && !RM.busy) prepLiving();
+        if (living && photoOK() && !PH.loading && !PH.ready) loadPhoto();
+      }
+    }
     el.dispatchEvent(new CustomEvent('dv3d:intro-end', { bubbles: true }));
   }
 
@@ -441,7 +490,8 @@ function mount(el, opts = {}) {
     o.D = 80 * (1 + dr * 0.025 * Math.sin(TAU * t / 53)); o.pitch = 0.7; o.focus = 0;
     o.el = 0.23 + 0.06 * Math.sin(lt * 0.13); o.az = 4.45 + 0.62 * Math.sin(TAU * lt / 36);
     const wx = camera && camera.aspect < 1 ? 0.45 : 1;          /* a narrow portrait frame: the light stays in view */
-    o.px = 24 * wx * Math.sin(TAU * lt / 29); o.py = 3 - 12 * Math.sin(TAU * lt / 41 + 0.7); o.ps = 17; o.lit = 1;
+    const tv = camera && camera.aspect < 1;
+    o.px = AUTO ? (tv ? -12 : -48) : 24 * wx * Math.sin(TAU * lt / 29); o.py = AUTO ? (tv ? -6 : 6) : 3 - 12 * Math.sin(TAU * lt / 41 + 0.7); o.ps = AUTO ? (tv ? 75 : 105) : 17; o.lit = 1;
     return o;
   }
   /* intro: the light follows the impact band down the wall, the lens half-follows focus, then everything settles */
@@ -452,7 +502,8 @@ function mount(el, opts = {}) {
     o.fx = mix(-9, 3, k); o.fy = mix(2, 0, k); o.D = mix(92, 80, k); o.pitch = 0.82;     /* slow glide + push-in: parallax between the beads and the wall */
     o.focus = clamp(band, -20, 45) * 0.5;
     o.el = 0.25; o.az = 4.45 + 0.08 * Math.sin(c * 0.9);
-    o.px = 4 * Math.sin(c * 0.7); o.py = clamp(band + 4, -10, 40); o.ps = 22; o.lit = smooth(0.0, 0.9, c);
+    const tv = camera && camera.aspect < 1;                     /* portrait: the light falls on the free middle of the frame */
+    o.px = AUTO ? (tv ? -12 : -48) + 4 * Math.sin(c * 0.7) : 4 * Math.sin(c * 0.7); o.py = AUTO ? (tv ? -6 : 6) : clamp(band + 4, -10, 40); o.ps = AUTO ? (tv ? 75 : 105) : 22; o.lit = smooth(0.0, 0.9, c);
     return o;
   }
   const PA = {}, PB = {}, P = {};
@@ -545,7 +596,8 @@ function mount(el, opts = {}) {
 
   /* micro-shadow steps: fewer when the GPU is struggling, and during the spray (ramped back while it settles) */
   function stepsNow() {
-    const full = stage.q < 0.85 ? Math.min(7, Q.steps) : Q.steps;
+    let full = stage.q < 0.85 ? Math.min(7, Q.steps) : Q.steps;
+    if (AUTO) full = Math.min(full, AU.armed && !AU.settled && AU.e > 0 ? 6 : 10);
     return I.on ? Math.round(mix(Math.min(8, full), full, smooth(I.end - 1.6, I.end - 0.2, I.clock))) : full;
   }
   const vtmp = { v: null, f: null };
@@ -557,9 +609,12 @@ function mount(el, opts = {}) {
     /* intro clock + landings stamped into the coating (the mip chain is refreshed every fifth frame:
        blurred areas use the coarse mips, a frame of latency there is invisible) */
     if (I.on) {
-      if (I.hold && (!el.hasAttribute('data-intro-hold') || stage.t - I.holdT > 6)) I.hold = false;
+      if (I.hold) {
+        const pageHold = el.hasAttribute('data-intro-hold') && stage.t - I.holdT <= 6;
+        if (!pageHold) I.hold = false;
+      }
       const prev = I.clock;
-      if (!I.hold) I.clock += dt;
+      if (!I.hold) I.clock += dt * (AUTO && AU.fast ? 3 : 1);     /* a scroll, key or touch: the rest of the spray plays at 3x */
       if (dt > 0 && I.clock > coat.firstLanding - 0.05 && prev <= coat.lastLanding + 0.001) {
         if (!DBG.noStamp) tile.stamp(prev, I.clock, false, false);
         if (++I.frame % 5 === 0 && !DBG.noFlush) tile.flush();
@@ -590,7 +645,33 @@ function mount(el, opts = {}) {
       ST.sent = ST.p;
       el.dispatchEvent(new CustomEvent('dv3d:story', { bubbles: true, detail: { progress: ST.p, eased: e0 } }));
     }
-    const e = holdStory(e0, dt);
+    /* autoStory: the camera's own move (cinematic ease), landing on the photograph; the scroll can only take it further */
+    if (AU.armed && !AU.settled && AU.light) {
+      AU.wait -= dt;
+      if (AU.wait <= 0 || AU.fast) { AU.settled = true; el.dispatchEvent(new CustomEvent('dv3d:settled', { bubbles: true, detail: { photo: false, quick: true } })); }
+    }
+    if (AU.armed && !AU.settled && !AU.light) {
+      AU.waitT += dt;
+      /* the move waits for the room (parsed, compiled, its textures uploaded by one warm-up frame) and the photograph,
+         at most 5.5 s (a fast device is ready in about 1.5 s; a slow one keeps the heavy work out of the move) */
+      const roomWait = living && !living.stats.failed && (!(RM.use && RM.warm) || (photoOK() && !PH.ready && !PH.err)) && AU.waitT < 5.5;
+      if (roomWait && RM.use && !RM.warm) warmRoom(P);
+      if ((AU.wait > 0 || roomWait) && !AU.fast) AU.wait -= dt;
+      else {
+        /* a GPU that was near its limit in the spray gets a little less resolution now, in the still moment, not mid-move */
+        AU.wait = 0; AU.t += dt * (AU.fast ? Math.max(1, AU.dur / 0.9) : 1);
+      }
+      const x = clamp(AU.t / AU.dur, 0, 1);
+      AU.e = x * x * x * (x * (x * 6 - 15) + 10);
+      if (x >= 1) {
+        AU.after += dt;
+        if ((PH.k >= 1 && PH.ready) || AU.after > 2.5 || !living) {
+          AU.settled = true;
+          el.dispatchEvent(new CustomEvent('dv3d:settled', { bubbles: true, detail: { photo: PH.k >= 1 } }));
+        }
+      }
+    }
+    const e = holdStory(Math.max(e0, AU.e), dt);
     /* the furnished room takes over once it is ready: at once in the macro, with a crossfade inside the story */
     if (living && RM.ready && !RM.use && !RM.switching) {
       if (e <= 0) useRoom(true);
@@ -611,7 +692,7 @@ function mount(el, opts = {}) {
     fp.set(M.x + p.fx, M.y + p.fy + p.focus * (1 - e), 0).sub(camera.position);
     const focus = e > 0 ? mix(Math.max(20, fp.dot(fwd)), d, smooth(0, 0.3, e)) : Math.max(20, fp.dot(fwd));
     u.uFocus.value = focus; spray.uniforms.uFocus.value = focus;
-    const aper = Q.aper * stage.pr * Math.pow(clamp(1 / kMac, 0, 1), 0.85) * (LOOK === 'studio' ? (SV.studioAper || 0.45) : 1);
+    const aper = Q.aper * stage.pr * Math.pow(clamp(1 / kMac, 0, 1), 0.85) * (LOOK === 'studio' ? (SV.studioAper || 0.45) : 1);   /* the far wall behind the page's text melts into a soft blur */
     u.uAper.value = aper;
     /* raking light (macro) */
     const ce = Math.cos(p.el);
@@ -628,10 +709,11 @@ function mount(el, opts = {}) {
     u.uClock.value = I.clock + I.base;
     u.uSteps.value = stepsNow();
     u.uRoom.value = kRoom;
-    u.uFade.value = LOOK === 'studio' ? 0 : 0.014 * (1 - smooth(L(95), L(420), ld));
-    u.uVig.value = LOOK === 'studio' ? 0 : mix(1, RM.use ? 0 : 0.3, kRoom);
+    u.uFade.value = LOOK === 'studio' ? 0 : (AUTO ? 0.005 : 0.014) * (1 - smooth(L(95), L(420), ld));
+    u.uVig.value = LOOK === 'studio' || AUTO ? 0 : mix(1, RM.use ? 0 : 0.3, kRoom);
+    if (AUTO) { const a = mix(0.15, 1, p.lit); u.uAmb.value.setRGB(mix(0.075 * a, 0.035, kRoom), mix(0.072 * a, 0.036, kRoom), mix(0.066 * a, 0.042, kRoom), T.LinearSRGBColorSpace); }
     if (LOOK === 'studio') { u.uAmb.value.setRGB(0.1, 0.097, 0.092, T.LinearSRGBColorSpace); u.uRelief.value = SV.studioRelief || 0.06; }
-    R.toneMappingExposure = mix(0.92, 1.2, kRoom);                     /* the sunlit room is a brighter scene than the macro */
+    R.toneMappingExposure = mix(AUTO ? 0.8 : 0.92, 1.2, kRoom);       /* the sunlit room is a brighter scene than the macro */
     if (RM.use) { living.setFade(kFade); living.update(still ? 0 : t, kRoom); }
     else room.setFade(kFade);
     photoStep(d, dt, e > 0 ? SV.dist : 1e9);
@@ -723,7 +805,7 @@ function mount(el, opts = {}) {
     disableTilt() { window.removeEventListener('deviceorientation', onTilt); tilt.on = false; tilt.tx = tilt.ty = 0; },
     stats() {
       return Object.assign({}, stage.stats, { granules: coat ? coat.granules : 0, flights: coat ? coat.fly.count : 0, stamps: tile ? tile.count : 0,
-        tile: Q.px, tier, fpsCap: fpsCap(), frames: I.frames || 0, room: RM.use ? 'furnished' : 'simple', roomMs: living ? living.stats.ms : 0, photo: PH.ready ? +PH.k.toFixed(3) : (PH.err ? 'error' : (PH.loading ? 'loading' : 'off')), light: [Math.round(pool.x), Math.round(pool.y)], intro: I.on ? +I.clock.toFixed(2) : -1, story: +ST.p.toFixed(3), storyCam: +(ST.eh || 0).toFixed(3), gpuMs: gpu ? +gpu.ms.toFixed(2) : undefined });
+        tile: Q.px, tier, fpsCap: fpsCap(), frames: I.frames || 0, room: RM.use ? 'furnished' : 'simple', roomMs: living ? living.stats.ms : 0, photo: PH.ready ? +PH.k.toFixed(3) : (PH.err ? 'error' : (PH.loading ? 'loading' : 'off')), light: [Math.round(pool.x), Math.round(pool.y)], intro: I.on ? +I.clock.toFixed(2) : -1, story: +ST.p.toFixed(3), auto: AU.armed ? (AU.settled ? 'settled' : +AU.e.toFixed(3)) : 'off', storyCam: +(ST.eh || 0).toFixed(3), gpuMs: gpu ? +gpu.ms.toFixed(2) : undefined });
     },
     renderFrame() { if (stage.ready) { update(stage.t, 0); render(); } },
     get debug() { return gpu ? { U, Q, stage, DBG, living, PH, ST, SV, RM, camera } : null; },          /* ?gpu only: internals for profiling */
@@ -735,11 +817,20 @@ function mount(el, opts = {}) {
   function dispose() {
     if (pt) { ['pointermove', 'pointerdown'].forEach(ev => pt.removeEventListener(ev, onMove)); pt.removeEventListener('pointerup', onUp); ['pointercancel', 'pointerleave'].forEach(ev => pt.removeEventListener(ev, onLeave)); }
     ACT_EV.forEach(ev => window.removeEventListener(ev, onAct));
+    ['wheel', 'touchstart', 'keydown', 'pointerdown'].forEach(ev => window.removeEventListener(ev, auFast));
     if (SS.on) { window.removeEventListener('scroll', stillScroll); window.removeEventListener('resize', stillScroll); SS.on = false; }
     window.removeEventListener('deviceorientation', onTilt);
     tile && tile.dispose(); spray && spray.dispose(); room && room.dispose(); wallM && wallM.dispose(); wallR && wallR.dispose(); wall && wall.geometry.dispose();
     living && living.dispose(); wallL && wallL.dispose();
-    if (PH.ctl) PH.ctl.destroy(); if (PH.host) PH.host.remove();
+    /* the photograph's stage (core.js) reports its context loss as a failure: released out of the page first, so nothing
+       reaches the hero, and that one expected message is kept out of the console */
+    if (PH.host) PH.host.remove();
+    if (PH.ctl) {
+      const ce = console.error;
+      console.error = function (...a) { if (a[0] === '[dvatone 3d]' && /context lost/i.test(String(a[1]))) return; return ce.apply(console, a); };
+      setTimeout(() => { console.error = ce; }, 2000);
+      PH.ctl.destroy();
+    }
   }
 }
 
@@ -771,6 +862,7 @@ function autoMount() {
     let colors = null; try { colors = JSON.parse(el.getAttribute('data-colors') || 'null'); } catch (e) { colors = null; }
     const poster = el.getAttribute('data-poster'), intro = el.getAttribute('data-intro'), story = el.getAttribute('data-scroll-story');
     mount(el, {
+      autoStory: el.hasAttribute('data-auto-story'), autoDur: +el.getAttribute('data-auto-story') || undefined,
       colors, grain: +el.getAttribute('data-grain') || 1,
       sparkle: el.hasAttribute('data-sparkle') ? +el.getAttribute('data-sparkle') : undefined,
       intro: intro == null ? true : (intro === 'false' ? false : (intro === 'always' ? 'always' : true)),

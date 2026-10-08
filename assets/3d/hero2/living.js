@@ -220,6 +220,7 @@ export function createLiving(T, R, opts = {}) {
      (end of the intro, or the story's start) only parses and compiles */
   let pre = null;
   function prefetch() {
+    gltfLoader().catch(() => {});
     if (pre || S.loaded || S.loading) return pre;
     const get = u => fetch(u).then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
     const files = ['living.json', 'living.glb', 'living-lm-m.webp', hi ? 'living-sun.webp' : 'living-sun-1k.webp', 'living-env.webp'].map(f => ROOMDIR + f);

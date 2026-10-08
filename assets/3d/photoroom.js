@@ -185,6 +185,7 @@ uniform mat3 uH; uniform float uRho0; uniform float uBleedScale;
 uniform float uMetresA; uniform float uMetresB; uniform float uFlatA; uniform float uFlatB;
 uniform float uWipe; uniform vec2 uWipeRange; uniform float uWipeMix; uniform float uCoatBias; uniform float uCells;
 uniform float uFade; uniform vec3 uBg;
+/*FX_DECL*/
 vec2 dvHash2( vec2 p ) { vec3 p3 = fract( p.xyx * vec3( 0.1031, 0.1030, 0.0973 ) ); p3 += dot( p3, p3.yzx + 33.33 ); return fract( ( p3.xx + p3.yz ) * p3.zy ); }
 /* tiling and blending (Heitz and Neyret 2018): a triangle grid over the wall, each of its vertices reads the seamless
    tile at its own random offset and the three reads are blended around the tile's mean with a variance-preserving
@@ -252,6 +253,7 @@ vec3 dvSRGB( vec3 c ) { return mix( c * 12.92, 1.055 * pow( c, vec3( 1.0 / 2.4 )
 void main() {
   vec2 puv = uFit.xy + vUv * uFit.zw;
   puv = uFocus + ( puv - uFocus ) / uZoom;
+  /*FX_UV*/
   /* the photograph as shown (display-linear); the light on the wall per unit albedo (linear, display exposure) */
   vec3 b = uMinify > 1.02 ? texture( tBase, puv ).rgb : catmull( tBase, puv, uPhotoPx );
   vec2 hl = bsplineHalf( tLight, puv, uLightPx, uLightPx.y ).rg * 255.0;      /* top half (texture rows h .. 2h) */
@@ -259,6 +261,7 @@ void main() {
   float dc = texture( tDetail, puv ).r * 255.0 - 128.0;
   vec3 lw = exp2( uLightK.x + ( hl.x * 256.0 + hl.y ) / 65535.0 * uLightK.y + dc * uLightK.z ) * ch;
   float m = texture( tMask, puv ).r;
+  /*FX_MASK*/
   vec3 bl = texture( tBleed, puv ).rgb; bl = bl * bl * uBleedScale;
   /* the coating on the wall plane (metres), current composition A and the next one B wiping in */
   vec3 hw = uH * vec3( puv * 2.0 - 1.0, 1.0 );
@@ -275,11 +278,14 @@ void main() {
   }
   /* the wall: its light times the coating, through the tone curve; the rest: the photograph plus the change of the
      wall's colour bleed, through the slope of the tone curve there; blended by the wall's anti-aliased coverage */
+  /*FX_WALL*/
   vec3 wallC = dvTone( cc * lw );
   float pk = max( b.r, max( b.g, b.b ) );
   float J = pk < 0.55 ? 1.0 : ( 0.97 - pk ) * ( 0.97 - pk ) / ( 0.42 * 0.42 );
   vec3 rest = max( b + J * ( meanC - uRho0 ) * bl, 0.0 );
-  vec3 col = dvSRGB( clamp( mix( rest, wallC, m ), 0.0, 1.0 ) );
+  vec3 lin = clamp( mix( rest, wallC, m ), 0.0, 1.0 );
+  /*FX_POST*/
+  vec3 col = dvSRGB( lin );
   float dn = texture( tBlue, gl_FragCoord.xy / 64.0 ).r;
   col = mix( col, uBg, uFade );                            /* room change: through the stage colour, never a double exposure */
   gl_FragColor = vec4( col + ( dn - 0.5 ) / 255.0, 1.0 );
@@ -299,6 +305,7 @@ export function mountPhoto(el, opts = {}) {
   };
   const box0 = el.getBoundingClientRect();
   let portrait = box0.width > 0 && box0.height > 0 && box0.width / box0.height < 0.95;
+  const vid = (name, p) => opts.views ? opts.views[p ? 1 : 0] : viewId(name, p);      /* opts.views: other view files (offline video) */
   const posterOf = (room, p) => POSTER + 'poster-' + (room === 'hero-end' ? 'hero' : (roomDef(room) ? roomDef(room).file : room)) + (p ? '-p' : '') + '.webp';
   let T, R, baker, scene, camera, mat, U, stage = null, view = null, coatA = null, coatB = null, wipe = null, roomTok = 0, coatTok = 0;
   let push = 0, dirty = true, lastT = null;
@@ -364,12 +371,18 @@ export function mountPhoto(el, opts = {}) {
       uWipe: { value: 0 }, uWipeRange: { value: new T.Vector2(0, 6) }, uWipeMix: { value: 0 }, uCoatBias: { value: 0.15 }, uCells: { value: 128 },
       uFade: { value: 0 }, uBg: { value: new T.Vector3(0.11, 0.105, 0.1) }
     };
-    mat = new T.ShaderMaterial({ uniforms: U, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }', fragmentShader: GLSL, depthTest: false, depthWrite: false });
+    /* opts.fx: offline effects (the pre-rendered home video): GLSL at three marked places and their uniforms; the site
+       never passes it, so its shader is the plain one */
+    const fx = opts.fx || null;
+    if (fx && fx.uniforms) Object.assign(U, fx.uniforms(T));
+    const frag = fx ? GLSL.replace('/*FX_DECL*/', fx.decl || '').replace('/*FX_UV*/', fx.uv || '').replace('/*FX_MASK*/', fx.mask || '')
+      .replace('/*FX_WALL*/', fx.wall || '').replace('/*FX_POST*/', fx.post || '') : GLSL;
+    mat = new T.ShaderMaterial({ uniforms: U, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }', fragmentShader: frag, depthTest: false, depthWrite: false });
     const g = new T.BufferGeometry();
     g.setAttribute('position', new T.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
     g.setAttribute('uv', new T.Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2));
     const quad = new T.Mesh(g, mat); quad.frustumCulled = false; scene.add(quad);
-    const vP = loadView(viewId(S.room, portrait));
+    const vP = loadView(vid(S.room, portrait));
     loadTex(ASSET + 'bluenoise64.webp', false, false).then(t => {
       t.wrapS = t.wrapT = T.RepeatWrapping; t.minFilter = t.magFilter = T.NearestFilter; t.needsUpdate = true; U.tBlue.value = t; dirty = true;
     }).catch(() => {});
@@ -419,7 +432,7 @@ export function mountPhoto(el, opts = {}) {
   function prewarm() {
     loadThree().catch(() => {});
     if (typeof createImageBitmap !== 'function') return;
-    const id = viewId(S.room, portrait);
+    const id = vid(S.room, portrait);
     viewMeta(id).then(async meta => {
       const ext = meta.avif && await AVIF ? '.avif' : '.webp';
       for (const u of [ASSET + id + ext, ASSET + id + '-l.webp', ASSET + id + '-d.webp', ASSET + id + '-m.webp', ASSET + id + '-b.webp']) bitmapOf(u);
@@ -469,7 +482,7 @@ export function mountPhoto(el, opts = {}) {
     const list = groupRooms(S.room), i = list.indexOf(S.room);
     if (i < 0 || list.length < 2) return;
     const next = list[(i + 1) % list.length];
-    const go = () => { if (!stage || stage.destroyed) return; loadView(viewId(next, portrait)).catch(() => {}); };
+    const go = () => { if (!stage || stage.destroyed) return; loadView(vid(next, portrait)).catch(() => {}); };
     if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 5000 }); else setTimeout(go, 2000);
   }
   function useView(v) {
@@ -560,7 +573,7 @@ export function mountPhoto(el, opts = {}) {
       const e = push * push * (3 - 2 * push);
       U.uZoom.value = 1 + PUSH.amount * e;
       dirty = true;
-    } else if (stage.reduced || !S.drift) U.uZoom.value = 1;
+    } else if ((stage.reduced || !S.drift) && !opts.fx) U.uZoom.value = 1;      /* an fx caller drives the zoom itself */
     if (wipe) {
       wipe.k += (dt || 0) / wipe.dur;
       const k = stage.reduced ? 1 : Math.min(1, wipe.k), e = k * k * (3 - 2 * k);
@@ -626,7 +639,7 @@ export function mountPhoto(el, opts = {}) {
       if (opts.poster !== false && !opts.poster) stage.setPoster(posterOf(name, portrait));
       if (!stage.ready) return;
       let v;
-      try { v = await loadView(viewId(name, portrait)); await upload(v); } catch (e) { console.error('[dvatone 3d]', e); return; }
+      try { v = await loadView(vid(name, portrait)); await upload(v); } catch (e) { console.error('[dvatone 3d]', e); return; }
       if (stage.destroyed || tok !== roomTok) return;
       if (orientation) { useView(v); stage.invalidate(); return; }
       if (stage.reduced) { useView(v); frameNow(); prefetchNext(); return; }

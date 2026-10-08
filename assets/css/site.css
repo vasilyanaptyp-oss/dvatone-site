@@ -1736,48 +1736,48 @@ button.mixrow__ico.is-on:hover{color:var(--copper-hi)}
 /* wave 5 (07.10): the end-of-story link is light text on a copper rule; copper text over the bright floor and chair was about 2:1 */
 .hero-track .hero__cap a{color:var(--td);border-bottom-color:var(--copper-hi);transition:border-color var(--dur-1)}
 @media (hover:hover){.hero-track .hero__cap a:hover{border-bottom-color:var(--td)}}
-/* -- hero2 first screen (07.10 evening, Artur: black screen, the letters one by one, no header; then the coating applied on
-   the wall of the photoreal room; the header fades in; then the story). On the first visit of a session, with JS on and
-   motion allowed, <html> has dv-intro and dv-nohdr from the head script (build_home.py). .hero__room holds the room
-   photograph twice (the primed wall, the coat) and the canvas that applies the coat between them (assets/3d/hero2/first.js:
-   .is-applying while it runs, .is-coated at the end, .is-fade without WebGL). Without the opening (second visit, reduced
-   motion, no JS) the coated room shows at once. The headline sits over the calm wall on the right on desktops, with only a
-   local soft gradient behind it; the sun patch and the leaf shadows stay free. -- */
-.hero__room{position:absolute;inset:0;overflow:hidden;transform-origin:62% 46%}
+/* -- hero2 first screen (since 08.10 late evening, Artur: black, only the headline; the spray on the wall, a pre-rendered
+   Cycles video; the header fades in; after the animation the rest; then the story). On the first visit of a session, with
+   JS on and motion allowed, <html> has dv-intro and dv-nohdr (and dv-anim when the video may be tried) from the head
+   script (build_home.py). .hero__room holds the room still (the LCP image, under a black veil until .is-still-in);
+   video.hero__anim plays over it (.is-anim-on, .is-anim-out at its end: the same picture); html.dv-rest brings the rest of
+   the text (assets/3d/hero2/first.js). Without the opening (second visit, reduced motion, no JS) the room shows at once.
+   The headline sits over the calm wall on the right on desktops, with only a local soft gradient behind it. -- */
+.hero__room{position:absolute;inset:0;overflow:hidden;transform-origin:62% 46%;isolation:isolate}   /* its veil and edge stay inside it (over the 3D layer only if inside) */
 .hero__room picture,.hero__room img,.hero__apply{position:absolute;inset:0;width:100%;height:100%;display:block}
-/* the crop (first.js computes the same for the canvas and the story): the desktop frame (2400x1080) never shows the window's
-   glass at its left edge (9.2 % of the frame, -20.44svh at full height) and is centred otherwise; the phone frame (1080x1920)
-   ends on the right where the sofa's back cushions meet (89 % of the frame: right-aligned + 6.19svh), so the sofa reads
-   whole and the leaf shadows keep as much as they can, but never shows the chair at its left edge (7 %, -3.94svh) */
-.hero__room img{object-fit:cover;object-position:max(100%,min(50%,-20.44svh)) 50%}
-@media (max-width:760px) and (orientation:portrait){.hero__room img{object-position:max(100%,min(-3.94svh,calc(100% + 6.19svh))) 50%}}
+/* the crop, the same for the still and the opening video (the same picture at the end: the hand-over is invisible): the
+   desktop frame (20:9) never shows the window's glass at its left edge (9.2 % of the frame, -20.44svh at full height) and
+   is centred otherwise; the phone frame (9:16) ends on the right where the sofa's back cushions meet (89 %: right-aligned
+   + 6.19svh), so the sofa reads whole, but never shows the chair at its left edge (7 %, -3.94svh) */
+.hero__room img,.hero__anim{object-fit:cover;object-position:max(100%,min(50%,-20.44svh)) 50%}
+@media (max-width:760px) and (orientation:portrait){.hero__room img,.hero__anim{object-position:max(100%,min(-3.94svh,calc(100% + 6.19svh))) 50%}}
 .hero__room-pre,.hero__apply{opacity:0}
 .hero__apply{pointer-events:none}
-/* the primed room is painted at once (the LCP image) under a black veil that lifts after the headline's letters */
-.dv-intro .hero__room-pre{opacity:1}
-.dv-intro .hero__room::before{content:"";position:absolute;inset:0;z-index:3;background:#0e0c0a;opacity:0;pointer-events:none;animation:roomVeil 1.2s cubic-bezier(.25,.6,.25,1) 1.05s backwards}
+/* the opening (08.10 late evening, first.js): the room still is painted at once (the LCP image) under a black veil; only
+   the headline shows; then the opening video (a pre-rendered Cycles render) fades in over the black and plays; at its end
+   the veil goes (instantly, under the video's last frame: the same picture) and the video dissolves into the still; without
+   the video the veil lifts slowly over the still (.is-still-in) */
+.dv-intro .hero__room::before{content:"";position:absolute;inset:0;z-index:3;background:#0e0c0a;opacity:1;pointer-events:none;transition:opacity 1.2s var(--ease)}
+.dv-intro .hero.is-still-in .hero__room::before{opacity:0}
+.dv-intro .hero.is-anim-on.is-still-in .hero__room::before{transition:none}
+/* no z-index: the video paints in tree order, over the room and under the shade (the still has the same shade over it) */
+.hero__anim{position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;pointer-events:none;background:#0e0c0a}
+.hero.is-anim-on .hero__anim{opacity:1;transition:opacity .5s linear}
+.hero.is-anim-on.is-anim-out .hero__anim,.hero.is-anim-out .hero__anim{opacity:0;transition:opacity .6s linear}
+.hero.is-landed .hero__anim{transition-duration:.35s}
 /* Chrome leaves an image that covers the whole viewport out of the LCP (it takes it for a background): the media layer stays
    1px short at the bottom (black, under the veil) until the still in view has painted, then first.js lifts it (.is-lcp) */
 .dv-js .hero--room .hero__media{clip-path:inset(0 0 1px)}
 .dv-js .hero--room.is-lcp .hero__media{clip-path:none}
-.dv-intro .hero__room-coat{opacity:0}
-.hero.is-applying .hero__apply{opacity:1}
-.dv-intro .hero.is-coated .hero__room-coat{opacity:1}
-.hero.is-coated .hero__room-pre,.hero.is-coated .hero__apply{opacity:0;transition:opacity .45s linear .1s}
-.hero.is-fade .hero__room-pre{opacity:0;transition:opacity 1.3s var(--ease)}
-.hero.is-fade .hero__room-coat{opacity:1}
-.dv-intro .hero__room{animation:roomArrive 2.6s cubic-bezier(.2,.6,.2,1) .95s backwards}
 .hero.is-coated .hero__room{animation:roomDrift 28s cubic-bezier(.35,0,.25,1) forwards}
 /* the story (first.js): the push into the wall stops the drift; the material close-up dissolves in over the room */
 .hero.is-story .hero__room{animation:none}
 .hero__soft{opacity:0}
 .hero__close{position:absolute;inset:0;opacity:0;pointer-events:none;will-change:opacity,transform}
 .hero__close img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
-@keyframes roomVeil{from{opacity:1}}
-@keyframes roomArrive{from{transform:scale(1.035)}}
 @keyframes roomDrift{to{transform:scale(1.035) translate3d(-.5%,0,0)}}
 /* the window's sunlit reveal at the far left: softened where the crop cannot leave it out (wide screens) */
-@media (min-aspect-ratio:17/10){.hero__room::after{content:"";position:absolute;inset:0 auto 0 0;width:8%;background:linear-gradient(90deg,rgba(14,12,10,.5),rgba(14,12,10,0));pointer-events:none}}
+@media (min-aspect-ratio:17/10){.hero--room .hero__media::after{content:"";position:absolute;inset:0 auto 0 0;z-index:1;width:8%;background:linear-gradient(90deg,rgba(14,12,10,.5),rgba(14,12,10,0));pointer-events:none}}
 .dv-js .hero__lens,.dv-js .hero__ring{display:none}
 .dv-nohdr .hdr{opacity:0;pointer-events:none}
 .dv-intro .hdr{transition:opacity 1s var(--ease),transform .7s var(--ease),background .5s,border-color .5s}
@@ -1808,6 +1808,12 @@ button.mixrow__ico.is-on:hover{color:var(--copper-hi)}
   .hero--room .hero__body+.wrap{margin-top:auto}
 }
 .hero--room .hero__tag{display:none}          /* the old DV 033 tag: the text column now holds the right side */
+/* the 3D opening's macro (bright, textured wall): a little more shade behind the text while it lasts (.is-macro, first.js);
+   it fades out over 3 s as the camera moves into the room, so the room comes to rest under its own shade */
+.hero--room .hero__shade::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity 3s var(--ease);
+  background:radial-gradient(ellipse 54% 72% at 75% 36%,rgba(14,12,10,.34) 0%,rgba(14,12,10,.18) 55%,rgba(14,12,10,0) 100%)}
+.hero--room.is-macro .hero__shade::after{opacity:1;transition-duration:.6s}
+@media (max-width:760px){.hero--room .hero__shade::after{background:linear-gradient(180deg,rgba(14,12,10,.42) 0%,rgba(14,12,10,.3) 40%,rgba(14,12,10,0) 56%),linear-gradient(0deg,rgba(14,12,10,.3) 0%,rgba(14,12,10,0) 30%)}}
 @media (max-width:760px){
   /* phones: the headline and the lede over the calm upper wall, the buttons and the facts over the floor; the sun patch, the
      leaf shadows and the sofa stay clear between them, where the coat is seen landing */
@@ -1818,15 +1824,15 @@ button.mixrow__ico.is-on:hover{color:var(--copper-hi)}
      layer adds .16 and lifts with the coat */
   .hero--room .hero__shade{background:linear-gradient(180deg,rgba(14,12,10,.5) 0%,rgba(14,12,10,.3) 30%,rgba(14,12,10,0) 48%),linear-gradient(0deg,rgba(14,12,10,.8) 0%,rgba(14,12,10,.5) 20%,rgba(14,12,10,0) 34%)}
   .dv-intro .hero--room .hero__shade::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(14,12,10,.2) 0%,rgba(14,12,10,.16) 32%,rgba(14,12,10,0) 48%);transition:opacity 1.4s var(--ease)}
-  .dv-intro .hero--room.is-coated .hero__shade::before{opacity:0}
+  .dv-intro.dv-coated .hero--room .hero__shade::before,.dv-intro .hero--room.is-coated .hero__shade::before{opacity:0}   /* with the header: mid-video, never after the hand-over */
 }
-.dv-intro .hero__eyebrow,.dv-intro .hero__lede,.dv-intro .hero__ctas{animation:heroUp .8s var(--ease) backwards}
-.dv-intro .hero__eyebrow{animation-delay:1.25s}
-.dv-intro .hero__lede{animation-delay:1.4s}
-.dv-intro .hero__ctas{animation-delay:1.55s}
+/* only the headline until the opening ends; then the rest comes (html.dv-rest): the eyebrow, the lead, the buttons, the facts */
+.dv-intro:not(.dv-rest) .hero__eyebrow,.dv-intro:not(.dv-rest) .hero__lede,.dv-intro:not(.dv-rest) .hero__ctas,.dv-intro:not(.dv-rest) .hero__facts,.dv-intro:not(.dv-rest) .hero__tag{visibility:hidden}
+.dv-intro.dv-rest .hero__eyebrow,.dv-intro.dv-rest .hero__lede,.dv-intro.dv-rest .hero__ctas,.dv-intro.dv-rest .hero__facts{animation:heroUp .7s var(--ease) backwards}
+.dv-intro.dv-rest .hero__lede{animation-delay:.1s}
+.dv-intro.dv-rest .hero__ctas{animation-delay:.2s}
+.dv-intro.dv-rest .hero__facts{animation-delay:.32s}
 @keyframes heroUp{from{opacity:0;transform:translateY(12px)}}
-.dv-intro:not(.dv-coated) .hero__facts,.dv-intro:not(.dv-coated) .hero__tag{visibility:hidden}
-.dv-intro.dv-coated .hero__facts,.dv-intro.dv-coated .hero__tag{animation:heroUp .9s var(--ease) backwards}
 @media (prefers-reduced-motion:reduce){.hero__title .ch,.hero__title .w,.hero__room{animation:none!important}}   /* a still room: no drift either */
 /* ==== end hero2 story end ==== */
 

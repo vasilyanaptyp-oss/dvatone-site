@@ -130,10 +130,12 @@ export function createStage(el, cfg) {
     st.inited = true;
     if (!hasWebGL2()) return fail('nowebgl');
     if (!G.capture) await afterLoad();
+    /* three.js downloads and parses while the tier probe runs (08.10: the home page's opening starts a second earlier) */
+    const threeP = loadThree(); threeP.catch(() => {});
     if (cfg.preInit) { try { await cfg.preInit(); } catch (e) { /* keep the static settings */ } }
     if (st.destroyed) return;
     let THREE;
-    try { THREE = await loadThree(); } catch (e) { return fail(e); }
+    try { THREE = await threeP; } catch (e) { return fail(e); }
     if (st.destroyed) return;
     st.THREE = THREE;
     const tb = performance.now();
@@ -146,7 +148,7 @@ export function createStage(el, cfg) {
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       if (cfg.alpha) renderer.setClearColor(0x000000, 0);
       st.canvas.setAttribute('aria-hidden', 'true');
-      st.canvas.addEventListener('webglcontextlost', ev => { ev.preventDefault(); fail('WebGL context lost'); }, false);
+      st.canvas.addEventListener('webglcontextlost', ev => { ev.preventDefault(); if (!st.destroyed) fail('WebGL context lost'); }, false);   /* not when released on purpose */
       measure();
       applySize();
       wrap.appendChild(st.canvas);
@@ -219,13 +221,13 @@ export function createStage(el, cfg) {
     ticking = true;
     try { frame(dt); } finally { ticking = false; }
     /* adaptive resolution: EMA of the real frame interval, checked about once a second after a warm-up (not while capped) */
-    if (raw > 0 && raw < 0.5 && wantsLoop() && !G.noAdapt && !fcap) {
+    if (raw > 0 && raw < 0.5 && wantsLoop() && !G.noAdapt && !fcap && (!cfg.adapt || cfg.adapt())) {   /* cfg.adapt(): false = hold the resolution now */
       ema = ema * 0.9 + raw * 1000 * 0.1; warm += raw; sinceCheck += raw;
       st.stats.ms = +ema.toFixed(1); st.stats.fps = Math.round(1000 / ema);
       if (warm > 1.5 && sinceCheck > 0.8) {
         sinceCheck = 0;
         const minQ = minPr() / cap();
-        slow = ema > 24 ? slow + 1 : 0;
+        slow = ema > 18.8 ? slow + 1 : 0;              /* 08.10: aim at 60 fps (was 41): the resolution gives way first */
         fast = ema < 17.6 ? fast + 1 : 0;
         const tnow = performance.now();
         if (slow >= 2 && st.q > minQ + 0.001) {

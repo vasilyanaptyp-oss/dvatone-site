@@ -144,9 +144,9 @@ void main(){
   float metal = smoothstep(0.42, 0.3, d.g);
   float rough = clamp(metal > 0.5 ? d.g * 0.6 : d.g * 0.84, 0.06, 1.0);
   float age = uClock - d.b;
-  float wet = uWet * (age > -0.03 ? exp(-max(age, 0.0) / 0.55) : 0.0);
-  alb *= 1.0 - 0.2 * wet;
-  rough = mix(rough, 0.2, 0.75 * wet);
+  float wet = uWet * (age > -0.03 ? exp(-max(age, 0.0) / 0.85) : 0.0);
+  alb *= 1.0 - 0.3 * wet;
+  rough = mix(rough, 0.12, 0.85 * wet);
   rough = mix(rough, 0.4, uPrimer * smoothstep(-1.6, -1.95, d.b));
   vec3 V = normalize(cameraPosition - vW);
   vec3 H = normalize(L + V);

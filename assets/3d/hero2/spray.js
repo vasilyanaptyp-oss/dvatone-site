@@ -163,8 +163,8 @@ void main(){
   float rim = smoothstep(0.55, 0.98, rr) * side * side;
   vec2 gp = e / Re - vLd * 0.45;
   float glint = exp(-dot(gp, gp) / 0.03);
-  vec3 col = vCol.rgb * mix(1.0, 0.55 + 0.6 * nz, sharp) + vGlow * mix(0.6, nz * 1.5, sharp)
-           + vRim * (rim * 1.5 + glint * 1.0) * sharp;
+  vec3 col = vCol.rgb * mix(1.0, 0.8 + 0.25 * nz, sharp) + vGlow * mix(0.3, nz * 0.5, sharp)
+           + vRim * (rim * 0.6 + glint * 0.3) * sharp;          /* 08.10: a flat droplet, not a glassy bead */
   gl_FragColor = vec4(col, a);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -176,7 +176,7 @@ export function createSpray(T) {
     uG: { value: 60 }, uTurb: { value: 5 }, uShutter: { value: 1 / 600 },
     uFocus: { value: 80 }, uAper: { value: 26 }, uRes: { value: new T.Vector2(1, 1) },
     uL: { value: new T.Vector3(0, 1, 0) }, uLcol: { value: new T.Color() }, uAmb: { value: new T.Color() },
-    uPool: { value: new T.Vector3(0, 0, 20) }, uLight: { value: 1 }, uNear: { value: 9 }, uDofK: { value: 0.3 }, uBeamH: { value: 7.5 }, uHighA: { value: 0.16 }, uMistA: { value: 0.32 }
+    uPool: { value: new T.Vector3(0, 0, 20) }, uLight: { value: 1 }, uNear: { value: 9 }, uDofK: { value: 0.3 }, uBeamH: { value: 7.5 }, uHighA: { value: 0.24 }, uMistA: { value: 0.55 }
   };
   const material = new T.ShaderMaterial({
     uniforms, vertexShader: VERT, fragmentShader: FRAG,

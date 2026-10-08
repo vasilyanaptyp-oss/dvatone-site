@@ -1,108 +1,166 @@
-/* hero2 first screen of the home page (07.10, Artur): the black opening with the headline (CSS, site.css hero2 block),
-   then the room photograph with the primed wall, the coating applied on the wall (apply.js), the coated room at rest with a
-   slow drift, and the header.
-
-   Page contract (build_home.py): .hero__room holds two pictures of the same Cycles frame, img.hero__room-pre (the primed
-   wall, the LCP image) and img.hero__room-coat (the coat), and canvas.hero__apply. <html> has dv-intro / dv-nohdr on the
-   first visit of a session with motion allowed (head script). This module removes dv-nohdr and adds dv-coated when the
-   coat is on (the header fades in, the facts come); a scroll, key or touch brings the header at once.
-   No three.js here: about 6 KB of raw WebGL2 (apply.js), run in a worker on the page's canvas where the browser can, and the
-   stills. */
-import { createApply } from './apply.js';
-
+/* hero2 first screen of the home page. Since 08.10 late evening (Artur: «появляются только "Створіть... з характ." и
+   начинается пшик на стенку и только потом появляется сначала верхняя панель плавно! ну и потом остальное после
+   анимации»; the animation is a pre-rendered Cycles video):
+     black, only the headline, letter by letter (CSS, site.css hero2 block);
+     then the opening video (video.hero__anim: the coat sprayed on the primed wall from the top down, then the camera pulls
+     back into the room); the header fades in where the spray ends (data-cue, seconds of the video);
+     at the video's end its last frame (the room) dissolves into the identical still (img.hero__room-coat) and the rest
+     comes: the eyebrow, the lead, the buttons, the facts (html.dv-rest);
+     a scroll, key or touch lands everything at once.
+   Without the video (it cannot start within about 2.5 s, Save-Data or a 2G connection, autoplay refused, an error or a
+   stall): the same sequence on the room still. Reduced motion and later visits in the session: the room still at once.
+   Page contract (build_home.py): <html> gets dv-intro and dv-nohdr on the first visit of a session with motion allowed,
+   and dv-anim when the video may be tried (head script); the inline script after the video picks the desktop or the
+   phone file and starts loading it while the page parses. No WebGL here. */
 const DIR = new URL('./first/', import.meta.url).href;
-const SEEN = 'dv3d:hero2:intro';                    /* the same flag as the 3D module: the opening plays once per session */
+const SEEN = 'dv3d:hero2:intro';                    /* the opening plays once per session */
 const frame = () => new Promise(r => requestAnimationFrame(r));
-const capture = /[?&]capture\b/.test(location.search);
-/* test switches: ?nowebgl behaves as without WebGL (also in the worker), ?nowebgl=worker as a worker without WebGL2 */
-const nogl = (location.search.match(/[?&]nowebgl(=worker)?\b/) || [])[1] ? 'worker' : /[?&]nowebgl\b/.test(location.search);
 
 export function mountFirst(root) {
   if (!root || root.dataset.first) return;
   root.dataset.first = '1';
   const H = document.documentElement, hero = root.closest('.hero') || root;
-  const pre = root.querySelector('.hero__room-pre'), coat = root.querySelector('.hero__room-coat'), cv = root.querySelector('.hero__apply');
-  const intro = H.classList.contains('dv-intro');
-  const tall = () => innerWidth < innerHeight && innerWidth <= 760;
-  const st = { done: false, shown: false, apply: null, meta: null, coated: null };
+  const coat = root.querySelector('.hero__room-coat');
+  const vid = hero.querySelector('video.hero__anim');
+  /* the page's safety net may already have shown everything (a very slow network brought this module late): no opening */
+  const intro = H.classList.contains('dv-intro') && !H.classList.contains('dv-rest');
+  const st = { done: false, shown: false, rest: false, meta: null, coated: null, hold3d: intro, kick: null, mode: '' };
+  window.DV3D_OPEN = st;                            /* state, for the checks */
 
   /* the LCP: Chrome leaves an image that covers the whole viewport out of it (a background, to its mind), so site.css keeps
-     the media layer 1px short at the bottom (black, under the veil) until the still in view has painted; then the clip goes */
-  const lit = intro ? pre : coat, unclip = () => hero.classList.add('is-lcp');
-  if (!lit) unclip();
-  else (lit.complete ? Promise.resolve() : new Promise(r => { lit.addEventListener('load', r, { once: true }); lit.addEventListener('error', r, { once: true }); }))
-    .then(() => (lit.naturalWidth && lit.decode ? lit.decode().catch(() => {}) : 0)).then(frame).then(frame).then(frame).then(unclip);
+     the media layer 1px short at the bottom (black, under the veil) until the still has painted; then the clip goes */
+  const unclip = () => hero.classList.add('is-lcp');
+  if (!coat) unclip();
+  else (coat.complete ? Promise.resolve() : new Promise(r => { coat.addEventListener('load', r, { once: true }); coat.addEventListener('error', r, { once: true }); }))
+    .then(() => (coat.naturalWidth && coat.decode ? coat.decode().catch(() => {}) : 0)).then(frame).then(frame).then(frame).then(unclip);
 
-  /* where the photograph is cropped, as object-position in site.css does it (the page never jumps): the desktop frame never
-     shows the window's glass at its left edge (9.2 % of the frame) and is centred otherwise; the phone frame ends on the
-     right where the sofa's back cushions meet (89 %), but never shows the chair at its left edge (7 %). fx: the share of
-     the cropped width taken from the left (object-position's percentage) */
+  /* where the photograph is cropped, as object-position in site.css does it (the still and the video alike): the desktop
+     frame never shows the window's glass at its left edge (9.2 %) and is centred otherwise; the phone frame ends on the
+     right where the sofa's back cushions meet (89 %), but never shows the chair at its left edge (7 %) */
   function place() {
-    const tallStill = /room-p-/.test((pre && (pre.currentSrc || pre.src)) || '');
+    const tallStill = /room-p-/.test((coat && (coat.currentSrc || coat.src)) || '');
     const ap = tallStill ? 1080 / 1920 : 2400 / 1080, ac = root.offsetWidth / Math.max(1, root.offsetHeight);
     let fx = 0.5;
-    if (ac < ap) {
-      const ex = 1 - ac / ap;
-      fx = tallStill ? Math.min(1, Math.max(0.07, ex - 0.11) / ex) : Math.min(1, Math.max(0.5, 0.092 / ex));
-    }
+    if (ac < ap) { const ex = 1 - ac / ap; fx = tallStill ? Math.min(1, Math.max(0.07, ex - 0.11) / ex) : Math.min(1, Math.max(0.5, 0.092 / ex)); }
     st.fx = fx;
     return [fx, 0.5];
   }
 
-  /* the header: when the coat is on, or at once on a scroll, key or touch */
-  const EV = ['wheel', 'touchstart', 'pointerdown', 'keydown', 'scroll'];
-  const showHeader = () => {
-    if (st.shown) return; st.shown = true;
-    H.classList.remove('dv-nohdr'); H.classList.add('dv-coated');
-    EV.forEach(e => removeEventListener(e, showHeader, true));
-  };
-  if (H.classList.contains('dv-nohdr')) { EV.forEach(e => addEventListener(e, showHeader, { capture: true, passive: true })); if (scrollY > 8) showHeader(); }
-
+  /* the header; the rest of the first screen (eyebrow, lead, buttons, facts) */
+  const showHeader = () => { if (st.shown) return; st.shown = true; H.classList.remove('dv-nohdr'); H.classList.add('dv-coated'); };
+  const showRest = () => { if (st.rest) return; st.rest = true; H.classList.add('dv-rest'); };
+  /* the still: the room is on, the story below may run */
   const finish = () => {
     if (st.done) return; st.done = true;
-    hero.classList.add('is-coated');                 /* the coat picture shows, the canvas goes */
-    showHeader();
-    if (st.coated) st.coated();
+    hero.classList.add('is-coated');
     try { sessionStorage.setItem(SEEN, '1'); } catch (e) { /* private mode */ }
-    if (st.apply) setTimeout(() => { st.apply.destroy(); st.apply = null; }, 900);
+    if (st.unhook) st.unhook();                      /* the opening's scroll / key / touch listeners */
+    st.hold3d = false; if (st.kick) st.kick();
+    if (st.coated) st.coated();
   };
   story(root, hero, st, place);
-  if (!intro) {                                     /* second visit, reduced motion: the coated room at once */
-    hero.classList.add('is-coated');
-    if (st.coated) st.coated();
-    fetch(DIR + 'first.json').then(r => r.json()).then(m => { st.meta = m; place(); }).catch(() => {});
+  if (!intro) {                                     /* later visits, reduced motion: the room, the header, the text at once */
+    showHeader(); showRest(); finish();
+    fetch(DIR + 'first.json').then(r => r.json()).then(m => { st.meta = m; }).catch(() => {});
     return;
   }
 
-  /* the text is in (the buttons' entrance ends, at the latest 2.6 s): the application may start */
-  const textIn = new Promise(r => {
-    const last = hero.querySelector('.hero__ctas');
-    if (last) last.addEventListener('animationend', r, { once: true });
-    setTimeout(r, 2600);
+  /* the headline is in (its letters, 0.3 to about 1.6 s): the opening starts slightly before the last letters settle */
+  const T0 = performance.now();
+  const at = ms => new Promise(r => setTimeout(r, Math.max(0, ms - (performance.now() - T0))));
+  const timers = [];
+  const later = (fn, ms) => { timers.push(setTimeout(fn, ms)); };
+  let landed = false;
+  /* a scroll, key or touch: everything at once (the video stops where it is and dissolves into the room) */
+  const EV = ['wheel', 'touchstart', 'pointerdown', 'keydown', 'scroll'];
+  const land = () => {
+    if (landed) return; landed = true;
+    EV.forEach(e => removeEventListener(e, land, true));
+    timers.forEach(clearTimeout);
+    hero.classList.remove('is-macro');
+    hero.classList.add('is-landed');
+    showHeader(); showRest();
+    if (st.mode === 'video' && vid) { hero.classList.add('is-anim-out'); setTimeout(() => { try { vid.pause(); } catch (e) { /* gone */ } }, 400); }
+    hero.classList.add('is-still-in');
+    finish();
+  };
+  EV.forEach(e => addEventListener(e, land, { capture: true, passive: true }));
+  st.unhook = () => EV.forEach(e => removeEventListener(e, land, true));
+  if (scrollY > 8) land();
+
+  /* without the video: the room still fades in after the headline (never before it: an early error waits), then the header,
+     then the rest */
+  const toStill = (delay = 0) => {
+    if (landed || st.mode === 'still') return;
+    st.mode = 'still';
+    delay = Math.max(delay, 1300 - (performance.now() - T0));
+    hero.classList.remove('is-macro');
+    if (vid) { hero.classList.add('is-anim-out'); try { vid.pause(); } catch (e) { /* gone */ } }
+    later(() => hero.classList.add('is-still-in'), delay);
+    later(showHeader, delay + 700);
+    later(() => { showRest(); finish(); }, delay + 1500);
+  };
+
+  const canVideo = vid && H.classList.contains('dv-anim') && typeof vid.play === 'function';
+  if (!canVideo) { at(1500).then(() => toStill()); return; }
+  /* the desktop or the phone file, WebM (VP9) where it plays, else MP4 (H.264); loaded now, after the page's own files */
+  try {
+    const kind = innerWidth < innerHeight && innerWidth <= 760 ? 'p' : 'd', base = vid.getAttribute('data-base') + kind;
+    vid.poster = base + '-poster.webp';
+    vid.src = base + (vid.canPlayType('video/webm; codecs="vp9"') ? '.webm' : '.mp4');
+    vid.preload = 'auto'; vid.load();
+  } catch (e) { at(1500).then(() => toStill()); return; }
+
+  /* the video: started at 1.2 s if it can play by then, else as soon as it can, at most until 2.6 s */
+  const cue = +(vid.getAttribute('data-cue') || 3.3);
+  let started = false;
+  const ready = () => vid.readyState >= 3;
+  /* the video's own clock drives the steps: the header at the cue (the spray ends, the camera starts to pull back), the
+     rest in the last held frames, the end; read on every presented frame (requestVideoFrameCallback), on timeupdate and
+     on every page frame, so a busy page never delays a step. A stall (no progress for 1.2 s): the room still */
+  let lastT = -1, lastWall = 0;
+  const step = t => {
+    if (landed || st.mode !== 'video') return;
+    if (t >= cue && !st.shown) { showHeader(); hero.classList.remove('is-macro'); }
+    if (vid.duration && t >= vid.duration - 0.32 && !st.rest) showRest();
+    if (vid.ended || (vid.duration && t >= vid.duration - 0.04)) end();
+  };
+  const watch = () => {
+    if (landed || st.mode !== 'video') return;
+    const t = vid.currentTime, now = performance.now();
+    if (t !== lastT) { lastT = t; lastWall = now; }
+    else if (!vid.paused && now - lastWall > 1200) { toStill(); return; }      /* the network cannot keep up */
+    step(t);
+    if (st.mode === 'video') requestAnimationFrame(watch);
+  };
+  vid.addEventListener('timeupdate', () => step(vid.currentTime));
+  const onFrame = (now, meta) => { step(meta && meta.mediaTime != null ? meta.mediaTime : vid.currentTime); if (st.mode === 'video') vid.requestVideoFrameCallback(onFrame); };
+  /* the end: the still under the last frame (the same picture), the video dissolves, then the rest */
+  const end = () => {
+    if (landed || st.mode !== 'video') return;
+    st.mode = 'ended';
+    showHeader();
+    hero.classList.add('is-still-in');
+    requestAnimationFrame(() => hero.classList.add('is-anim-out'));
+    later(() => { showRest(); finish(); }, 250);
+  };
+  const start = async () => {
+    if (started || landed || st.mode) return;
+    started = true; st.mode = 'video';
+    try { await vid.play(); } catch (e) { st.mode = ''; toStill(); return; }   /* autoplay refused */
+    lastWall = performance.now();
+    hero.classList.add('is-anim-on', 'is-macro');
+    if (vid.requestVideoFrameCallback) vid.requestVideoFrameCallback(onFrame);
+    watch();
+  };
+  vid.addEventListener('ended', end, { once: true });
+  vid.addEventListener('error', () => { if (st.mode === '' || st.mode === 'video') toStill(); }, { once: true });
+  at(1200).then(() => {
+    if (landed || st.mode) return;
+    if (ready()) { start(); return; }
+    vid.addEventListener('canplay', () => { if (!st.mode && performance.now() - T0 < 2600) start(); }, { once: true });
+    at(2600).then(() => { if (!started && !landed) toStill(); });
   });
-  (async () => {
-    await frame(); await frame();                    /* WebGL only after the first paint */
-    try { st.meta = await fetch(DIR + 'first.json').then(r => r.json()); } catch (e) { st.meta = null; }
-    /* the stills the page already chose (AVIF or WebP, desktop or portrait): the same files, from the cache */
-    const srcP = pre && (pre.currentSrc || pre.src), srcC = coat && (coat.currentSrc || coat.src);
-    const v = /room-p-/.test(srcP || '') ? 'p' : 'd';
-    const m = st.meta && st.meta[v];
-    const focus = place();
-    if (!m || !cv || !srcP || !srcC || typeof createImageBitmap !== 'function') { await textIn; hero.classList.add('is-fade'); setTimeout(finish, 1400); return; }
-    st.apply = createApply(cv, {
-      meta: m, focus, capture, dur: 3.6, bands: v === 'p' ? 6 : 5, dprCap: tall() ? 1.5 : 2, when: textIn,
-      pre: srcP, coat: srcC, mask: DIR + 'room-' + v + '-mask.webp',
-      mist: [0.71, 0.64, 0.54], nogl
-    });
-    addEventListener('resize', () => { const f = place(); if (st.apply) st.apply.resize(f); }, { passive: true });
-    const ok = await st.apply.ready;
-    await textIn;
-    if (!ok) { hero.classList.add('is-fade'); setTimeout(finish, 1400); return; }
-    hero.classList.add('is-applying');               /* the canvas over the primed room (it draws the same frame first) */
-    if (capture) { window.DV3D_FIRST = { step: dt => st.apply && st.apply.step(dt), state: st }; st.apply.state.onEnd = finish; return; }
-    st.apply.play(finish);
-  })();
-  setTimeout(() => { if (!st.done && !hero.classList.contains('is-applying')) { hero.classList.add('is-fade'); setTimeout(finish, 1400); } }, 12000);
 }
 
 /* The story: scrolling through the hero's track pushes into the coated wall (the room photograph, 2D, toward the sun patch)
@@ -146,6 +204,7 @@ function story(root, hero, st, place) {
     return [ox + u * sw, oy + v * sh];
   };
   function apply(p) {
+    if (st.hold3d) return;                         /* the 3D opening is on screen: its own events drive the page */
     if (!Z.on && p > 0.002) {                      /* the drift stops where it is; the push starts from there */
       Z.on = true; addClose();
       const m = getComputedStyle(root).transform;
@@ -177,6 +236,7 @@ function story(root, hero, st, place) {
     apply(Z.p);
   }
   const kick = () => { if (!Z.raf) Z.raf = requestAnimationFrame(tick); };
+  st.kick = kick;
   addEventListener('scroll', kick, { passive: true });
   addEventListener('resize', kick, { passive: true });
   st.coated = () => (window.requestIdleCallback || (f => setTimeout(f, 1500)))(addClose, { timeout: 4000 });
