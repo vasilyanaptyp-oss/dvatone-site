@@ -46,7 +46,8 @@
       added: '{label}: додано', removed: '{label}: прибрано',
       emptyA: 'Нічого не знайдено. У цьому списку лише відтінки каталогу Dvatone: NCS, 5051 і вибрані RAL. Колекцію DV дивіться ', emptyLink: 'у каталозі',
       titleId: '№ {id}', recipeBase: 'основний', recipeTex: 'Фракція {g} · щільність {d}%', catSwitch: 'Збіги є в категорії «{name}»',
-      roomGroups: 'Тип приміщення', roomTabs: 'Приміщення'
+      roomGroups: 'Тип приміщення', roomTabs: 'Приміщення',
+      scanColour: 'зі скану', ownColour: 'власний колір'
     },
     en: {
       copiedBtn: 'Copied', copyFail: 'We could not copy automatically. Select the text and copy it by hand.',
@@ -61,7 +62,8 @@
       added: '{label}: added', removed: '{label}: removed',
       emptyA: 'Nothing found. This list holds only the Dvatone catalogue shades: NCS, 5051 and selected RAL. The DV collection is ', emptyLink: 'in the catalogue',
       titleId: '#{id}', recipeBase: 'base', recipeTex: 'Granule size {g} · density {d}%', catSwitch: 'Matches are in “{name}”',
-      roomGroups: 'Type of space', roomTabs: 'Room'
+      roomGroups: 'Type of space', roomTabs: 'Room',
+      scanColour: 'from the scan', ownColour: 'custom colour'
     }
   }[lang];
   var PREFER = { areaErr: 1, areaBig: 1 };
@@ -109,13 +111,17 @@
     var a = 500 * (f(X) - f(Y)), b = 200 * (f(Y) - f(Z)); return (chromaCache[hex] = Math.sqrt(a * a + b * b));
   }
   var catOfHex = function (hex) { var cc = chroma(hex); for (var i = 0; i < CATS.length; i++) if (CATS[i].max == null || CATS[i].max > cc) return CATS[i].id; return CATS[CATS.length - 1].id; };
-  cat.forEach(function (it) { var h = catHand[it.sys + '|' + it.code]; it.cat = h && catById[h] ? h : catOfHex(it.hex); });
-  var catOfColour = function (hex) { return byHex[hex] ? byHex[hex].cat : catOfHex(hex); };
+  var catsSorted = false;
+  function sortCats() {   // once, in a later task of the start-up (or at the first need)
+    if (catsSorted) return; catsSorted = true;
+    cat.forEach(function (it) { var h = catHand[it.sys + '|' + it.code]; it.cat = h && catById[h] ? h : catOfHex(it.hex); });
+  }
+  var catOfColour = function (hex) { sortCats(); return byHex[hex] ? byHex[hex].cat : catOfHex(hex); };
 
   /* ---------- state ---------- */
   var SHARES = [45, 25, 20, 10];
   var state = { mix: [], grain: 'S', density: 0.9, scale: 'wall', seed: 11, area: '', lock: false };
-  var ui = { sel: 0, filter: 'all', q: '', shown: 0, list: cat, cat: CATS[0].id, view: 'wall' };   // view: wall | macro | room (room is not part of the state)
+  var ui = { sel: 0, filter: 'all', q: '', shown: 0, list: cat, cat: CATS[0].id, view: 'wall', dv: '', dvMix: '' };   // view: wall | macro | room (room is not part of the state); dv: the DV composition the catalogue opened (?dv=DV 029) and its mix
 
   function normList(m) {  // integer shares that always add up to 100 (largest remainder)
     var n = m.length; if (!n) return;
@@ -182,8 +188,13 @@
     return -1;
   }
   var idMark = function () { return String(tx('titleId')).split('{id}')[0].trim(); };   // "№" / "#"
-  var titleText = function (id, pk) { return pk > -1 ? G.presets[pk].name : fmt(tx('titleId'), { id: id }); };
-  var titleHTML = function (id, pk) { return pk > -1 ? esc(G.presets[pk].name) : '<span class="phead__no">' + esc(idMark()) + '</span>' + id; };
+  /* a DV composition of the catalogue (catalogue.html: «Open in the generator», ?mix=…&dv=DV 029) keeps its code as the title while
+     its mix is unchanged; DV.gen.dv names it (the client's names only, nothing invented) */
+  var mixSig = function () { return state.mix.map(function (c) { return c.hex + ':' + c.share; }).join(','); };
+  var dvShown = function () { return !!ui.dv && ui.dvMix === mixSig(); };
+  var dvName = function () { var n = (G.dv || DV.dv || {})[ui.dv]; return n ? String(n) : ''; };
+  var titleText = function (id, pk) { return dvShown() ? ui.dv + (dvName() ? ' ' + dvName() : '') : pk > -1 ? G.presets[pk].name : fmt(tx('titleId'), { id: id }); };
+  var titleHTML = function (id, pk) { return dvShown() ? esc(ui.dv) : pk > -1 ? esc(G.presets[pk].name) : '<span class="phead__no">' + esc(idMark()) + '</span>' + id; };
   var plural = function (n) {
     if (lang === 'en') return n === 1 ? T.shade1 : T.shade5;
     var a = n % 10, b = n % 100; return (a === 1 && b !== 11) ? T.shade1 : (a >= 2 && a <= 4 && (b < 12 || b > 14)) ? T.shade2 : T.shade5;
@@ -208,16 +219,35 @@
     clearTimeout(commitT); commitT = setTimeout(function () { emit('dvatone:commit', { state: copyState(), cause: cause }); roomUpdate(); }, 190);
   }
 
-  /* ---------- preview engine (default; replaceable via registerEngine) ---------- */
+  /* ---------- preview engine (default; replaceable via registerEngine) ----------
+     Wave 6 (07.10): the default engine paints with the fleck structure of a real scan (assets/js/dv-coat.js, the rank map the room
+     view uses): the shares are the areas, the flecks have the size and grouping of the material, matte, no bright specks. While
+     that structure loads, the canvas shows the composition's average colour (coat.interim) and is painted again when it is
+     there. The procedural granules below are only the last resort, for a page without dv-coat.js. */
   var mulberry = function (a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
   var shade = function (c, k) { return 'rgb(' + c.map(function (v) { return clamp(Math.round(v * k), 0, 255); }).join(',') + ')'; };
   var GR = { S: 1, M: 1.8, XL: 3.2 };   // fraction multipliers: the product line is very fine, so S is the default
+  var coatWait = false;
+  /* Performance (07.10): a picture of the default composition rendered with this very engine ([data-dv-poster], AVIF / WebP)
+     holds the first paint, and the engine with its fleck map starts at idle (the map is decoded in a worker, dv-coat.js). The
+     picture goes as soon as the canvas shows the live engine or any other composition. */
+  var poster = $('[data-dv-poster]'), posterSig = '';
+  var sigOf = function (st) { return st.mix.map(function (c) { return c.hex + ':' + c.share; }).join(',') + '|' + st.grain + '|' + Math.round(st.density * 100) + '|' + st.scale + '|' + st.seed; };
+  function dropPoster() { if (!poster) return; var p0 = poster; poster = null; p0.classList.add('is-gone'); setTimeout(function () { if (p0.parentNode) p0.parentNode.removeChild(p0); }, 450); }
   var defaultEngine = {
-    label: 'fine granule preview',
+    label: 'scan fleck structure',
     render: function (canvas, st, opts) {
       opts = opts || {};
+      var coat = NS.coat;
+      if (coat) {
+        if (poster && !coat.ready() && sigOf(st) === posterSig) return;   // the picture shows exactly this already
+        var done = coat.render(canvas, st, { draft: opts.draft, onReady: function () { coatWait = false; paint(); } });
+        dropPoster();
+        if (done) return;
+        coatWait = true; coat.interim(canvas, st); return;
+      }
       var ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height, k = W / 1280;   // granule sizes scale with the canvas: the picture is the same at any backing size
-      var cols = st.mix.map(function (c) { var r = rgb(c.hex); return [shade(r, .9), shade(r, 1), shade(r, 1.08)]; });
+      var cols = st.mix.map(function (c) { var r = rgb(c.hex); return [shade(r, .96), shade(r, 1), shade(r, 1.02)]; });   // matte: no brighter speck than the colour itself (wave 6)
       var cum = [], acc = 0; st.mix.forEach(function (c) { acc += c.share; cum.push(acc); });
       var macro = st.scale === 'macro', gm = (GR[st.grain] || 1) * (macro ? 2.5 : 1) * (opts.draft ? 1.6 : 1);   // draft (slider drag): larger grains, so 2.5x fewer of them cover the same area
       var s0 = 2.2 * gm * k, s1 = 5.2 * gm * k;
@@ -289,7 +319,8 @@
      (lock on the base, "make it the base" on an accent, remove) and the thin slider under them */
   function rowHTML(c, i) {
     var lab = labelOf(c.hex), base = i === 0, mx = 100 - MINSH * (state.mix.length - 1);
-    var role = base ? T.base + ' · ' + (state.lock && T.locked ? T.locked : '#' + c.hex) : T.accent + ' · #' + c.hex;
+    var own = !byHex[c.hex] ? (ui.dv ? tx('scanColour') : tx('ownColour')) : '#' + c.hex;   // a colour that is not a catalogue shade: say where it comes from, not its hex twice
+    var role = base ? T.base + ' · ' + (state.lock && T.locked ? T.locked : own) : T.accent + ' · ' + own;
     var act = base
       ? '<button type="button" class="icob" data-act="lock" aria-pressed="' + !!state.lock + '" aria-label="' + esc(tx('lockBase') + ': ' + lab) + '" title="' + esc(state.lock ? tx('unlockBase') : tx('lockBase')) + '">' + (state.lock ? ico.lock : ico.unlock) + '</button>'
       : '<button type="button" class="icob" data-act="base" aria-label="' + esc(T.makeBase + ': ' + lab) + '" title="' + esc(T.makeBase) + '">' + ico.pin + '</button>';
@@ -338,7 +369,8 @@
     var id = compId(), pk = presetIndex(), d = Math.round(state.density * 100);
     $$('[data-dv-id]').forEach(function (e) { e.textContent = id; });
     $$('[data-dv-title]').forEach(function (e) { e.innerHTML = titleHTML(id, pk); });
-    $$('[data-dv-sub]').forEach(function (e) { e.textContent = fmt(T.previewSub, { n: state.mix.length, shades: plural(state.mix.length), fraction: state.grain, density: d }); });
+    var dvn = dvShown() ? dvName() : '';
+    $$('[data-dv-sub]').forEach(function (e) { e.textContent = (dvn ? dvn + ' · ' : '') + fmt(T.previewSub, { n: state.mix.length, shades: plural(state.mix.length), fraction: state.grain, density: d }); });
     $$('[data-dv-grain]').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-dv-grain') === state.grain ? 'true' : 'false'); });
     $$('[data-dv-view]').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-dv-view') === ui.view ? 'true' : 'false'); });
     $$('[data-dv-density]').forEach(function (r) { r.value = d; r.style.setProperty('--v', ((d - 40) / 60 * 100) + '%'); r.setAttribute('aria-valuetext', d + ' %'); });
@@ -378,6 +410,7 @@
   /* auto: a new search or standard may move to another category: if the pressed one has no match while another has, the first
      category with matches is pressed and the live region says so (a pressed category is never changed behind a hand-made choice) */
   function applySearch(auto) {
+    sortCats();
     var nq = normQ(ui.q), counts = {}, first = null;
     CATS.forEach(function (c) { counts[c.id] = 0; });
     var base = cat.filter(function (it) { return (ui.filter === 'all' || SYS[it.sys].toLowerCase() === ui.filter) && (!nq || it.key.indexOf(nq) > -1); });
@@ -809,6 +842,7 @@
     if (lc) { copy(shareUrl(), tx('linkCopied'), lc); return; }
     if (t.closest('[data-dv-save-png]')) {
       var cv = canvases[0]; if (!cv || !cv.toBlob) return;
+      if (NS.coat && !NS.coat.ready()) { var sb = t.closest('[data-dv-save-png]'); NS.coat.load().then(function () { texStale = true; sb.click(); }); return; }   // the engine starts first
       if (texStale || !painted) { drawOne(cv, false); texStale = false; painted = true; }   // the hidden canvas of the room view is brought up to date first
       cv.toBlob(function (bl) { if (!bl) return; var u = URL.createObjectURL(bl), a2 = document.createElement('a'); a2.href = u; a2.download = 'dvatone-' + compId() + '.png'; document.body.appendChild(a2); a2.click(); a2.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 4000); });
       return;
@@ -844,7 +878,7 @@
   /* ---------- share link ---------- */
   function shareUrl() {
     return location.origin.replace('null', '') + location.pathname + '?mix=' + state.mix.map(function (c) { return c.hex + ':' + c.share; }).join(',') + '&g=' + state.grain + '&d=' + Math.round(state.density * 100) + '&s=' + state.scale + '&seed=' + state.seed +
-      (state.area ? '&a=' + encodeURIComponent(state.area) : '') + (ui.view === 'room' ? '&v=room&room=' + encodeURIComponent(room.name) : '');
+      (state.area ? '&a=' + encodeURIComponent(state.area) : '') + (ui.view === 'room' ? '&v=room&room=' + encodeURIComponent(room.name) : '') + (dvShown() ? '&dv=' + encodeURIComponent(ui.dv) : '');
   }
   function setDefault() {
     var p = G.presets[0]; state.lock = false; setMix(p.cols); state.grain = 'S'; state.density = 0.9; state.scale = 'wall'; state.seed = 11;
@@ -860,6 +894,9 @@
         seen[hh] = 1; hx.push(hh); sh.push(v);
       });
       if (hx.length >= MIN) { var t = sh.reduce(function (a, b) { return a + b; }, 0); setMix(hx, sh.map(function (v) { return v / t * 100; })); ok = true; }
+      var dq = /[?&]dv=([^&]+)/.exec(s), dc = '';   // a DV composition opened from the catalogue: its code names it while the mix is unchanged
+      try { dc = dq ? decodeURIComponent(dq[1].replace(/\+/g, ' ')).trim().toUpperCase().replace(/^DV[\s_-]*0*(\d{1,3})$/, function (_, n) { return 'DV ' + ('00' + n).slice(-3); }) : ''; } catch (e) {}
+      if (ok && /^DV \d{3}$/.test(dc)) { ui.dv = dc; ui.dvMix = mixSig(); }
     }
     if (!ok && (m = /[?&]add=([^&]+)/.exec(s))) {   // picks handed over by the catalogue page
       var hx2 = [];
@@ -926,13 +963,19 @@
     pvQueue();
   }
 
-  /* ---------- go ---------- */
+  /* ---------- go: the first view in this task, the catalogue shades and the rest in later ones (scheduler.yield or a timeout), so a
+     slow phone never sees one long start-up task ---------- */
+  var later = function (f) { if (window.scheduler && typeof window.scheduler.yield === 'function') window.scheduler.yield().then(f); else setTimeout(f, 0); };
   var fromQuery = fromUrl();
   if (!fromQuery) setMix(G.presets[0].cols);
+  if (poster) { if (fromQuery || state.scale !== 'wall' || ui.view !== 'wall') dropPoster(); else posterSig = sigOf(state); }
   if (areaIn) areaIn.value = state.area;
-  ui.cat = state.mix.length ? catOfColour(state.mix[0].hex) : CATS[0].id;   // the category of the base colour is pressed first
   sizeCanvases();
-  applySearch(false); renderAll(); runArea();
+  renderAll();
+  later(function () {
+  ui.cat = state.mix.length ? catOfColour(state.mix[0].hex) : CATS[0].id;   // the category of the base colour is pressed first
+  applySearch(false); runArea();
+  later(function () {
   if (window.ResizeObserver) {   // the canvas follows its frame (a debounced redraw after the size settles)
     var rsT = 0, frameEl = canvases[0] && (canvases[0].closest('.view__frame') || canvases[0].parentNode);
     if (frameEl) new ResizeObserver(function () { clearTimeout(rsT); rsT = setTimeout(function () { if (ui.view === 'room') { texStale = true; return; } if (sizeCanvases()) paint(); }, 150); }).observe(frameEl);
@@ -949,5 +992,10 @@
     }
   }
   if (ui.view !== 'wall') setView(ui.view);
-  if (mq('(pointer:coarse)')) paint(true);   // phones: a quick coarse first frame, the full render follows 220 ms later
+  if (poster && NS.coat) {   // the live engine at idle; it takes over from the picture without a visible change
+    var startCoat = function () { (window.requestIdleCallback || function (f) { return setTimeout(f, 400); })(function () { NS.coat.load().then(function () { paint(mq('(pointer:coarse)')); }); }, { timeout: 3000 }); };
+    if (document.readyState === 'complete') startCoat(); else window.addEventListener('load', startCoat);
+  } else if (mq('(pointer:coarse)')) paint(true);   // phones: a quick coarse first frame, the full render follows 220 ms later
+  });
+  });
 })();

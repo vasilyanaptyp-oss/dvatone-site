@@ -12,7 +12,7 @@
    coat(uv) = the generator's granule albedo (core.js bakeGranules: exact colours and shares), laid out without
    repetition or seams (tiling and blending: a triangle grid of random offsets into the seamless tile, blended with a
    variance-preserving operator) and filtered by its on-screen size (mip-mapped, slightly biased), so at room
-   distance it averages into a fine matte mineral surface and never sparkles or crawls.
+   distance it averages into a fine matte surface and never sparkles or crawls.
    The wall's light is stored with real precision: low-frequency log luminance in 16 bits (hi and lo bytes: the GPU's
    bilinear filtering is linear in each, so the 16 bits survive filtering) plus chroma at a quarter resolution in one
    lossless image (cubic B-spline reconstruction), times a full-resolution 8-bit detail ratio around 1.0 (shadow
@@ -23,7 +23,7 @@
      -> { setColors, setState, setRoom, setTexture, destroy, stats, renderFrame, start, ready, room }   (DVInterior2 API)
    photoFrame(host, { view: 'hero-end', colors, grain, drift: false })   the hero story's end frame, same controller
    photoCamera(view, aspect) -> { pos, look, vfov, shift, crop }        camera that the frame shows at that aspect */
-import { createStage, createBaker, bakeGranules, normColors, clamp, crossfade } from './core.js';
+import { createStage, createBaker, bakeGranules, normColors, clamp, crossfade, loadThree } from './core.js';
 
 const ASSET = new URL('./interior2/photo/', import.meta.url).href;
 const POSTER = new URL('./interior2/', import.meta.url).href;
@@ -52,12 +52,15 @@ void main() {
 const structures = new Map();
 function loadStructure(T, id) {
   if (!structures.has(id)) {
+    const setup = t => {
+      t.colorSpace = T.NoColorSpace; t.minFilter = t.magFilter = T.NearestFilter; t.generateMipmaps = false;
+      t.wrapS = t.wrapT = T.RepeatWrapping; t.needsUpdate = true; return t;
+    };
     const p = Promise.all([
       fetch(COAT + id + '.json').then(r => { if (!r.ok) throw new Error('coat ' + id); return r.json(); }),
-      new Promise((res, rej) => new T.TextureLoader().load(COAT + id + '.webp', t => {
-        t.colorSpace = T.NoColorSpace; t.minFilter = t.magFilter = T.NearestFilter; t.generateMipmaps = false;
-        t.wrapS = t.wrapT = T.RepeatWrapping; t.needsUpdate = true; res(t);
-      }, undefined, rej))
+      /* shared by every stage on the page (each uploads it to its own context): its bitmap is kept, never closed */
+      takeBitmap(COAT + id + '.webp').then(bm => bm ? setup(bitmapTexture(T, bm)) :
+        new Promise((res, rej) => new T.TextureLoader().load(COAT + id + '.webp', t => res(setup(t)), undefined, rej)))
     ]).then(([meta, tex]) => ({ meta, tex }));
     p.catch(() => structures.delete(id));
     structures.set(id, p);
@@ -90,19 +93,27 @@ export const PHOTO_GROUPS = [
 ];
 export const PHOTO_ROOMS = [
   { id: 'living', group: 'residential', file: 'living', ready: true, name: { uk: 'Вітальня', en: 'Living room' },
-    label: { uk: 'Вітальня, стіна з мультиколоровим покриттям Dvatone у денному світлі', en: 'Living room with a Dvatone multicolour coating on the feature wall in daylight' } },
+    label: { uk: 'Вітальня, стіна з мультикольоровим покриттям Dvatone у денному світлі', en: 'Living room with a Dvatone multicolour coating on the feature wall in daylight' } },
   { id: 'bedroom', group: 'residential', file: 'bedroom', ready: true, name: { uk: 'Спальня', en: 'Bedroom' },
     label: { uk: 'Спальня, стіна за ліжком з покриттям Dvatone', en: 'Bedroom with a Dvatone coating on the wall behind the bed' } },
-  { id: 'kitchen', group: 'residential', file: 'kitchen', ready: false, name: { uk: 'Кухня', en: 'Kitchen' },
+  { id: 'kitchen', group: 'residential', file: 'kitchen', ready: true, name: { uk: 'Кухня', en: 'Kitchen' },
     label: { uk: 'Кухня, стіна з покриттям Dvatone за робочою зоною', en: 'Kitchen with a Dvatone coating on the wall behind the counter' } },
-  { id: 'lobby', group: 'public', file: 'lobby', ready: false, name: { uk: 'Хол / лобі', en: 'Lobby' },
+  { id: 'lobby', group: 'public', file: 'lobby', ready: true, name: { uk: 'Хол / лобі', en: 'Lobby' },
     label: { uk: 'Хол, стіна з покриттям Dvatone за стійкою рецепції', en: 'Lobby with a Dvatone coating on the wall behind the reception desk' } },
-  { id: 'office', group: 'public', file: 'office', ready: false, name: { uk: 'Офіс', en: 'Office' },
+  { id: 'office', group: 'public', file: 'office', ready: true, name: { uk: 'Офіс', en: 'Office' },
     label: { uk: 'Кабінет, стіна з покриттям Dvatone', en: 'Office with a Dvatone coating on the feature wall' } },
-  { id: 'meeting', group: 'public', file: 'meeting', ready: false, name: { uk: 'Переговорна', en: 'Meeting room' },
+  { id: 'meeting', group: 'public', file: 'meeting', ready: true, name: { uk: 'Переговорна', en: 'Meeting room' },
     label: { uk: 'Переговорна кімната, торцева стіна з покриттям Dvatone', en: 'Meeting room with a Dvatone coating on the end wall' } },
   { id: 'corridor', group: 'public', file: 'hallway', ready: true, name: { uk: 'Коридор', en: 'Corridor' },
-    label: { uk: 'Коридор, стіна з покриттям Dvatone', en: 'Corridor with a Dvatone coating' } }
+    label: { uk: 'Коридор, стіна з покриттям Dvatone', en: 'Corridor with a Dvatone coating' } },
+  { id: 'staircase', group: 'public', file: 'staircase', ready: true, name: { uk: 'Сходи', en: 'Staircase' },
+    label: { uk: 'Сходи, стіна з покриттям Dvatone вздовж маршу', en: 'Staircase with a Dvatone coating on the wall along the flight' } },
+  { id: 'playroom', group: 'public', file: 'playroom', ready: true, name: { uk: 'Ігрова в садочку', en: 'Kindergarten playroom' },
+    label: { uk: 'Ігрова кімната дитячого садка, стіна з покриттям Dvatone', en: 'Kindergarten playroom with a Dvatone coating on the feature wall' } },
+  { id: 'classroom', group: 'public', file: 'classroom', ready: true, name: { uk: 'Клас', en: 'Classroom' },
+    label: { uk: 'Шкільний клас, задня стіна з покриттям Dvatone', en: 'Classroom with a Dvatone coating on the back wall' } },
+  { id: 'foyer', group: 'public', file: 'foyer', ready: true, name: { uk: 'Фоє школи', en: 'School foyer' },
+    label: { uk: 'Фоє школи, стіна з покриттям Dvatone', en: 'School foyer with a Dvatone coating on the feature wall' } }
 ];
 const ALIAS = { hallway: 'corridor' };
 const roomDef = id => PHOTO_ROOMS.find(r => r.id === (ALIAS[id] || id));
@@ -122,6 +133,21 @@ const AVIF = new Promise(res => {
   const i = new Image(); i.onload = () => res(i.width > 0); i.onerror = () => res(false);
   i.src = 'data:image/avif;base64,AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZk1BMUIAAADybWV0YQAAAAAAAAAoaGRscgAAAAAAAAAAcGljdAAAAAAAAAAAAAAAAGxpYmF2aWYAAAAADnBpdG0AAAAAAAEAAAAeaWxvYwAAAABEAAABAAEAAAABAAABGgAAAB0AAAAoaWluZgAAAAAAAQAAABppbmZlAgAAAAABAABhdjAxQ29sb3IAAAAAamlwcnAAAABLaXBjbwAAABRpc3BlAAAAAAAAAAIAAAACAAAAEHBpeGkAAAAAAwgICAAAAAxhdjFDgQ0MAAAAABNjb2xybmNseAACAAIAAYAAAAAXaXBtYQAAAAAAAAABAAEEAQKDBAAAACVtZGF0EgAKCBgANogQEAwgMg8f8D///8WfhwB8+ErK42A=';
 });
+/* images decoded off the main thread (07.10 night, the performance pass): fetch + createImageBitmap, flipped as three.js
+   flips images and without colour conversion (the maps are data, the photograph is sRGB decoded on the GPU), so the
+   upload needs no decode or conversion. Where createImageBitmap or its options are missing: null (the TextureLoader). */
+const BITMAPS = new Map();
+function bitmapOf(url) {
+  if (!BITMAPS.has(url)) {
+    BITMAPS.set(url, typeof createImageBitmap !== 'function' ? Promise.resolve(null) :
+      fetch(url).then(r => { if (!r.ok) throw new Error(r.status + ' ' + url); return r.blob(); })
+        .then(b => createImageBitmap(b, { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' }))
+        .catch(() => null));
+  }
+  return BITMAPS.get(url);
+}
+function takeBitmap(url) { const p = bitmapOf(url); BITMAPS.delete(url); return p; }
+function bitmapTexture(T, bm) { const t = new T.Texture(bm); t.flipY = false; return t; }
 const metaCache = new Map();
 function viewMeta(id) {
   if (!metaCache.has(id)) {
@@ -361,25 +387,45 @@ export function mountPhoto(el, opts = {}) {
     if (/[?&]debug(&|$)/.test(location.search)) G.photo = { T, R, U, get view() { return view; }, stage };
   }
   function loadTex(url, srgb, mip) {
-    return new Promise((res, rej) => new T.TextureLoader().load(url, t => {
+    const setup = t => {
       t.colorSpace = srgb ? T.SRGBColorSpace : T.NoColorSpace;
       t.wrapS = t.wrapT = T.ClampToEdgeWrapping;
       t.generateMipmaps = !!mip; t.minFilter = mip ? T.LinearMipmapLinearFilter : T.LinearFilter; t.magFilter = T.LinearFilter;
-      t.anisotropy = 1; t.needsUpdate = true;
+      t.anisotropy = 1; t.needsUpdate = true; return t;
+    };
+    return takeBitmap(url).then(bm => bm ? setup(bitmapTexture(T, bm)) : new Promise((res, rej) => new T.TextureLoader().load(url, t => {
+      setup(t);
       const im = t.image;                                    /* decode now, off the main thread, not at the upload */
       if (im && im.decode) im.decode().then(() => res(t), () => res(t)); else res(t);
-    }, undefined, rej));
+    }, undefined, rej)));
   }
-  /* a view's maps go to the GPU one per animation frame before it is shown (all at once was a 300 ms long task) */
+  /* a view's maps go to the GPU one per animation frame before it is shown (all at once was a 300 ms long task); a
+     decoded bitmap is freed once its texture is on the GPU */
   const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
   async function upload(v) {
     if (v.uploaded) return;
     for (const t of [v.light, v.bleed, v.mask, v.detail, v.base]) {
       await nextFrame();
       if (stage.destroyed) return;
-      if (R.initTexture) R.initTexture(t);
+      if (R.initTexture) {
+        R.initTexture(t);
+        if (typeof ImageBitmap !== 'undefined' && t.image instanceof ImageBitmap) t.image.close();
+      }
     }
     v.uploaded = true;
+  }
+  /* before the stage exists: three.js parsed and the first view's maps, the fleck structure and the dither decoded, all
+     off the main thread, so the stage's own start (300 px before the section) has only the uploads left */
+  function prewarm() {
+    loadThree().catch(() => {});
+    if (typeof createImageBitmap !== 'function') return;
+    const id = viewId(S.room, portrait);
+    viewMeta(id).then(async meta => {
+      const ext = meta.avif && await AVIF ? '.avif' : '.webp';
+      for (const u of [ASSET + id + ext, ASSET + id + '-l.webp', ASSET + id + '-d.webp', ASSET + id + '-m.webp', ASSET + id + '-b.webp']) bitmapOf(u);
+    }).catch(() => {});
+    if (S.structure && !S.textureUrl && !structures.has(S.structure)) bitmapOf(COAT + S.structure + '.webp');
+    bitmapOf(ASSET + 'bluenoise64.webp');
   }
   function loadView(id) {
     if (views.has(id)) return views.get(id);
@@ -596,7 +642,19 @@ export function mountPhoto(el, opts = {}) {
     destroy() { if (stage) stage.destroy(); }
   };
   el.dv3d = ctl;
-  start();
+  /* start-up (07.10 night, the performance pass): at idle once the section is about two screens away, with the decoding
+     done ahead (prewarm), instead of at mount; in view or near it at mount, and the hero's end frame: at once, as before */
+  const r0 = el.getBoundingClientRect(), vh = window.innerHeight || 800;
+  if (hero || typeof IntersectionObserver !== 'function' || (r0.bottom > -2 * vh && r0.top < 3 * vh)) { prewarm(); start(); }
+  else {
+    const near = new IntersectionObserver(es => {
+      if (!es.some(e => e.isIntersecting)) return;
+      near.disconnect();
+      const go = () => { if (!stage) { prewarm(); start(); } };
+      if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 1200 }); else setTimeout(go, 50);
+    }, { rootMargin: '200% 0px' });
+    near.observe(el);
+  }
   return ctl;
 
   function dispose() {

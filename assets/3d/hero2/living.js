@@ -26,8 +26,9 @@ const TEX = new URL('./tex/', BASE).href;
 export const LIVING = {
   M: [-1.15, 1.18, -2.8],
   wide: { pos: [-0.4, 1.15, 2.5], look: [-0.4, 1.15, -2.8], hfov: 60, vmin: 36, shift: 0 },
-  tall: { pos: [-0.6, 1.35, 1.6], look: [-1.7, 1.3, -2.8], fov: 54, shift: -0.02 },
-  gain: 3.4, fill: 3.6, sun: 1.2      /* matched to the photo frame at the same camera: wall within dE 1 to 2, sun patch 5 L darker */
+  tall: { pos: [0.0, 1.22, 2.65], look: [-0.6, 1.22, -2.8], fov: 44, shift: 0 },     /* 07.10: the sofa, the table and the sun patch, no chair up close */
+  gain: 3.4, fill: 3.6, sun: 1.2,     /* matched to the photo frame at the same camera: wall within dE 1 to 2, sun patch 5 L darker */
+  wall: 0.88                          /* the walls against the photo frame as encoded since 06.10 evening (12 % darker than at the first match; furniture unchanged) */
 };
 
 /* ---------- three.js addons without an import map (same URLs as interior2.js: one download for the page) ---------- */
@@ -74,7 +75,7 @@ function gltfLoader() {
    Colour textures are sRGB; normal maps carry the roughness in B; metal maps their metalness in R (interior2 format). */
 const MAT = {
   floor_herringbone: { c: 'o:herringbone_parquet', rough: 0.95, spec: 0.5, sunB: 2.2 },     /* the photograph's glossy oak catches more sun */
-  wall_paint: { color: [0.84, 0.79, 0.72], rough: 0.92 },                                      /* warm plaster, as in the photograph */
+  wall_paint: { color: [0.74, 0.695, 0.634], rough: 0.92 },                                    /* warm plaster, as in the photograph (current encode) */
   ceiling_paint: { color: [0.83, 0.825, 0.81], rough: 0.95 },
   stone_sill: { color: [0.80, 0.78, 0.74], rough: 0.8 },
   shadow_gap: { color: [0.02, 0.02, 0.02], rough: 0.8 },
@@ -154,7 +155,7 @@ ${TONE_PHOTO_GLSL}
 /* the coated wall in the furnished room: the room's lightmap and sun visibility at the wall's own position */
 export const LIVING_WALL_GLSL = `
 uniform sampler2D uLmMap; uniform sampler2D uSunMap; uniform vec3 uLmU; uniform vec3 uLmV; uniform float uLmScale;
-uniform vec2 uLmSize; uniform vec2 uSunSize; uniform vec3 uSunDirR; uniform vec3 uSunColR; uniform float uRoomGain;
+uniform vec2 uLmSize; uniform vec2 uSunSize; uniform vec3 uSunDirR; uniform vec3 uSunColR; uniform float uRoomGain; uniform float uWallK;
 vec4 dvCubic(sampler2D t, vec2 uv, vec2 size){
   vec2 st = uv * size - 0.5; vec2 i = floor(st); vec2 f = st - i;
   vec2 f2 = f * f, f3 = f2 * f;
@@ -204,7 +205,7 @@ export function createLiving(T, R, opts = {}) {
     uLmU: { value: new T.Vector3() }, uLmV: { value: new T.Vector3() },
     uSunDirR: { value: new T.Vector3(-0.55, 0.46, 0.7).normalize() }, uSunColR: { value: new T.Color(5, 4.8, 4.45) },
     uProbePos: { value: new T.Vector3() }, uProbeMin: { value: new T.Vector3() }, uProbeMax: { value: new T.Vector3() }, uSpecRef: { value: 0.12 },
-    uRoomGain: { value: LIVING.gain }, uFill: { value: LIVING.fill }, uSunK: { value: LIVING.sun },
+    uRoomGain: { value: LIVING.gain }, uFill: { value: LIVING.fill }, uSunK: { value: LIVING.sun }, uWallK: { value: LIVING.wall },
     uRFade: { value: 0 }, uFog: fog, uTime: time, uRoomO: { value: group.position.clone() }, uVScale: { value: 0.44 }
   };
   const sun = new T.DirectionalLight(0xffffff, 5);

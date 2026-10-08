@@ -210,6 +210,15 @@ em{font-style:normal}
 
 .mnav{position:fixed;inset:0;z-index:var(--z-mnav);background:var(--ink);padding:calc(var(--hdr) + 24px) var(--pad) 28px;display:flex;flex-direction:column;justify-content:space-between;overflow-y:auto;opacity:0;visibility:hidden;transition:opacity .5s var(--ease),visibility .5s}
 .mnav.is-open{opacity:1;visibility:visible}
+/* the closed menu is not laid out (its big type cost every page load a text layout); it renders when opened, and on
+   close its content stays until the fade has ended (allow-discrete) */
+.mnav:not(.is-open){content-visibility:hidden}
+.mnav{transition:opacity .5s var(--ease),visibility .5s,content-visibility .5s allow-discrete}
+/* sections below the first one and the footer are laid out (and their fonts and lazy pictures fetched) only when they come
+   near the screen, so the first layout covers the first screens, not the whole page. site.js renders a section with
+   pictures 1.5 screens ahead, so the pictures keep their head start. Sections with video, canvas, 3D, a before/after
+   slider, the scroll zoom, a dialog or the tray render as before. */
+main>section:not(:first-child):not(:has(video,canvas,iframe,dialog,[data-dv3d],[data-dv3d-interior],[data-sweep],[data-tzm],.tray)),.ftr{content-visibility:auto;contain-intrinsic-size:auto 900px}
 .mnav__links{display:flex;flex-direction:column}
 .mnav__links a{display:flex;align-items:baseline;gap:18px;padding:13px 0;border-bottom:1px solid var(--line-d);font-size:clamp(26px,7.4vw,38px);font-weight:300;letter-spacing:-.03em;transform:translateY(14px);opacity:0;transition:transform .7s var(--ease),opacity .7s var(--ease)}
 .mnav__links a i{font-style:normal;font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--copper);font-variant-numeric:tabular-nums}
@@ -280,6 +289,9 @@ em{font-style:normal}
 .dv-js [data-reveal]{opacity:0;transform:translateY(26px);transition:opacity 1s var(--ease),transform 1.1s var(--ease);transition-delay:var(--d,0s)}
 .dv-js [data-reveal].is-in{opacity:1;transform:none}
 .js-off [data-reveal]{opacity:1;transform:none}
+/* the first section is the first screen: its blocks are there from the first paint (no fade waiting for site.js or a measuring
+   script); later blocks that start inside the first screen are marked by w6.FOLD_JS (IntersectionObserver, no forced layout) */
+.dv-js main>section:first-child:not(.hero) [data-reveal]{opacity:1;transform:none;transition:none}
 
 /* ---------------------------------------------------------
    11. LIVE SKY (page background, never behind a colour composition)
@@ -287,7 +299,7 @@ em{font-style:normal}
 .sky{position:fixed;left:0;right:0;top:-10vh;bottom:-10vh;z-index:var(--z-sky);pointer-events:none;overflow:hidden;contain:strict;background:var(--sky-mid)}
 .sky__base{position:absolute;inset:0;background:linear-gradient(180deg,var(--sky-top) 0%,var(--sky-mid) 52%,var(--sky-bot) 100%)}
 .sky__veil{position:absolute;inset:0;background:radial-gradient(90% 60% at 12% 100%,var(--sky-tint),rgba(0,0,0,0) 72%);animation:skyBreath 27s ease-in-out infinite alternate}
-.sky__glow{position:absolute;left:var(--sky-gx);top:var(--sky-gy);width:0;height:0}
+.sky__glow{position:absolute;inset:0;transform:translate(var(--sky-gx),var(--sky-gy))}   /* moved by transform, not left/top: a time-of-day update is never a layout shift (CLS) */
 .sky__glow i{position:absolute;left:-62vmax;top:-62vmax;width:124vmax;height:124vmax;border-radius:50%;background:radial-gradient(closest-side,var(--sky-glow),rgba(255,255,255,0));animation:skyDrift 46s ease-in-out infinite alternate;will-change:transform}
 @keyframes skyDrift{from{transform:translate3d(-2.4vw,1.6vh,0) scale(1)}to{transform:translate3d(2.4vw,-1.6vh,0) scale(1.08)}}
 @keyframes skyBreath{from{opacity:.5}to{opacity:1}}
@@ -1417,6 +1429,11 @@ input[type=search]::-webkit-search-cancel-button:hover{opacity:1}
       -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent 100%);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent 100%);animation:none}
   }
 }
+/* reduced motion: the same static end fade, no scroll-driven animation (it restyled the row on every scroll frame) */
+@media (max-width:760px) and (prefers-reduced-motion:reduce){
+  .rooms__chips,.rooms__ui .tabs,.gc__tabs .tabs,.ctool__f,.gfilters,.gpre__l,.gen__presets,#interiors .rsel__r{
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent 100%);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent 100%);animation:none}
+}
 
 /* ---- W2-C01 / W2-C02: forced colours ---- */
 @media (forced-colors:active){
@@ -1719,25 +1736,90 @@ button.mixrow__ico.is-on:hover{color:var(--copper-hi)}
 /* wave 5 (07.10): the end-of-story link is light text on a copper rule; copper text over the bright floor and chair was about 2:1 */
 .hero-track .hero__cap a{color:var(--td);border-bottom-color:var(--copper-hi);transition:border-color var(--dur-1)}
 @media (hover:hover){.hero-track .hero__cap a:hover{border-bottom-color:var(--td)}}
-/* -- hero2 first screen (07.10, Artur: "сначала на тёмном фоне появляются все эти буквы, без панели сверху"). On the first
-   visit of a session, with JS on and motion allowed, <html> has dv-intro and dv-nohdr from the head script (build_home.py):
-   the page opens on the dark hero without the header; the headline comes in letter by letter (about 1.4 s), then the
-   eyebrow, the lead and the buttons; then the 3D spray coats the wall behind the text (hero2.js waits for data-intro-hold
-   on .hero__gl, which the page removes when the buttons are in). The facts and the DV 033 tag come with the coated wall
-   (dv-coated), the header slides in when the spray ends or at the first scroll, key or touch. With JS the page's own
-   photo is never shown: where 3D cannot run (no WebGL, low tier, failed start) the 3D module shows its own poster;
-   .hero.is-still brings the photo back only if the module never started. -- */
-.dv-js .hero__img{display:none}
-.dv-js .hero.is-still .hero__img{display:block}
+/* -- hero2 first screen (07.10 evening, Artur: black screen, the letters one by one, no header; then the coating applied on
+   the wall of the photoreal room; the header fades in; then the story). On the first visit of a session, with JS on and
+   motion allowed, <html> has dv-intro and dv-nohdr from the head script (build_home.py). .hero__room holds the room
+   photograph twice (the primed wall, the coat) and the canvas that applies the coat between them (assets/3d/hero2/first.js:
+   .is-applying while it runs, .is-coated at the end, .is-fade without WebGL). Without the opening (second visit, reduced
+   motion, no JS) the coated room shows at once. The headline sits over the calm wall on the right on desktops, with only a
+   local soft gradient behind it; the sun patch and the leaf shadows stay free. -- */
+.hero__room{position:absolute;inset:0;overflow:hidden;transform-origin:62% 46%}
+.hero__room picture,.hero__room img,.hero__apply{position:absolute;inset:0;width:100%;height:100%;display:block}
+/* the crop (first.js computes the same for the canvas and the story): the desktop frame (2400x1080) never shows the window's
+   glass at its left edge (9.2 % of the frame, -20.44svh at full height) and is centred otherwise; the phone frame (1080x1920)
+   ends on the right where the sofa's back cushions meet (89 % of the frame: right-aligned + 6.19svh), so the sofa reads
+   whole and the leaf shadows keep as much as they can, but never shows the chair at its left edge (7 %, -3.94svh) */
+.hero__room img{object-fit:cover;object-position:max(100%,min(50%,-20.44svh)) 50%}
+@media (max-width:760px) and (orientation:portrait){.hero__room img{object-position:max(100%,min(-3.94svh,calc(100% + 6.19svh))) 50%}}
+.hero__room-pre,.hero__apply{opacity:0}
+.hero__apply{pointer-events:none}
+/* the primed room is painted at once (the LCP image) under a black veil that lifts after the headline's letters */
+.dv-intro .hero__room-pre{opacity:1}
+.dv-intro .hero__room::before{content:"";position:absolute;inset:0;z-index:3;background:#0e0c0a;opacity:0;pointer-events:none;animation:roomVeil 1.2s cubic-bezier(.25,.6,.25,1) 1.05s backwards}
+/* Chrome leaves an image that covers the whole viewport out of the LCP (it takes it for a background): the media layer stays
+   1px short at the bottom (black, under the veil) until the still in view has painted, then first.js lifts it (.is-lcp) */
+.dv-js .hero--room .hero__media{clip-path:inset(0 0 1px)}
+.dv-js .hero--room.is-lcp .hero__media{clip-path:none}
+.dv-intro .hero__room-coat{opacity:0}
+.hero.is-applying .hero__apply{opacity:1}
+.dv-intro .hero.is-coated .hero__room-coat{opacity:1}
+.hero.is-coated .hero__room-pre,.hero.is-coated .hero__apply{opacity:0;transition:opacity .45s linear .1s}
+.hero.is-fade .hero__room-pre{opacity:0;transition:opacity 1.3s var(--ease)}
+.hero.is-fade .hero__room-coat{opacity:1}
+.dv-intro .hero__room{animation:roomArrive 2.6s cubic-bezier(.2,.6,.2,1) .95s backwards}
+.hero.is-coated .hero__room{animation:roomDrift 28s cubic-bezier(.35,0,.25,1) forwards}
+/* the story (first.js): the push into the wall stops the drift; the material close-up dissolves in over the room */
+.hero.is-story .hero__room{animation:none}
+.hero__soft{opacity:0}
+.hero__close{position:absolute;inset:0;opacity:0;pointer-events:none;will-change:opacity,transform}
+.hero__close img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+@keyframes roomVeil{from{opacity:1}}
+@keyframes roomArrive{from{transform:scale(1.035)}}
+@keyframes roomDrift{to{transform:scale(1.035) translate3d(-.5%,0,0)}}
+/* the window's sunlit reveal at the far left: softened where the crop cannot leave it out (wide screens) */
+@media (min-aspect-ratio:17/10){.hero__room::after{content:"";position:absolute;inset:0 auto 0 0;width:8%;background:linear-gradient(90deg,rgba(14,12,10,.5),rgba(14,12,10,0));pointer-events:none}}
 .dv-js .hero__lens,.dv-js .hero__ring{display:none}
-.dv-nohdr .hdr{transform:translateY(-100%)}
+.dv-nohdr .hdr{opacity:0;pointer-events:none}
+.dv-intro .hdr{transition:opacity 1s var(--ease),transform .7s var(--ease),background .5s,border-color .5s}
 .dv-nohdr .skyctl{opacity:0;pointer-events:none}
+/* the letters fade in one by one, each word rises with its first letter. Opacity and transform only, so the compositor runs
+   them and nothing on the main thread can stall them (a blur cannot); the letters stay inline (one text run per word, no
+   box per letter, so the page's layout passes stay cheap) */
 .hero__title .w{display:inline-block;white-space:nowrap}
-.hero__title .ch{display:inline-block}
 .dv-intro .hero__title .line{overflow:visible}
 .dv-intro .hero__title .line>span{transform:none;animation:none}
-.dv-intro .hero__title .ch{animation:heroCh .8s cubic-bezier(.22,.61,.36,1) backwards;animation-delay:calc(.3s + var(--i) * 26ms)}
-@keyframes heroCh{from{opacity:0;transform:translateY(.3em);filter:blur(10px)}}
+.dv-intro .hero__title .w{animation:heroW .9s cubic-bezier(.22,.61,.36,1) backwards;animation-delay:calc(.3s + var(--i) * 26ms)}
+.dv-intro .hero__title .ch{animation:heroCh .65s cubic-bezier(.33,0,.25,1) backwards;animation-delay:calc(.3s + var(--i) * 26ms)}
+@keyframes heroW{from{transform:translateY(.2em)}}
+@keyframes heroCh{from{opacity:0}}
+/* the headline in full colour on the photograph (no grey second line) */
+.hero--room .hero__title .line:nth-child(2)>span{color:inherit}
+/* a local, soft shade only where the text is: behind the text column (right on desktops) and under the facts */
+.hero--room .hero__shade{background:radial-gradient(ellipse 46% 62% at 80% 34%,rgba(14,12,10,.5) 0%,rgba(14,12,10,.28) 48%,rgba(14,12,10,0) 100%),linear-gradient(0deg,rgba(14,12,10,.58) 0%,rgba(14,12,10,0) 20%)}
+@media (min-width:761px){
+  .hero--room{justify-content:flex-start}
+  /* the text column over the calm wall on the right, above the sofa (the sofa's back is at about half height) */
+  .hero--room .hero__body{padding-top:calc(var(--hdr) + clamp(10px,2.6vh,32px));display:flex;flex-direction:column;align-items:flex-end}
+  .hero--room .hero__body>*{width:min(100%,44vw,820px)}
+  .hero--room .hero__title{max-width:none;font-size:clamp(40px,min(4.3vw,8.4vh),84px)}
+  .hero--room .hero__eyebrow{margin-bottom:clamp(10px,1.8vh,22px)}
+  .hero--room .hero__row{margin-top:clamp(12px,2vh,26px);gap:clamp(12px,1.8vh,22px)}
+  .hero--room .hero__lede{max-width:48ch;font-size:clamp(14px,1.05vw,17px);line-height:1.55}
+  .hero--room .hero__body+.wrap{margin-top:auto}
+}
+.hero--room .hero__tag{display:none}          /* the old DV 033 tag: the text column now holds the right side */
+@media (max-width:760px){
+  /* phones: the headline and the lede over the calm upper wall, the buttons and the facts over the floor; the sun patch, the
+     leaf shadows and the sofa stay clear between them, where the coat is seen landing */
+  .hero--room{justify-content:flex-start}
+  .hero--room .hero__body{flex:1;display:flex;flex-direction:column}
+  .hero--room .hero__row{flex:1;grid-template-rows:auto auto;align-content:space-between}
+  /* the coated wall needs little under the text (contrast 4.9:1 and up with .3); while the light primed wall shows, a second
+     layer adds .16 and lifts with the coat */
+  .hero--room .hero__shade{background:linear-gradient(180deg,rgba(14,12,10,.5) 0%,rgba(14,12,10,.3) 30%,rgba(14,12,10,0) 48%),linear-gradient(0deg,rgba(14,12,10,.8) 0%,rgba(14,12,10,.5) 20%,rgba(14,12,10,0) 34%)}
+  .dv-intro .hero--room .hero__shade::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(14,12,10,.2) 0%,rgba(14,12,10,.16) 32%,rgba(14,12,10,0) 48%);transition:opacity 1.4s var(--ease)}
+  .dv-intro .hero--room.is-coated .hero__shade::before{opacity:0}
+}
 .dv-intro .hero__eyebrow,.dv-intro .hero__lede,.dv-intro .hero__ctas{animation:heroUp .8s var(--ease) backwards}
 .dv-intro .hero__eyebrow{animation-delay:1.25s}
 .dv-intro .hero__lede{animation-delay:1.4s}
@@ -1745,7 +1827,7 @@ button.mixrow__ico.is-on:hover{color:var(--copper-hi)}
 @keyframes heroUp{from{opacity:0;transform:translateY(12px)}}
 .dv-intro:not(.dv-coated) .hero__facts,.dv-intro:not(.dv-coated) .hero__tag{visibility:hidden}
 .dv-intro.dv-coated .hero__facts,.dv-intro.dv-coated .hero__tag{animation:heroUp .9s var(--ease) backwards}
-@media (prefers-reduced-motion:reduce){.hero__title .ch{animation:none!important}}
+@media (prefers-reduced-motion:reduce){.hero__title .ch,.hero__title .w,.hero__room{animation:none!important}}   /* a still room: no drift either */
 /* ==== end hero2 story end ==== */
 
 /* video block: the second tile is the client's colour-fan clip (06.10); one tile fills the side column on desktops */
@@ -1759,7 +1841,7 @@ button.mixrow__ico.is-on:hover{color:var(--copper-hi)}
    ========================================================= */
 
 /* ---- base: while the open menu locks the page, the scrollbar gutter stays, so the header never jumps ---- */
-html:has(#mnav.is-open){scrollbar-gutter:stable}
+html:has(>body>#mnav.is-open){scrollbar-gutter:stable}   /* :has() limited to fixed depths: never a scan of the whole page on each restyle */
 a[href^="tel:"]{white-space:nowrap}
 
 /* ---- sky pill: icon only below 1680px (rule in W2-C12), tucked into the corner; hidden on tablets and phones,
@@ -1768,7 +1850,7 @@ a[href^="tel:"]{white-space:nowrap}
 @media (max-width:1240px){.skyctl{right:max(8px,env(safe-area-inset-right))}}
 @media (max-width:1679px) and (pointer:coarse){.skyctl__pill{min-width:44px;height:44px}}
 @media (max-width:1024px){.skyctl{display:none}}
-body:has([data-dv-generator]) .skyctl{display:none}
+body:has(>main>[data-dv-generator]) .skyctl{display:none}
 .skyctl:focus-within{opacity:1;pointer-events:auto;transform:none}
 
 /* ---- technology figures (home + Technology): both kinds of slot share one height, so the three numbers start on one line ---- */
@@ -1884,7 +1966,7 @@ body:has([data-dv-generator]) .skyctl{display:none}
    it is mapped to the stuck position. */
 @property --ctop{syntax:"<length>";inherits:true;initial-value:0px}
 #digital .ctool{--ctop:var(--hdr);position:sticky;top:var(--ctop);z-index:6;padding-top:10px;transition:--ctop .7s var(--ease)}
-body:has(#hdr.is-hidden) #digital .ctool{--ctop:0px}
+#hdr.is-hidden~main #digital .ctool{--ctop:0px}
 #digital .ctool::before{content:"";position:absolute;z-index:-1;top:0;bottom:0;left:calc(50% - 50vw);right:calc(50% - 50vw);pointer-events:none;
   background:radial-gradient(circle 64vmax at var(--sky-gx) calc(var(--sky-gy) * 1.2 - 10vh),var(--sky-glow),rgba(255,255,255,0)) fixed,
     linear-gradient(180deg,var(--sky-top) 0%,var(--sky-mid) 52%,var(--sky-bot) 100%) 0 -10vh/100% 120vh no-repeat fixed,var(--sky-mid)}
@@ -1905,7 +1987,7 @@ body:has(#hdr.is-hidden) #digital .ctool{--ctop:0px}
 @media (max-width:760px){
   #digital .ctool.has-sheet{--ctop:calc(var(--hdr) - 26px);display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"n n" "s f";gap:8px;align-items:center;
     padding-top:6px;padding-bottom:10px}
-  body:has(#hdr.is-hidden) #digital .ctool.has-sheet{--ctop:-26px}
+  #hdr.is-hidden~main #digital .ctool.has-sheet{--ctop:-26px}
   #digital .ctool.has-sheet .ctool__n{grid-area:n;margin:0;width:auto;height:20px;font-size:13px;line-height:20px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #digital .ctool.has-sheet .csearch{grid-area:s;order:0;max-width:none}
   #digital .ctool.has-sheet .dvfbtn{grid-area:f;padding:0 16px 0 14px}

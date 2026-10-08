@@ -44,7 +44,7 @@ const ASSET = new URL('./interior2/', BASE).href;
 const ROOMS = ['living', 'bedroom', 'hallway'];
 const LANG = /^en/i.test(document.documentElement.lang || '') ? 'en' : 'uk';
 const LABEL = {
-  uk: { living: 'Вітальня, стіна з мультиколоровим покриттям Dvatone у денному світлі', bedroom: 'Спальня, стіна за ліжком з покриттям Dvatone', hallway: 'Передпокій, довга стіна з покриттям Dvatone' },
+  uk: { living: 'Вітальня, стіна з мультикольоровим покриттям Dvatone у денному світлі', bedroom: 'Спальня, стіна за ліжком з покриттям Dvatone', hallway: 'Передпокій, довга стіна з покриттям Dvatone' },
   en: { living: 'Living room with a Dvatone multicolour coating on the feature wall in daylight', bedroom: 'Bedroom with a Dvatone coating on the wall behind the bed', hallway: 'Hallway with a Dvatone coating along the long wall' }
 };
 const posterOf = (room, portrait) => ASSET + 'poster-' + room + (portrait ? '-p' : '') + '.webp';

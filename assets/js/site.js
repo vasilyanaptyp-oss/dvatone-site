@@ -18,6 +18,34 @@
     rv.forEach(function (el) { io.observe(el); });
   } else { rv.forEach(function (el) { el.classList.add('is-in'); }); }
 
+  /* ---------- sections below the first screen are laid out only near the screen (content-visibility, site.css). One with
+     pictures is rendered for good a screen and a half before it is reached, so its lazy pictures start as early as before
+     (the browser's own margin for content-visibility is half a screen). No layout is read here. ---------- */
+  if ('IntersectionObserver' in window) {
+    var cvIo = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { e.target.style.contentVisibility = 'visible'; cvIo.unobserve(e.target); } });
+    }, { rootMargin: '150% 0px' });
+    $$('main>section:not(:first-child)').forEach(function (s) { if (s.querySelector('img')) cvIo.observe(s); });
+  }
+  // once the page has settled (6 s after load), the sections not rendered yet are rendered in idle time, one at a time and
+  // never while the page is being scrolled, so a later scroll through the page does not lay them out on the way. Not on a page
+  // whose first screen is a live picture (a canvas or a video, e.g. the home hero): a section rendered there would drop its frames
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      if ($('main>section:first-child canvas, main>section:first-child video')) return;
+      var rest = $$('main>section:not(:first-child),.ftr').filter(function (s) { return s.style.contentVisibility !== 'visible'; }), moved = 0;
+      if (!rest.length) return;
+      window.addEventListener('scroll', function () { moved = Date.now(); }, { passive: true });
+      var later = function (fn) { if (window.requestIdleCallback) requestIdleCallback(fn, { timeout: 3000 }); else setTimeout(fn, 200); };
+      var next = function () {
+        if (Date.now() - moved < 800) { later(next); return; }
+        var s = rest.shift(); if (s) s.style.contentVisibility = 'visible';
+        if (rest.length) later(next);
+      };
+      later(next);
+    }, 6000);
+  });
+
   /* ---------- digital-catalogue strip: a photo appears only once fully loaded (its swatch colour shows meanwhile),
      so slow phones never see half-painted strips (the catalogue's sample leaves have their own loader, LEAF_JS in build_inner.py) ---------- */
   $$('.sws img').forEach(function (im) {
@@ -138,6 +166,9 @@
     if (window.scheduler && window.scheduler.yield) return window.scheduler.yield();
     return new Promise(function (res) { setTimeout(res, 0); });
   };
+  // runs fn just after the next frame has been drawn, when style and layout are up to date: a first measurement made there
+  // costs nothing, while the same read during start-up (or in the frame's own callbacks) forces a whole-page style and layout pass
+  var afterFrame = NS.afterFrame = function (fn) { requestAnimationFrame(function () { setTimeout(fn, 0); }); };
   var hdrH = function () { return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hdr')) || 70; };
   /* The generator's colour preview ([data-dv-sticky-preview], #dvPrev) is sticky under the header. On phones and tablets it sits
      above the controls, which scroll under it, so it is part of the top inset. On desktop it is a column beside the controls
@@ -181,7 +212,7 @@
       if (v !== pad) { pad = v; document.documentElement.style.scrollPaddingTop = v + 'px'; }
     };
     var soon = function () { if (!padRaf) padRaf = requestAnimationFrame(upd); };
-    window.addEventListener('resize', soon); window.addEventListener('load', soon); soon();
+    window.addEventListener('resize', soon); window.addEventListener('load', soon); afterFrame(upd);
     if (window.ResizeObserver) { var ro = new ResizeObserver(soon); $$(PIN).forEach(function (e) { ro.observe(e); }); }
     var vv = window.visualViewport;   // on-screen keyboard: the visual viewport shrinks well below the layout viewport
     if (vv && window.matchMedia && matchMedia('(pointer:coarse)').matches) {
@@ -199,9 +230,11 @@
 
   /* ---------- header + mobile nav (modal sheet: inert page behind, Tab trapped, focus returned) ---------- */
   var hdr = $('#hdr'), burger = $('.burger'), mnav = $('#mnav'), menuOpen = false, inerted = [];
-  var hdrY = 0, hdrPins = $$(PIN);
+  var hdrY = 0, hdrPins = $$(PIN), burgerOff = null, hdrRaf = 0;
+  window.addEventListener('resize', function () { burgerOff = null; });   // the burger comes and goes with the breakpoint: measured again after a resize, not on every scroll
   var keepHdr = function () {   // the bar stays: desktop layout, keyboard focus inside it, or a generator preview pinned under it (hiding would open a see-through gap above the preview)
-    if (!burger || getComputedStyle(burger).display === 'none') return true;
+    if (burgerOff === null) burgerOff = !burger || getComputedStyle(burger).display === 'none';
+    if (burgerOff) return true;
     var a = document.activeElement;
     if (a && hdr.contains(a)) { try { if (a.matches(':focus-visible')) return true; } catch (e) { return true; } }
     for (var i = 0; i < hdrPins.length; i++) {
@@ -211,11 +244,14 @@
     return false;
   };
   function onScrollHdr() {
-    var open = !!(mnav && mnav.classList.contains('is-open')), y = window.scrollY;
-    hdr.classList.toggle('is-solid', y > 40 || open);
+    hdrRaf = 0;
+    var open = !!(mnav && mnav.classList.contains('is-open')), y0 = window.scrollY;
+    // all reads first (scroll height, the pinned preview), then the class writes: never a forced layout between them
+    var y = clamp(y0, 0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight));   // an iOS rubber band past either end is not a change of direction
+    var keep = open || y <= 400 || keepHdr();
+    hdr.classList.toggle('is-solid', y0 > 40 || open);
     // phones and tablets: the bar slides away while reading down and comes back on any scroll up
-    y = clamp(y, 0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight));   // an iOS rubber band past either end is not a change of direction
-    if (open || y <= 400 || keepHdr()) { hdr.classList.remove('is-hidden'); hdrY = y; return; }
+    if (keep) { hdr.classList.remove('is-hidden'); hdrY = y; return; }
     if (y > hdrY + 6) { hdr.classList.add('is-hidden'); hdrY = y; }
     else if (y < hdrY - 6) { hdr.classList.remove('is-hidden'); hdrY = y; }
   }
@@ -269,8 +305,9 @@
     });
     window.addEventListener('resize', function () { if (menuOpen && getComputedStyle(burger).display === 'none') setMenu(false); });   // the burger leaves with the breakpoint (px or text size)
   }
-  window.addEventListener('scroll', onScrollHdr, { passive: true }); window.addEventListener('resize', onScrollHdr);
-  onScrollHdr();
+  var onScrollHdrSoon = function () { if (!hdrRaf) hdrRaf = requestAnimationFrame(onScrollHdr); };   // once per frame, in the frame's own update
+  window.addEventListener('scroll', onScrollHdrSoon, { passive: true }); window.addEventListener('resize', onScrollHdrSoon);
+  afterFrame(onScrollHdr);   // the first check runs once the first frame is drawn: no forced layout while the page starts
 
   /* ---------- language switch keeps what is on screen: a shared composition (?mix=…), a search (?q=…), a section (#s4).
      File names and section ids are the same in both languages; the href is refreshed right before it is used. ---------- */
@@ -301,7 +338,7 @@
       tocA.forEach(function (a, j) { if (j === k) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); });
     };
     var spySoon = function () { if (!tocRaf) tocRaf = requestAnimationFrame(spy); };
-    window.addEventListener('scroll', spySoon, { passive: true }); window.addEventListener('resize', spySoon); spy();
+    window.addEventListener('scroll', spySoon, { passive: true }); window.addEventListener('resize', spySoon); afterFrame(spy);   // first mark once the first frame is drawn, not as a forced layout while the page starts
   }
 
   /* ---------- count-up figures ---------- */
@@ -738,67 +775,15 @@
      Live sky: tones follow local time of day and season.
      Only the page background is driven. Colour previews sit on .gen__mat (opaque neutral grey).
      ===================================================== */
-  var PAL = {
-    night: { top: '#8E97A8', mid: '#B3B9C3', bot: '#CCCDCF', glow: '#EEF2F8', ga: .46, dim: 1 },
-    dawn: { top: '#D5C4D0', mid: '#EBD6CB', bot: '#F2E6DC', glow: '#FFD2B4', ga: .72, dim: .28 },
-    day: { top: '#E8E5DF', mid: '#F1EDE6', bot: '#F2EDE5', glow: '#FFFDF6', ga: .7, dim: 0 },
-    golden: { top: '#E9D1B5', mid: '#F1DEC8', bot: '#F4E8DA', glow: '#FFC58C', ga: .42, dim: .08 },
-    dusk: { top: '#AFA9BF', mid: '#CFC5CC', bot: '#E1D7D1', glow: '#F2BAA1', ga: .46, dim: .62 }
-  };
-  var SEASON_TINT = ['#B2C3DA', '#C8DCC0', '#F4D8AB', '#E1B086'];  // winter, spring, summer, autumn
-  var SEASON_DOY = [15, 105, 196, 288];
-  var SUN = [[473, 980], [435, 1032], [374, 1079], [365, 1185], [310, 1230], [287, 1272], [300, 1265], [345, 1220], [390, 1150], [435, 1085], [430, 985], [470, 960]]; // sunrise/sunset per month, ~Kyiv
-  var TXT = { day: { ml: '#5f564b', mute: '#857a6f', copper: '#8a4f1f' }, night: { ml: '#39352f', mute: '#4f4a43', copper: '#5e3513' } };
-  var rgb = function (h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; };
-  var mix = function (a, b, f) { return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]; };
-  var hx = function (c) { return '#' + c.map(function (v) { return ('0' + Math.round(clamp(v, 0, 255)).toString(16)).slice(-2); }).join(''); };
-  var PL = {}; Object.keys(PAL).forEach(function (k) { var p = PAL[k]; PL[k] = { top: rgb(p.top), mid: rgb(p.mid), bot: rgb(p.bot), glow: rgb(p.glow), ga: p.ga, dim: p.dim }; });
-  var ST = SEASON_TINT.map(rgb);
+  /* The sky model and its root-variable writes live in the inline <head> script (_src/head_sky.js, window.DVSKY): the page
+     paints with the right sky at once and only changed variables are written (each write restyles the whole page).
+     Without it (an old cached page with this file) the sky simply keeps its CSS default. */
+  var SKYM = window.DVSKY || null;
   var SKY = { t: null, s: null, play: false, info: null }, skyOpen = false;
-  var smooth = function (f) { f = clamp(f, 0, 1); return f * f * (3 - 2 * f); };
-  var doyOf = function (d) { return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 864e5); };
-  var sunFor = function (doy) { var mf = (doy - 15) / 30.44, i = Math.floor(mf), f = mf - i, a = SUN[((i % 12) + 12) % 12], b = SUN[(((i + 1) % 12) + 12) % 12]; return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]; };
-  var seasonW = function (doy) {
-    for (var k = 0; k < 4; k++) {
-      var a = SEASON_DOY[k], b = SEASON_DOY[(k + 1) % 4] + (k === 3 ? 365 : 0), d = doy < a && k === 3 ? doy + 365 : doy;
-      if (d >= a && d < b) { var f = smooth((d - a) / (b - a)), w = [0, 0, 0, 0]; w[k] = 1 - f; w[(k + 1) % 4] = f; return w; }
-    }
-    return [1, 0, 0, 0];
-  };
-  var phaseAt = function (t, R, S) {
-    var K = [[0, 'night'], [R - 100, 'night'], [R - 30, 'dawn'], [R + 45, 'dawn'], [R + 140, 'day'], [S - 160, 'day'], [S - 65, 'golden'], [S - 5, 'golden'], [S + 40, 'dusk'], [S + 110, 'night'], [1440, 'night']];
-    for (var i = 0; i < K.length - 1; i++) if (t >= K[i][0] && t < K[i + 1][0]) return { a: K[i][1], b: K[i + 1][1], f: smooth((t - K[i][0]) / Math.max(1, K[i + 1][0] - K[i][0])) };
-    return { a: 'night', b: 'night', f: 0 };
-  };
-  function skyState() {
-    var now = new Date(), t = SKY.t != null ? SKY.t : now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
-    var doy = SKY.s != null ? SEASON_DOY[SKY.s] : doyOf(now), sun = sunFor(doy), R = sun[0], S = sun[1];
-    var ph = phaseAt(t, R, S), A = PL[ph.a], B = PL[ph.b], f = ph.f;
-    var sw = SKY.s != null ? [0, 1, 2, 3].map(function (k) { return k === SKY.s ? 1 : 0; }) : seasonW(doy);
-    var tint = [0, 0, 0]; sw.forEach(function (w, k) { tint = [tint[0] + ST[k][0] * w, tint[1] + ST[k][1] * w, tint[2] + ST[k][2] * w]; });
-    var dim = A.dim + (B.dim - A.dim) * f, tk = 1 - 0.45 * dim, night = (ph.a === 'night' ? 1 - f : 0) + (ph.b === 'night' ? f : 0), sx, sy;
-    if (t < R) { sx = 6; sy = 88; } else if (t > S) { sx = 94; sy = 88; } else { var k2 = (t - R) / (S - R); sx = 6 + 88 * k2; sy = 86 - 72 * Math.sin(Math.PI * k2); }
-    var gl = mix(A.glow, B.glow, f), ga = A.ga + (B.ga - A.ga) * f;
-    return {
-      t: t, dim: dim, phase: f < .5 ? ph.a : ph.b, season: sw.indexOf(Math.max.apply(null, sw)),
-      top: hx(mix(mix(A.top, B.top, f), tint, .2 * tk)), mid: hx(mix(mix(A.mid, B.mid, f), tint, .11 * tk)), bot: hx(mix(mix(A.bot, B.bot, f), tint, .05 * tk)),
-      glow: 'rgba(' + gl.map(Math.round).join(',') + ',' + ga.toFixed(3) + ')', tint: 'rgba(' + tint.map(Math.round).join(',') + ',' + (.3 * tk).toFixed(3) + ')',
-      gx: (sx + (78 - sx) * night).toFixed(2) + '%', gy: (sy + (12 - sy) * night).toFixed(2) + '%'
-    };
-  }
-  var rs = document.documentElement.style, lastTxt = '';
   function applySky() {
-    var s = skyState(); SKY.info = s;
-    rs.setProperty('--sky-top', s.top); rs.setProperty('--sky-mid', s.mid); rs.setProperty('--sky-bot', s.bot);
-    rs.setProperty('--sky-glow', s.glow); rs.setProperty('--sky-tint', s.tint); rs.setProperty('--sky-gx', s.gx); rs.setProperty('--sky-gy', s.gy);
-    var d = Math.round(s.dim * 20) / 20;
-    if (String(d) !== lastTxt) {  // keep text on the sky readable when the light dims
-      lastTxt = String(d);
-      rs.setProperty('--ml', hx(mix(rgb(TXT.day.ml), rgb(TXT.night.ml), d)));
-      rs.setProperty('--mute-l', hx(mix(rgb(TXT.day.mute), rgb(TXT.night.mute), d >= 0.05 ? Math.min(1, d * 2) : d)));   // darkens twice as fast from the first dimming: italic h2 tone stays >= 3.2:1 on the golden-hour and winter sky
-      rs.setProperty('--copper-lo', hx(mix(rgb(TXT.day.copper), rgb(TXT.night.copper), d)));
-    }
-    document.documentElement.setAttribute('data-sky', s.phase);
+    if (!SKYM) return;
+    var s = SKYM.state(SKY.t, SKY.s); SKY.info = s;
+    SKYM.apply(s);
     skyUI();
   }
   var hhmm = function (t) { t = ((Math.round(t) % 1440) + 1440) % 1440; var h = Math.floor(t / 60), m = t % 60; return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m; };
@@ -830,11 +815,16 @@
     skyOpen = open; $('#skyPop').hidden = !open; $('#skyPill').setAttribute('aria-expanded', open ? 'true' : 'false');
     if (open) { skyCtl.classList.remove('is-away'); if (toFirst) { var t = $('#skyTime'); if (t) t.focus(); } } else tickPill();
   }
-  var tickRaf = 0, collide = null;
+  var tickRaf = 0, collide = null, pillOff = null;
   var ZONES = [['form,.btn,.tray', 80], ['.acc,.faqnav,.ftr__top,.ftr__bot', 16], ['.cgrid,.sws,.leaves,.link-arrow,.vplay,.studio__panel', 8]];   // what the pill keeps clear of, and by how many px (a whole FAQ list or generator panel, not row by row, so the pill does not blink in and out while reading)
-  function tickPillSoon() { if (!tickRaf) tickRaf = requestAnimationFrame(function () { tickRaf = 0; tickPill(); }); }
+  // the pill is not shown on tablets, phones and the generator (CSS): then nothing is measured while scrolling. Checked again after a resize.
+  var pillHidden = function () { if (pillOff === null) pillOff = !skyCtl || getComputedStyle(skyCtl).display === 'none'; return pillOff; };
+  window.addEventListener('resize', function () { pillOff = null; });
+  // a block in a part of the page that is not rendered yet (content-visibility) is far from the pill: it is skipped, not measured (measuring would lay it out)
+  var unrendered = function (el) { try { return !!el.checkVisibility && !el.checkVisibility({ contentVisibilityAuto: true }); } catch (e) { return false; } };
+  function tickPillSoon() { if (!tickRaf && pillOff !== true) tickRaf = requestAnimationFrame(function () { tickRaf = 0; tickPill(); }); }   // the display check itself is made in tickPill, never in a scroll or start-up call
   function tickPill() {  // never sit on top of the hero, a colour composition, a form, a button, the generator's controls, the catalogue grid, a sample strip, an arrow link, a video, a FAQ list or the footer
-    if (!skyCtl || skyOpen) return;
+    if (!skyCtl || skyOpen || pillHidden()) return;
     var pill = $('#skyPill'), pr = pill.getBoundingClientRect(), hit = false, h = hero ? hero.getBoundingClientRect() : null;
     var tf = /^matrix\((.+)\)$/.exec(getComputedStyle(skyCtl).transform || ''), dy = tf ? parseFloat(tf[1].split(',')[5]) || 0 : 0;
     var pl = { left: pr.left, right: pr.right, top: pr.top - dy, bottom: pr.bottom - dy };   // where the pill rests: its own "away" slide must not feed back into the decision
@@ -848,7 +838,7 @@
       }
       for (var i = 0; i < collide.length && !hit; i++) {
         var c = collide[i][0];
-        if (c.hidden || (c.offsetParent === null && getComputedStyle(c).position !== 'fixed')) continue;   // the tray is listed even while it is empty and hidden
+        if (c.hidden || unrendered(c) || (c.offsetParent === null && getComputedStyle(c).position !== 'fixed')) continue;   // the tray is listed even while it is empty and hidden
         if (near(c.getBoundingClientRect(), collide[i][1]) && getComputedStyle(c).visibility !== 'hidden') hit = true;
       }
     }
@@ -877,14 +867,9 @@
     document.addEventListener('toggle', tickPillSoon, true);   // an opened FAQ answer moves the rows below it without a scroll
     var trayEl = $('.tray'); if (trayEl && window.MutationObserver) new MutationObserver(tickPillSoon).observe(trayEl, { attributes: true, attributeFilter: ['hidden'] });
   }
-  // QA deep links: ?t=21:40  ?season=winter|spring|summer|autumn  ?sky=night|dawn|day|golden|dusk
-  (function () {
-    var sp = /[?&]season=(winter|spring|summer|autumn)/i.exec(location.search); if (sp) SKY.s = ['winter', 'spring', 'summer', 'autumn'].indexOf(sp[1].toLowerCase());
-    var tp = /[?&]t=(\d{1,2})[:.]?(\d{2})/.exec(location.search); if (tp) SKY.t = (+tp[1] % 24) * 60 + (+tp[2] % 60);
-    var ph = /[?&]sky=(night|dawn|day|golden|dusk)/i.exec(location.search);
-    if (ph) { var sun = sunFor(SKY.s != null ? SEASON_DOY[SKY.s] : doyOf(new Date())); SKY.t = { night: 60, dawn: sun[0] + 5, day: 780, golden: sun[1] - 35, dusk: sun[1] + 22 }[ph[1].toLowerCase()]; }
-  })();
-  applySky(); tickPill();
+  // QA deep links (?t=21:40 ?season=winter ?sky=dusk): parsed by the head script with the same rules
+  if (SKYM && SKYM.q) { SKY.t = SKYM.q.t; SKY.s = SKYM.q.s; }
+  applySky(); afterFrame(tickPill);   // the head script painted this sky already, so nothing is rewritten; the pill is placed once the first frame is drawn
   setInterval(function () { if (SKY.t == null) applySky(); }, 20000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) applySky(); });
 })();

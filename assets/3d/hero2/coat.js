@@ -55,7 +55,7 @@ function latticeFor(n) {
    the viewer) with an ease-in-out speed; every spot receives its granules over SPREAD seconds, lowest first,
    so a later granule always lands on top of an earlier one (painter's order == landing order == depth).
    f = position of the band in the tile, 1 = far edge (top of the frame) .. 0 = near edge. */
-export const SCHED = { t0: 0.5, sweep: 2.0, spread: 0.7, pre: 0.3, top: 0.92 };
+export const SCHED = { t0: 0.5, sweep: 1.7, spread: 0.65, pre: 0.3, top: 0.92 };   /* 07.10: the coat is on in about 2.9 s (was 3.2) */
 export const DRY = -2;                /* landing time stored for a dry surface (interpolates gracefully in the mips) */
 export function bandTime(f) {
   f = clamp(f, 0, 1);

@@ -191,7 +191,7 @@ void main(){
     vec3 ind = lmS * lmS * uLmScale;
     ind = mix(vec3(dot(ind, vec3(0.2126, 0.7152, 0.0722))), ind, 0.3);
     vec3 colR = (diffB * mix(ndl, wrap, 0.25) + spec * ndl * 0.6) * uSunColR * (sv * uSunK) * sh + alb * ind * uFill * ao;
-    col = mix(colM, colR * uRoomGain, uRoom);
+    col = mix(colM, colR * (uRoomGain * uWallK), uRoom);
   }
 #endif
   col *= exp(-max(vDepth - uFocus * 0.92, 0.0) * uFade);

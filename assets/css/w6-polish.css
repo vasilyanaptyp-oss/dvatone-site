@@ -1,0 +1,422 @@
+/* Dvatone, wave 6 polish (07.10 evening): loaded on every page after the wave-5 stylesheets (_src/w6.py appends it to the
+   build's W5_CSS list, so layout.page() links it and critical.py inlines its first-screen rules). Overrides live here instead of
+   in the shared sheets. Sections:
+   1. light sections: warm paper / greige in every light of the day (the living background keeps its rhythm)
+   2. touch: no blue tap flash
+   3. catalogue: the DV collection (filter, compact grid, macro viewer)
+   4. composition generator: the home teaser in the studio's language
+   5. technology: the photo intro, the close-up story, the coating system, the sample strip
+   6. application service: the room before / after
+   7. Designer Box: the set without the photo places
+   8. phones and small fixes
+   The first screen is never faded out waiting for a scroll reveal: w6.FOLD_JS (_src/w6.py) marks its blocks at once. */
+
+/* =========================================================
+   1. Light sections: warm paper / greige
+   site.js paints the living background from the time of day and the season (--sky-top / -mid / -bot, a glow and a seasonal
+   tint). Only the lightness of those colours reaches the page now: hue and chroma are fixed to a warm greige, so night, dusk
+   and winter never turn the light sections blue-grey. Day reads as warm paper, night as a deeper greige, golden hour keeps
+   a soft warm glow. The generator's preview keeps its neutral grey mat (it is opaque and never shows this background).
+   ========================================================= */
+body,.sky{background:#efe9e0}
+.sky__base{background:linear-gradient(180deg,#e8e0d4 0%,#efe9e0 52%,#f2ede5 100%)}
+html[data-sky="night"] body,html[data-sky="night"] .sky{background:#ddd5c9}
+html[data-sky="night"] .sky__base{background:linear-gradient(180deg,#d3cabd 0%,#ddd5c9 52%,#e6dfd5 100%)}
+html[data-sky="dusk"] .sky__base,html[data-sky="dawn"] .sky__base{background:linear-gradient(180deg,#e0d5c9 0%,#e9e1d6 52%,#efe8de 100%)}
+.sky__veil{background:radial-gradient(90% 60% at 12% 100%,rgba(222,203,176,.22),rgba(0,0,0,0) 72%)}
+.sky__glow i{background:radial-gradient(closest-side,rgba(255,246,232,.42),rgba(255,255,255,0))}
+@supports (color:oklch(from red calc(.6 + l * .36) .012 78)){
+  body,.sky{background:oklch(from var(--sky-mid) calc(.6 + l * .37) .012 78)}
+  .sky__base{background:linear-gradient(180deg,
+    oklch(from var(--sky-top) calc(.6 + l * .37) .017 74) 0%,
+    oklch(from var(--sky-mid) calc(.6 + l * .37) .013 78) 52%,
+    oklch(from var(--sky-bot) calc(.6 + l * .37) .011 80) 100%)}
+  .sky__veil{background:radial-gradient(90% 60% at 12% 100%,oklch(from var(--sky-tint) calc(.55 + l * .4) min(c, .028) 72 / alpha),rgba(0,0,0,0) 72%)}
+  .sky__glow i{background:radial-gradient(closest-side,oklch(from var(--sky-glow) l min(c, .05) 78 / calc(alpha * .8)),rgba(255,255,255,0))}
+}
+
+/* =========================================================
+   2. Touch: no blue flash on a tapped link or button (Android Chrome, iOS Safari); every control keeps its own pressed,
+   hover and focus states, so the tap still answers
+   ========================================================= */
+html{-webkit-tap-highlight-color:transparent}
+@media (pointer:coarse){
+  a:active,button:active,[role="button"]:active,[role="tab"]:active,summary:active{opacity:.72;transition:opacity 0s}
+}
+
+/* =========================================================
+   3. Catalogue: the DV collection (build_inner.dv_block, catalogue.js)
+   A quiet bar (the generator's four tone categories, text toggles with their counts), a compact grid of square swatches cut
+   from the real scans (code and name under each) and, from 1100 px, a sticky viewer on the left: the macro crop of the scan
+   (a 6.5 cm field, a 1 cm scale), the name, the description and «Open in the generator». No frames, no plates.
+   ========================================================= */
+.dvx--w6 .dvx__head{margin-bottom:clamp(24px,2.6vw,40px)}
+.dv6{display:grid;grid-template-columns:minmax(0,1fr);gap:clamp(28px,3vw,48px)}
+.dv6__view{display:none}
+.dv6__main{min-width:0}
+.dv6__bar{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 32px;margin-bottom:clamp(20px,2vw,30px);padding-bottom:14px;border-bottom:1px solid var(--line-l)}
+.dv6__cats{display:flex;flex-wrap:wrap;gap:0 clamp(18px,2vw,30px)}
+.dv6__c{display:flex;align-items:baseline;gap:7px;padding:8px 0;font-size:15px;line-height:20px;color:var(--ml);white-space:nowrap;transition:color .3s;-webkit-tap-highlight-color:transparent}
+.dv6__c[hidden]{display:none}
+.dv6__c span{padding-bottom:4px;background:linear-gradient(currentColor,currentColor) 0 100%/0 1px no-repeat;transition:background-size .45s var(--ease)}
+.dv6__c small{font-size:11px;font-variant-numeric:tabular-nums;color:var(--ml);opacity:.8}
+.dv6__c:hover,.dv6__c[aria-pressed="true"]{color:var(--tl)}
+.dv6__c[aria-pressed="true"] span{background-size:100% 1px}
+.dv6__c:focus-visible{outline:2px solid var(--focus-l);outline-offset:4px}
+.dv6__hint{margin:0;padding:8px 0;font-size:12.5px;line-height:20px;color:var(--ml)}
+.dv6__hint--touch{display:none}
+@media (hover:none),(pointer:coarse),(max-width:1099.98px){.dv6__hint--fine{display:none}.dv6__hint--touch{display:inline}}
+.dv6__grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:clamp(18px,1.8vw,26px) clamp(10px,1vw,14px)}
+.dv6__i{min-width:0}
+.dv6__i[hidden]{display:none}
+.dv6__t{display:block;width:100%;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.dv6__ph{position:relative;display:block;aspect-ratio:1/1;overflow:hidden;background:var(--paper-2)}
+.dv6__ph img{display:block;width:100%;height:100%;object-fit:cover;transform:scale(1.001);transition:transform 1.2s var(--ease)}
+.dv6__ph--type{display:flex;align-items:flex-end;padding:12px}
+.dv6__ph--type span{font-weight:200;font-size:26px;line-height:1;letter-spacing:-.03em;color:var(--tl)}
+.dv6__ph::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 1px rgba(25,21,17,.06);pointer-events:none}
+.dv6__cap{display:flex;flex-direction:column;gap:3px;padding-top:10px;min-width:0}
+.dv6__cap b{font-family:var(--f-mono);font-weight:400;font-size:11px;line-height:1.3;letter-spacing:.04em;color:var(--copper-lo)}
+.dv6__cap span{font-size:13px;line-height:1.35;color:var(--tl);overflow-wrap:anywhere}
+.dv6__t:focus-visible{outline:none}
+.dv6__t:focus-visible .dv6__ph{outline:2px solid var(--focus-l);outline-offset:3px}
+@media (hover:hover) and (pointer:fine){
+  .dv6__t:hover .dv6__ph img{transform:scale(1.06)}
+}
+/* desktops: the sticky viewer beside the grid; the kept swatch gets the generator's thin ink ring */
+@media (min-width:1100px){
+  .dv6{grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(40px,4.4vw,88px);align-items:start}
+  .dv6__view{display:block;position:sticky;top:calc(var(--hdr) + 28px);min-width:0}
+  .dv6__t[aria-pressed="true"] .dv6__ph{outline:1px solid var(--tl);outline-offset:4px}
+  .dv6__grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media (min-width:1300px){.dv6__grid{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media (min-width:1500px){.dv6__grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
+.dv6__fig{position:relative;margin:0;width:100%;aspect-ratio:5/4;max-height:calc(100vh - var(--hdr) - 400px);max-height:calc(100svh - var(--hdr) - 400px);min-height:300px;overflow:hidden;
+  background:var(--paper-2) 50% 50%/420% no-repeat}
+.dv6__img{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .45s var(--ease)}
+.dv6__img img,.cxd--dv .cxd__vis .dv6__img img{display:block;width:100%;height:100%;min-height:0;max-height:none;object-fit:cover}   /* a <picture> (AVIF first): its image fills it */
+.dv6__img.is-on{opacity:1}
+.dv6__img--type{display:flex;align-items:flex-end;padding:clamp(20px,2vw,32px);background:var(--paper-2)}
+.dv6__img--type span{font-weight:200;font-size:clamp(48px,5vw,84px);line-height:1;letter-spacing:-.04em;color:var(--tl)}
+/* the views of a composition with studio photographs (DV 033): text toggles under the picture, as the generator's */
+.dv6__views{display:flex;gap:0 22px;margin-top:10px}
+.dv6__vb{padding:8px 0;font-size:13px;line-height:16px;color:var(--ml);white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:color .3s}
+.dv6__vb:hover{color:var(--tl)}
+.dv6__vb[aria-pressed="true"]{color:var(--tl);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:7px}
+.cxd--dv .dv6__views{padding:0 var(--pad);margin-top:6px}
+@media (pointer:coarse){.dv6__vb{min-height:44px;margin:0 -10px;padding:0 10px}.dv6__views{gap:0 20px}}
+/* 1 cm of the board: the bar is 10 / (field in mm) of the picture's width */
+.dv6__scale{position:absolute;left:clamp(14px,1.4vw,22px);bottom:clamp(14px,1.4vw,20px);z-index:2;width:calc(1000% / var(--mm,65));display:flex;flex-direction:column;gap:7px;
+  font-size:11px;line-height:1;letter-spacing:.06em;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55);pointer-events:none}
+.dv6__scale i{display:block;height:7px;border:solid #fff;border-width:0 1px 1px;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.5))}
+.dv6__scale[hidden]{display:none}
+.dv6__info{padding-top:clamp(18px,1.8vw,26px)}
+.dv6__code{margin:0;font-family:var(--f-mono);font-size:12px;line-height:1.4;letter-spacing:.04em;color:var(--copper-lo)}
+.dv6__name{margin:6px 0 0;font-weight:300;font-size:clamp(28px,2.3vw,40px);line-height:1.08;letter-spacing:-.03em;color:var(--tl);text-wrap:balance}
+.dv6__name[hidden],.dv6__desc[hidden]{display:none}
+.dv6__desc{margin:10px 0 0;max-width:46ch;font-size:15px;line-height:1.6;color:var(--ml)}
+.dv6__meta{margin:12px 0 0;font-size:12.5px;line-height:1.5;color:var(--ml)}
+.dv6__meta b{font-weight:600;font-size:10.5px;letter-spacing:var(--ls-caps);text-transform:uppercase;color:var(--tl)}
+.dv6__acts{display:flex;flex-wrap:wrap;align-items:center;gap:10px 26px;margin-top:22px}
+.dv6__gen{display:inline-flex;align-items:center;gap:14px;height:50px;padding:0 22px 0 16px;background:var(--tl);color:var(--bone);font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;white-space:nowrap;transition:background .4s var(--ease)}
+.dv6__gen:hover{background:#000}
+.dv6__gen svg{flex:none;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;transition:transform .5s var(--ease)}
+.dv6__gen:hover svg{transform:translateX(4px)}
+.dv6__gen:focus-visible{outline:2px solid var(--focus-l);outline-offset:3px}
+.dv6__dots{display:flex}
+.dv6__dots i{width:13px;height:13px;margin-left:-4px;border-radius:50%;box-shadow:0 0 0 1.5px var(--tl)}
+.dv6__dots i:first-child{margin-left:0}
+.dv6__gnote{order:3;flex:1 1 100%;margin:0;max-width:46ch;font-size:12.5px;line-height:1.5;color:var(--ml)}
+.dv6__copy{display:inline-flex;align-items:center;min-height:44px;font-size:13px;color:var(--tl);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:6px;-webkit-tap-highlight-color:transparent}
+.dv6__copy:hover{color:var(--copper-lo)}
+/* phones and tablets: three swatches a row (two on the narrowest phones), the detail opens in the dialog */
+@media (max-width:1099.98px){
+  .dv6__grid{grid-template-columns:repeat(auto-fill,minmax(132px,1fr))}
+}
+@media (max-width:760px){
+  .dv6__bar{display:block}
+  /* the generator's way on phones: five equal columns, the name over its count */
+  .dv6__cats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0 6px}
+  .dv6__c{flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-height:52px;padding:0;font-size:14px;line-height:18px;min-width:0}
+  .dv6__c span{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .dv6__hint{padding:6px 0 0;font-size:13px}
+  .dv6__grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:18px 10px}
+  .dv6__cap span{font-size:12.5px}
+}
+@media (max-width:359.98px){.dv6__grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* the dialog of a DV composition (below 1100 px; site.css makes it full screen on phones) */
+.cxd--dv .cxd__in{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}
+.cxd--dv .cxd__vis{min-height:0;background:var(--paper)}
+.cxd--dv .dv6__fig--dlg{width:100%;min-width:0;height:100%;aspect-ratio:auto;min-height:100%;max-height:none}
+.cxd--dv .cxd__vis .dv6__img{min-height:0}
+.cxd--dv .dv6__dcode{font-family:var(--f-mono);font-weight:400;font-size:13px;letter-spacing:.04em;color:var(--copper-lo);margin-top:12px}
+.cxd--dv .dv6__dname{margin-top:6px;font-weight:300;font-size:clamp(28px,6.4vw,38px);line-height:1.08;letter-spacing:-.03em;color:var(--tl)}
+.cxd--dv .cxd__desc{margin-top:12px;font-size:15.5px;line-height:1.6;color:var(--ml)}
+.cxd--dv .dv6__dgen{display:flex;flex-wrap:wrap;gap:10px 20px;margin-top:22px}
+.cxd--dv .dv6__dgen .dv6__gen{flex:1 1 auto;justify-content:center}
+.cxd--dv .cxd__acts{align-items:center;justify-content:space-between}
+.dv6__nav{display:flex;align-items:center;gap:6px;margin-right:auto}
+.dv6__navb{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;color:var(--tl);box-shadow:inset 0 0 0 1px var(--line-l2);-webkit-tap-highlight-color:transparent;transition:background .3s,color .3s}
+.dv6__navb:hover{background:var(--tl);color:var(--bone)}
+.dv6__navb svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.4}
+.dv6__navn{min-width:64px;text-align:center;font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--ml)}
+@media (max-width:700px){
+  .cxd--dv .cxd__vis{height:auto}
+  .cxd--dv .dv6__fig--dlg{height:auto;aspect-ratio:1/1;max-height:62dvh}
+  .cxd--dv .cxd__vis img.dv6__img{height:100%;min-height:0;max-height:none}
+  .cxd--dv .cxd__body{min-height:0;padding-top:20px}
+}
+
+/* =========================================================
+   4. Composition generator: the home teaser is the generator's studio in small (build_home.py, assets/js/dv-coat.js)
+   The same neutral light surface (#f5f5f5), thin type, text toggles with a 1 px underline, round swatches, dots-and-name palettes
+   and the proportion strip of generator.html; the preview sits on the same #e8e8e8 mat and is painted with the fleck structure of
+   a real scan. The dark section around it stays (the page's rhythm); the studio reads as the product itself.
+   ========================================================= */
+.gts{--studio:#f5f5f5;--s-ink:#141414;--s-2:#3a3a3a;--s-mute:#6b6b6b;--s-line:rgba(0,0,0,.08);--s-line-2:rgba(0,0,0,.17);
+  display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,27vw,420px);margin-top:clamp(36px,4vw,64px);background:var(--studio);color:var(--s-ink);
+  box-shadow:0 1px 0 rgba(255,255,255,.04),0 60px 120px -60px rgba(0,0,0,.6)}
+.gts ::selection{background:#141414;color:#fff}
+.gts :focus-visible{outline:2px solid var(--s-ink);outline-offset:3px}
+.gts__view{min-width:0;display:flex;flex-direction:column;padding:clamp(14px,1.4vw,22px) 0 0 clamp(14px,1.4vw,22px)}
+.gts .gts__frame{position:relative;flex:1 1 auto;min-height:420px;padding:0;border-radius:0;background:#e8e8e8;overflow:hidden}
+.gts .gts__frame canvas{position:absolute;inset:0;display:block;width:100%;height:100%;aspect-ratio:auto;background:#e8e8e8}
+.gts__bar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:clamp(16px,2vw,32px);min-height:58px;padding:6px 0 10px}
+.gts__vsw{display:flex;gap:20px}
+.gts__tt{display:inline-block;padding:6px 0;font-size:13px;line-height:16px;color:var(--s-mute);white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:color .3s}
+.gts__tt:hover{color:var(--s-ink)}
+.gts__tt[aria-pressed="true"]{color:var(--s-ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:7px}
+.gts__ratio{display:flex;height:3px;gap:2px;min-width:0}
+.gts__ratio i{height:100%;min-width:2px;transition:flex-grow .45s var(--ease)}
+.gts__mat{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--s-mute);white-space:nowrap}
+.gts__mat i{width:12px;height:12px;border-radius:50%;background:var(--studio);box-shadow:inset 0 0 0 1px var(--s-line-2),0 0 0 3px var(--studio),0 0 0 4px rgba(0,0,0,.06)}
+.gts__panel{min-width:0;display:flex;flex-direction:column;gap:clamp(26px,2.6vw,38px);padding:clamp(26px,2.4vw,40px) clamp(24px,2.6vw,44px) clamp(26px,2.4vw,40px)}
+.gts__head{display:flex;flex-direction:column;gap:6px;min-width:0}
+.gts__k{font-size:13px;color:var(--s-mute)}
+.gts__id{display:block;font-weight:200;font-size:clamp(36px,3vw,48px);line-height:1.08;letter-spacing:-.035em;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gts__id .phead__no{font-size:.5em;letter-spacing:0;color:#8c8c8c;margin-right:.22em;vertical-align:.38em}
+.gts__sum{margin-top:4px;font-size:13px;color:var(--s-mute)}
+.gts__grp{min-width:0}
+.gts__h{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.gts__h em{font-style:normal;font-size:13px;color:var(--s-2);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gts__t{margin:0 0 14px;font-size:13px;font-weight:400;line-height:1.4;letter-spacing:0;text-transform:none;color:var(--s-mute)}
+.gts__h .gts__t{margin-bottom:14px}
+.gts__chips{display:flex;flex-wrap:wrap;gap:2px 24px}
+.gts__chip{display:inline-flex;align-items:center;gap:10px;padding:6px 0;font-size:13.5px;line-height:1.3;color:var(--s-2);-webkit-tap-highlight-color:transparent;transition:color .3s}
+.gts__chip:hover,.gts__chip[aria-pressed="true"]{color:var(--s-ink)}
+.gts__chip>span:last-child{padding-bottom:3px;background:linear-gradient(currentColor,currentColor) 0 100%/0 1px no-repeat;transition:background-size .4s var(--ease)}
+.gts__chip[aria-pressed="true"]>span:last-child{background-size:100% 1px}
+.gts__dots{display:flex}
+.gts__dots i{width:14px;height:14px;margin-left:-4px;border-radius:50%;box-shadow:0 0 0 1.5px var(--studio)}
+.gts__dots i:first-child{margin-left:0}
+.gts__sw{display:flex;flex-wrap:wrap;gap:8px}
+.gts__swb{position:relative;width:30px;height:30px;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);-webkit-tap-highlight-color:transparent;transition:transform .4s var(--ease)}
+.gts__swb:hover{transform:scale(1.08)}
+.gts__swb[aria-pressed="true"]::after{content:"";position:absolute;inset:-4px;border-radius:50%;box-shadow:0 0 0 1px var(--s-ink)}
+.gts__rec{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
+.gts__rec li{display:flex;align-items:baseline;gap:12px;min-width:0;font-size:14px}
+.gts__rec i{flex:none;width:9px;height:9px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)}
+.gts__rec .c{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gts__rec .c small{margin-left:6px;font-size:12px;color:var(--s-mute)}
+.gts__rec .f{flex:1;min-width:14px;border-bottom:1px dotted var(--s-line-2);transform:translateY(-4px)}
+.gts__rec b{font-weight:300;font-variant-numeric:tabular-nums}
+.gts__cta{align-self:flex-start;display:inline-flex;align-items:center;gap:14px;height:52px;margin-top:auto;padding:0 26px;background:var(--s-ink);color:#fff;font-size:11.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;white-space:nowrap;transition:background .5s var(--ease)}
+.gts__cta:hover{background:#000}
+.gts__cta svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.4;transition:transform .6s var(--ease)}
+.gts__cta:hover svg{transform:translateX(4px)}
+#generator .gen__feat{margin-top:clamp(40px,4.4vw,72px)}
+@media (max-width:1099.98px){
+  .gts{grid-template-columns:minmax(0,1fr)}
+  .gts__view{padding:10px 10px 0}
+  .gts .gts__frame{flex:none;min-height:0;aspect-ratio:16/10}
+  .gts__panel{padding:24px 20px 28px;gap:28px}
+}
+@media (max-width:760px){
+  .gts__sw{display:grid;grid-template-columns:repeat(4,44px);gap:12px 16px}
+  .gts .gts__swb{width:44px;height:44px}
+  .gts{margin-inline:calc(var(--pad) * -1 + 10px)}
+  .gts .gts__frame{aspect-ratio:4/3}
+  .gts__bar{grid-template-columns:auto minmax(48px,1fr);gap:18px}
+  .gts__mat{grid-column:1 / -1;margin-top:-6px}
+  .gts__cta{align-self:stretch;justify-content:center}
+}
+@media (pointer:coarse),(max-width:1099.98px){
+  .gts__tt{min-width:44px;margin:0 -11px;padding:14px 11px;text-align:center}
+  .gts__vsw{gap:0 24px}
+  .gts__chip{min-height:44px}
+  .gts__swb{width:40px;height:40px}
+  .gts__sw{gap:8px}
+}
+@media (prefers-reduced-motion:reduce){.gts *{transition:none!important}}
+@media (forced-colors:active){.gts__swb,.gts__rec i,.gts__ratio i,.gts__dots i{forced-color-adjust:none;outline:1px solid CanvasText}}
+
+/* =========================================================
+   5. Technology: the photo intro, the close-up story (wall to flecks), the coating system, the sample strip
+   Viktor's studio photographs of DV 033 (07.10), shown as framed material shots on the light page (TECH_JS in build_inner.py).
+   ========================================================= */
+.intro--tech{padding-top:calc(var(--hdr) + clamp(36px,5vw,72px));padding-bottom:clamp(56px,7vw,112px)}
+.tin{display:grid;grid-template-columns:minmax(0,6fr) minmax(0,5fr);gap:clamp(32px,6vw,104px);align-items:center}
+.tin__fig{position:relative;margin:0;aspect-ratio:4/5;max-height:calc(100svh - var(--hdr) - 96px);overflow:hidden;background:#2a2521;justify-self:end;width:100%}
+.tin__fig picture,.tin__fig img{display:block;width:100%;height:100%}
+.tin__fig img{object-fit:cover}
+.tin .intro__ctas{margin-top:var(--s-7)}
+.tin .intro__ctas .link-arrow{color:var(--td)}
+@media (max-width:1099.98px){
+  .tin{grid-template-columns:minmax(0,1fr);gap:var(--s-7)}
+  .tin__fig{justify-self:stretch;aspect-ratio:4/5;max-height:none}
+}
+@media (max-width:760px){.tin__fig{aspect-ratio:4/5;margin-inline:calc(var(--pad) * -1);width:calc(100% + 2 * var(--pad))}}
+
+/* the close-up story: framed material shots on the warm light page (no full bleed, no vignette, no text over the picture).
+   Desktop: the steps on the left, a large square frame on the right that stays in view while they scroll past; the photographs
+   cross-fade inside it and push in slowly with the scroll (--z, TECH_JS). Phones: the frame full width under the header, the
+   steps below it. */
+.tzm__in{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);column-gap:clamp(48px,6vw,112px);align-items:start}
+.tzm__head{grid-column:1;grid-row:1;max-width:520px}
+.tzm__head .h2{margin-top:var(--s-5)}
+.tzm__head .lede{margin-top:var(--s-5);max-width:40ch}
+.tzm__media{grid-column:2;grid-row:1 / span 2;align-self:stretch;min-width:0}
+.tzm__fig{position:sticky;top:calc(var(--hdr) + 32px);margin:0}
+.tzm__frame{--side:min(100%,calc(100vh - var(--hdr) - 140px));--side:min(100%,calc(100svh - var(--hdr) - 140px));
+  position:relative;width:var(--side);aspect-ratio:1/1;margin-left:auto;overflow:hidden;border-radius:var(--r-1);background:var(--paper-2);
+  box-shadow:0 1px 2px rgba(40,28,16,.06),0 38px 80px -44px rgba(40,28,16,.42)}
+.tzm__pic{position:absolute;inset:0;opacity:0;transition:opacity .9s var(--ease)}
+.tzm__pic.is-on{opacity:1}
+.tzm__pic picture,.tzm__pic img{display:block;width:100%;height:100%}
+.tzm__pic img{object-fit:cover;transform:scale(var(--z,1));transform-origin:50% 50%;transition:transform .25s linear;will-change:transform}
+.tzm__cap{display:flex;justify-content:space-between;align-items:baseline;gap:16px;width:var(--side,100%);margin:14px 0 0 auto;font-size:12.5px;line-height:1.5;color:var(--ml)}
+.tzm__fig .tzm__cap{width:min(100%,calc(100svh - var(--hdr) - 140px))}
+.tzm__n{flex:none;font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.tzm__n b{font-weight:600;color:var(--tl)}
+.tzm__steps{grid-column:1;grid-row:2;list-style:none;margin:clamp(40px,5vw,80px) 0 0;padding:0}
+.tzm__s{display:grid;grid-template-columns:52px minmax(0,1fr);gap:0 14px;min-height:min(52vh,480px);padding-top:22px;border-top:1px solid var(--line-l);
+  opacity:.4;transition:opacity .6s var(--ease)}
+.tzm__s:last-child{min-height:min(62vh,600px)}   /* the frame stays whole while the last step is read */
+.tzm__s.is-on{opacity:1}
+.tzm__no{padding-top:7px;font-weight:600;font-size:11px;letter-spacing:var(--ls-caps);color:var(--copper-lo);font-variant-numeric:tabular-nums}
+.tzm__s h3{font-weight:300;font-size:clamp(24px,2vw,32px);line-height:1.12;letter-spacing:-.025em;color:var(--tl)}
+.tzm__s p{margin-top:10px;max-width:38ch;font-size:15.5px;line-height:1.6;color:var(--ml)}
+@media (max-width:1099.98px){
+  .tzm__in{display:block}
+  .tzm__head{max-width:none}
+  /* the frame pinned under the header while the steps scroll below it (data-dv-sticky-preview keeps the header in place) */
+  .tzm__media{position:sticky;top:var(--hdr);z-index:2;margin:var(--s-7) calc(var(--pad) * -1) 0}
+  .tzm__fig{position:static}
+  .tzm__frame{--side:100%;width:100%;aspect-ratio:4/3;margin:0;border-radius:0;box-shadow:0 18px 30px -24px rgba(40,28,16,.45)}
+  .tzm__cap{display:none}
+  .tzm__steps{margin-top:var(--s-6)}
+  .tzm__s{min-height:min(40vh,360px)}
+  .tzm__s:last-child{min-height:min(32vh,300px)}
+}
+@media (max-width:760px){
+  .tzm__frame{aspect-ratio:1/1;max-height:calc(100svh - var(--hdr) - 300px)}
+  .tzm__s{grid-template-columns:40px minmax(0,1fr);min-height:34vh;min-height:34svh;padding-top:18px}
+  .tzm__s:last-child{min-height:0;padding-bottom:8px}   /* the pinned frame lets go soon after the last words */
+  .tzm__s h3{font-size:24px}
+  .tzm__s p{font-size:15.5px;max-width:none}
+}
+@media (prefers-reduced-motion:reduce){.tzm__pic,.tzm__pic img{transition:none}}
+
+/* the coating system: an exploded isometric stack; each label sits at the height of its plate (desktops), a list below it on phones */
+.tsys__grid{position:relative;margin-top:clamp(32px,4vw,64px)}
+.tsys__vis{min-width:0}
+.tsys__svg{display:block;width:100%;height:auto;overflow:visible}
+.tsys__pl{transition:transform 1.1s var(--ease);transition-delay:calc(var(--i) * .07s)}
+.tsys__grid:not(.is-open) .tsys__pl{transform:translateY(var(--dy,0px))}   /* closed: each plate rests on the one below (build_inner.tsys_svg) */
+.tsys__lead{stroke:rgba(237,230,218,.32);stroke-width:1;transition:opacity .8s var(--ease) .55s}
+.tsys__dot{fill:var(--copper-hi);transition:opacity .8s var(--ease) .55s}
+.tsys__grid:not(.is-open) .tsys__lead,.tsys__grid:not(.is-open) .tsys__dot{opacity:0}
+.tsys__list{list-style:none;margin:0;padding:0}
+.tsys__l{display:grid;grid-template-columns:40px minmax(0,1fr);gap:4px 12px}
+.tsys__l b{font-weight:600;font-size:11px;letter-spacing:var(--ls-caps);color:var(--copper-hi);padding-top:7px;font-variant-numeric:tabular-nums}
+.tsys__l h3{font-weight:300;font-size:clamp(21px,1.75vw,28px);line-height:1.12;letter-spacing:-.02em;color:var(--td)}
+.tsys__l p{margin-top:6px;font-size:14.5px;line-height:1.55;color:var(--md);max-width:46ch}
+@media (min-width:1100px){
+  .tsys__list{position:absolute;inset:0}
+  .tsys__l{position:absolute;left:calc(640 / 1100 * 100% + 18px);right:0;top:var(--y);transform:translateY(-14px);transition:opacity .8s var(--ease) .5s}
+  .tsys__grid:not(.is-open) .tsys__l{opacity:0}
+}
+.tsys__note{margin-top:clamp(20px,2.4vw,32px);font-size:13px;line-height:1.55;color:var(--md)}
+.tsys__real{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,7fr);gap:clamp(24px,4vw,72px);align-items:end;margin:clamp(48px,6vw,96px) 0 0}
+.tsys__real figcaption{font-size:14.5px;line-height:1.6;color:var(--md);max-width:40ch;padding-bottom:6px}
+.tsys__real figcaption b{display:block;margin-bottom:10px;font-weight:300;font-size:clamp(22px,1.9vw,30px);line-height:1.15;letter-spacing:-.02em;color:var(--td)}
+.tsys__real picture,.tsys__real img{display:block;width:100%;height:auto}
+.tsys__real img{aspect-ratio:16/10;object-fit:cover;background:#2a2521}
+@media (max-width:1099.98px){
+  .tsys__vis{overflow:hidden;max-width:520px}
+  .tsys__svg{width:268%;max-width:none}
+  .tsys__lead,.tsys__dot{display:none}
+  .tsys__list{display:flex;flex-direction:column-reverse;margin-top:var(--s-5)}
+  .tsys__l{padding:18px 0;border-top:1px solid var(--line-d)}
+  .tsys__l:last-child{border-top:0}
+  .tsys__real{grid-template-columns:minmax(0,1fr)}
+  .tsys__real figcaption{order:2;padding-bottom:0}
+}
+@media (max-width:760px){.tsys__real img{aspect-ratio:1/1}}
+@media (prefers-reduced-motion:reduce){.tsys__pl,.tsys__l{transition:none}.tsys__grid:not(.is-open) .tsys__pl{transform:none}.tsys__grid:not(.is-open) .tsys__l,.tsys__grid:not(.is-open) .tsys__lead,.tsys__grid:not(.is-open) .tsys__dot{opacity:1}.tzm__pic{transition:none}}
+
+/* the sample strip: a <picture> fills its tile like the photos beside it */
+.tstrip__t picture{display:block;width:100%;height:100%}
+
+/* =========================================================
+   6. Application service: the room before and after (w6.room_ba): the same Cycles living room with the primed wall and with
+   the Sandstone coat, real <picture> elements loaded at once on the application page (its first screen), lazily on the home page
+   ========================================================= */
+.app__vis--room{aspect-ratio:5/4;background:#2a2521}
+.app__vis--room .base,.app__vis--room .done{background:none!important}
+.app__vis--room .base::after{display:none}
+.app__vis--room picture,.app__vis--room img{display:block;width:100%;height:100%}
+.app__vis--room img{object-fit:cover;-webkit-user-drag:none;user-select:none;pointer-events:none}
+@media (min-width:1101px){.intro--app .app{grid-template-columns:minmax(0,5fr) minmax(0,7fr)}}
+@media (max-width:1100px){.app__vis--room{aspect-ratio:5/4}}
+@media (max-width:760px){.app__vis--room{aspect-ratio:4/5}}
+
+/* =========================================================
+   7. Designer Box: the set without the photo places (Viktor's studio photographs of a sample board fill the mosaic)
+   ========================================================= */
+.dbx__photos .dbx__ph>picture.dbx__fill{position:absolute;inset:0;display:block}
+.dbx__photos .dbx__ph>picture.dbx__fill img{display:block;width:100%;height:100%;object-fit:cover}
+.dbx__photos--3 .dbx__ph--a{min-height:clamp(320px,34vw,560px)}
+#designer-box .hbox picture,#designer-box .hbox picture img{display:block;width:100%;height:100%}
+#designer-box .hbox picture img{object-fit:cover}
+
+/* =========================================================
+   8. Phones and small fixes
+   ========================================================= */
+/* generator: on phones the view bar is two rows (view switch and proportion strip, then the neutral-backing note), so no word
+   is ever cut at the edge */
+@media (max-width:760px){
+  .gx5 .view__bar{grid-template-columns:auto minmax(56px,1fr);row-gap:0;overflow:visible;-webkit-mask-image:none;mask-image:none;padding-right:0}
+  .gx5 .view__mat{grid-column:1 / -1;margin:-4px 0 8px}
+}
+/* the catalogue viewer: on short desktop screens the note under «Open in the generator» gives way, so the viewer fits */
+@media (min-width:1100px) and (max-height:940px){.dv6__view .dv6__gnote{display:none}}
+
+/* interiors (home): on phones the four palettes sit two by two instead of a sideways row whose third chip was cut at the edge */
+@media (max-width:760px){
+  #interiors .rooms__chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;overflow:visible;margin-inline:0;padding:0;
+    -webkit-mask-image:none;mask-image:none;animation:none}
+  #interiors .rooms__chips .preset{width:100%;min-width:0;justify-content:flex-start;padding:0 12px 0 10px}
+  #interiors .rooms__chips .preset i{width:12px;height:12px;margin-right:3px}
+  #interiors .rooms__chips .preset span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+
+/* the generator's first picture (performance, 07.10): the default composition rendered with the live engine; it lies over the canvas
+   until the engine takes over at idle, top-left aligned and width-fitted like the canvas, so the hand-over shows no change */
+.gx5 .gen__poster{position:absolute;inset:0;z-index:1;display:block;pointer-events:none;transition:opacity .4s var(--ease)}
+.gx5 .gen__poster img{display:block;width:100%;height:100%;object-fit:cover;object-position:0 0}
+.gx5 .gen__poster.is-gone{opacity:0}
+
+/* phone first screen (08.10 review): the buttons and the facts sit over the light sofa and floor of the room still, where the
+   text link and the small fact captions lost contrast; give them their own quiet dark backing instead of darkening the room */
+@media (max-width:760px){
+  .hero--room .hero__lede{text-shadow:0 1px 14px rgba(14,12,10,.6)}
+  .hero--room .hero__ctas{display:grid;gap:10px}
+  .hero--room .hero__ctas .btn-text{justify-content:center;width:100%;color:#f3ece2;border:1px solid rgba(243,236,226,.42);
+    background:rgba(14,12,10,.46);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .hero--room .hero__ctas .btn-text span{padding-bottom:0;background:none}
+  .hero--room .hero__facts{background:linear-gradient(0deg,rgba(14,12,10,.9) 0%,rgba(14,12,10,.72) 70%,rgba(14,12,10,.4) 100%);
+    margin-inline:calc(50% - 50vw);padding-inline:calc(50vw - 50%)}
+  .hero--room .fact span{color:rgba(243,236,226,.74)}
+}

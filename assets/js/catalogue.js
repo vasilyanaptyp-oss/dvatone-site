@@ -103,23 +103,211 @@
     for (var i = 0; i < DVL.length; i++) if (codeKey(DVL[i].code) === k) return DVL[i];
     return null;
   }
-  function openDv(d) {
-    var name = loc(d.name), desc = loc(d.desc), ph = d.photo_m || d.photo;
-    var tile = '<div class="cxd__neutral" aria-hidden="true"><span>' + esc(d.code) + '</span></div>';   // the heading below names it
-    var vis = ph ? '<img src="' + esc(url(ph)) + '" alt="' + esc(name ? d.code + ' ' + name : fmt(LS.sample, { code: d.code })) + '"' + (d.w > 0 && d.h > 0 ? ' width="' + Math.round(d.w) + '" height="' + Math.round(d.h) + '"' : '') + ' decoding="async">' : tile;
-    var body = '<p class="cxd__sys">' + esc(C.dvColl || LS.dvColl) + '</p><h2 class="cxd__code">' + esc(d.code) + '</h2>' +
-      (name ? '<p class="cxd__name">' + esc(name) + '</p>' : '') + (desc ? '<p class="cxd__desc">' + esc(desc) + '</p>' : '') +
-      '<div class="cxd__acts"><button type="button" class="btn btn--ink btn--sm" data-copy="' + esc(d.code) + '"><span>' + esc(C.copyCode || LS.copyCode) + '</span></button></div>';
-    if (!fillDialog(vis, body)) return;
-    var im = $('[data-cxd-vis] img', dlg);
-    if (im) im.addEventListener('error', function () { var v = im.parentNode; if (v) v.innerHTML = tile; });   // a listed photo that does not load: the tile, never a broken image
-    openModal(dlg);
+  /* ---------- wave 6: filter, viewer and dialog of the DV collection ----------
+     [data-dv6]: a filter by the generator's four tone categories ([data-dvc]), a grid of swatches ([data-dv-open]) and, from
+     1100 px, a sticky viewer ([data-dvv]): a pointer over a swatch (or keyboard focus) shows that composition there, a click keeps
+     it (and the address, #dv-029), leaving the grid brings the kept one back. Below 1100 px a tap opens the same detail in the
+     dialog, with previous / next within the filter (buttons, arrow keys, a swipe on the picture). The viewer and the dialog show
+     the macro crop of the real scan (make_dv_meta.py), its scale, the tone category and «Open in the generator» (the measured
+     colour families, generator.js names the composition after the code). Data: DV.cat.dv. */
+  var wideMq = window.matchMedia ? matchMedia('(min-width:1100px)') : null;
+  var fineMq = window.matchMedia ? matchMedia('(hover:hover) and (pointer:fine)') : null;
+  var wide = function () { return !!(wideMq && wideMq.matches); };
+  var reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches);
+  var dv6 = $('[data-dv6]'), view = $('[data-dvv]'), grid6 = $('[data-dv-grid]');
+  var CATN = C.dvCats || {};
+  var pinned = null, shown = null, dvFilter = 'all', hoverT = 0, leaveT = 0, dlgCode = null, viewK = {};
+  var nameOf = function (d) { return loc(d && d.name); };
+  var tileOf = function (code) { return grid6 ? $('[data-dv-open="' + code + '"]', grid6) : null; };
+  var smallOf = function (d) { return d.photo_s || d.photo_m || d.photo || ''; };
+  function metaLine(d) {
+    var bits = [];
+    if (d.cat && CATN[d.cat]) bits.push('<b>' + esc(CATN[d.cat]) + '</b>');
+    if (d.photoView) bits.push(esc(C.studio || ''));
+    else if (d.xm) {
+      if (d.scan && d.mm) {
+        var cm = (Math.round(d.mm) / 10).toFixed(1).replace(/\.0$/, ''); if (lang === 'uk') cm = cm.replace('.', ',');
+        bits.push(esc(fmt(C.scanDetail || '{mm} cm', { mm: cm })).replace(/&amp;nbsp;/g, '&nbsp;'));
+      } else bits.push(esc(C.photoDetail || ''));
+    }
+    return bits.join(' · ');
   }
+  var arrowSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+  function viewsHTML(d, k, attr) {   // the views of a composition with photographs: text toggles under the picture
+    if (!d.views || d.views.length < 2) return '';
+    return '<div class="dv6__views" role="group" aria-label="' + esc(C.viewL || '') + '" ' + attr + '>' + d.views.map(function (v, i) {
+      return '<button type="button" class="dv6__vb" data-dvv-view="' + i + '" aria-pressed="' + (i === (k | 0)) + '">' + esc(v.label) + '</button>';
+    }).join('') + '</div>';
+  }
+  function genHTML(d) {
+    if (!d.gen) return '';
+    return '<a class="dv6__gen" data-dvv-gen href="' + esc(url(d.gen)) + '"><span class="dv6__dots" aria-hidden="true">' +
+      (d.mix || []).slice(0, 6).map(function (m) { return '<i style="background:#' + esc(m[0]) + '"></i>'; }).join('') +
+      '</span><span>' + esc(C.genOpen || '') + '</span>' + arrowSvg + '</a><p class="dv6__gnote">' + esc(C.genNote || '') + '</p>';
+  }
+  function viewOf(d, k) {   // a composition with photographs (DV 033): the k-th view takes the place of the macro crop
+    var v = d.views && d.views.length ? d.views[Math.max(0, Math.min(d.views.length - 1, k | 0))] : null;
+    if (!v) return d;
+    var o = {}; for (var key in d) o[key] = d[key];
+    o.x = v.x; o.xm = v.xm; o.xa = v.xa; o.xma = v.xma; o.alt = v.alt; o.view = k | 0;
+    return o;
+  }
+  function macroImg(d, cls, sizes) {   // the macro crop (AVIF first when there is one) with its two widths; else the scan photo; else the typographic swatch
+    var name = nameOf(d), alt = d.alt || fmt(C.macroAlt || '{code}', { code: d.code + (name ? ' ' + name : '') });
+    if (d.xm) {
+      var img = '<img src="' + esc(url(d.xm)) + '" srcset="' + esc(url(d.xm)) + ' ' + (d.wxm || 640) + 'w, ' + esc(url(d.x || d.xm)) + ' ' + (d.wx || 1000) + 'w" sizes="' + sizes + '" alt="' + esc(alt) + '" width="1000" height="1000" decoding="async">';
+      if (d.xa && d.xma) return '<picture class="' + cls + '"><source type="image/avif" srcset="' + esc(url(d.xma)) + ' ' + (d.wxm || 640) + 'w, ' + esc(url(d.xa)) + ' ' + (d.wx || 1000) + 'w" sizes="' + sizes + '">' + img + '</picture>';
+      return img.replace('<img ', '<img class="' + cls + '" ');
+    }
+    var ph = d.photo_m || d.photo;
+    if (ph) return '<img class="' + cls + '" src="' + esc(url(ph)) + '" alt="' + esc(d.code + (name ? ' ' + name : '')) + '" width="1100" height="825" decoding="async">';
+    return '<span class="' + cls + ' dv6__img--type"><span>' + esc(d.code) + '</span></span>';
+  }
+
+  /* the viewer: the new picture is laid over the old one and fades in once decoded; until then the swatch's own small photo,
+     enlarged, holds the colour (never an empty frame) */
+  function showInView(d, k) {
+    if (!view || !d) return;
+    k = k | 0;
+    var key = d.code + ':' + k; if (shown === key || (shown === d.code && !k)) return;
+    shown = key;
+    var base = d; d = viewOf(base, k);
+    var fig = $('[data-dvv-fig]', view), info = $('[data-dvv-info]', view);
+    var vw = $('[data-dvv-views]', view), vh = viewsHTML(base, k, 'data-dvv-views');
+    if (vw) { if (vh) vw.outerHTML = vh; else vw.remove(); } else if (vh && fig) fig.insertAdjacentHTML('afterend', vh);
+    if (fig) {
+      fig.style.setProperty('--mm', d.mm || 65);
+      fig.style.backgroundImage = smallOf(d) ? 'url("' + url(smallOf(d)) + '")' : 'none';
+      var old = $$('.dv6__img', fig), holder = document.createElement('div');
+      holder.innerHTML = macroImg(d, 'dv6__img', '(min-width: 1100px) 40vw, 100vw');
+      var nu = holder.firstChild; fig.insertBefore(nu, $('[data-dvv-scale]', fig));
+      var im = nu.tagName === 'IMG' ? nu : $('img', nu);
+      var on = function () {
+        if (shown !== key) { if (nu.parentNode) nu.parentNode.removeChild(nu); return; }   // overtaken by a newer choice
+        nu.classList.add('is-on');
+        old.forEach(function (o) { o.classList.remove('is-on'); setTimeout(function () { if (o.parentNode) o.parentNode.removeChild(o); }, reduce ? 0 : 450); });
+      };
+      if (!im) on();
+      else if (im.complete && im.naturalWidth) on();
+      else { im.addEventListener('load', on); im.addEventListener('error', function () { if (nu.parentNode) nu.parentNode.removeChild(nu); }); }
+      var sc = $('[data-dvv-scale]', fig); if (sc) sc.hidden = !(d.scan && d.mm && d.xm);
+    }
+    if (info) {
+      var name = nameOf(d), desc = loc(d.desc);
+      $('[data-dvv-code]', info).textContent = d.code;
+      var nm = $('[data-dvv-name]', info); nm.textContent = name; nm.hidden = !name;
+      var ds = $('[data-dvv-desc]', info); ds.textContent = desc; ds.hidden = !desc;
+      $('[data-dvv-meta]', info).innerHTML = metaLine(d);
+      var acts = $('.dv6__acts', info);
+      if (acts) {
+        $$('[data-dvv-gen], .dv6__gnote', acts).forEach(function (n) { n.remove(); });
+        acts.insertAdjacentHTML('afterbegin', genHTML(d));
+        var cp = $('[data-dvv-copy]', acts); if (cp) cp.setAttribute('data-copy', d.code);
+      }
+    }
+  }
+  function pin(code, o) {
+    var d = dvEntry(code); if (!d) return;
+    pinned = d.code;
+    $$('[data-dv-open]', grid6 || document).forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-dv-open') === d.code ? 'true' : 'false'); });
+    showInView(d, viewK[d.code] || 0);
+    if (o && o.hash) { try { history.replaceState(history.state, '', location.pathname + location.search + '#dv-' + d.code.split(' ').pop()); } catch (e) {} }
+  }
+  function visibleCodes() { return $$('.dv6__i', grid6 || document).filter(function (li) { return !li.hidden; }).map(function (li) { return $('[data-dv-open]', li).getAttribute('data-dv-open'); }); }
+  function setFilter(cat) {
+    dvFilter = cat;
+    $$('[data-dvc]', dv6).forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-dvc') === cat ? 'true' : 'false'); });
+    $$('.dv6__i', grid6).forEach(function (li) { var on = cat === 'all' || li.getAttribute('data-cat') === cat; li.hidden = !on; li.style.display = on ? '' : 'none'; });
+    var vis = visibleCodes();
+    if (vis.length && vis.indexOf(pinned) < 0) pin(vis[0]);   // the kept composition left the filter: the first one of it takes its place
+    if (live) { live.textContent = fmt(C.shown || '{n}', { n: vis.length }); setTimeout(function () { live.textContent = ''; }, 2600); }
+  }
+
+  /* the dialog (below 1100 px): the same detail, with previous / next inside the filter */
+  function openDvDialog(code, keepOpen, k) {
+    var base = dvEntry(code) || { code: code }, d = viewOf(base, k | 0), name = nameOf(d), desc = loc(d.desc), list = visibleCodes(), i = list.indexOf(d.code);
+    dlgCode = d.code;
+    var vis = '<div class="dv6__fig dv6__fig--dlg" style="--mm:' + (d.mm || 65) + ';background-image:' + (smallOf(d) ? 'url(&quot;' + esc(url(smallOf(d))) + '&quot;)' : 'none') + '">' +
+      macroImg(d, 'dv6__img is-on', '100vw') + '<span class="dv6__scale" aria-hidden="true"' + (d.scan && d.mm && d.xm ? '' : ' hidden') + '><i></i><span>1 ' + esc(C.cm || 'cm') + '</span></span></div>' + viewsHTML(base, k | 0, 'data-dlg-views');
+    var nav = list.length > 1 && i > -1 ? '<div class="dv6__nav"><button type="button" class="dv6__navb" data-dv-step="-1" aria-label="' + esc(C.prev || '') + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>' +
+      '<span class="dv6__navn">' + esc(fmt(C.of || '{n} / {total}', { n: i + 1, total: list.length })) + '</span>' +
+      '<button type="button" class="dv6__navb" data-dv-step="1" aria-label="' + esc(C.next || '') + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div>' : '';
+    var body = '<p class="cxd__sys">' + esc(C.dvColl || LS.dvColl) + '</p><h2 class="cxd__code dv6__dcode">' + esc(d.code) + '</h2>' +
+      (name ? '<p class="dv6__dname">' + esc(name) + '</p>' : '') + (desc ? '<p class="cxd__desc">' + esc(desc) + '</p>' : '') +
+      '<p class="dv6__meta">' + metaLine(d) + '</p>' + (d.gen ? '<div class="dv6__dgen">' + genHTML(d) + '</div>' : '') +
+      '<div class="cxd__acts">' + nav + '<button type="button" class="btn btn--line-l btn--sm" data-copy="' + esc(d.code) + '"><span>' + esc(C.copyCode || LS.copyCode) + '</span></button></div>';
+    if (!fillDialog(vis, body)) return;
+    dlg.classList.add('cxd--dv');
+    var im = $('[data-cxd-vis] img', dlg);
+    if (im) im.addEventListener('error', function () { if (im.parentNode) im.parentNode.removeChild(im); });   // the enlarged swatch stays: never a broken image
+    if (!keepOpen) openModal(dlg);
+  }
+  function step(n) {
+    var list = visibleCodes(), i = list.indexOf(dlgCode); if (i < 0 || list.length < 2) return;
+    var to = list[(i + n + list.length) % list.length];
+    openDvDialog(to, true); pin(to);
+    var b = $('[data-dv-step="' + (n < 0 ? -1 : 1) + '"]', dlg); if (b) { try { b.focus({ preventScroll: true }); } catch (e) { b.focus(); } }
+  }
+  if (dlg) {
+    dlg.addEventListener('click', function (e) {
+      var s = e.target.closest('[data-dv-step]'); if (s) { step(+s.getAttribute('data-dv-step')); return; }
+      var v = e.target.closest('[data-dlg-views] [data-dvv-view]');
+      if (v && dlgCode) {
+        var kv = +v.getAttribute('data-dvv-view'); openDvDialog(dlgCode, true, kv);
+        var nb = $('[data-dlg-views] [data-dvv-view="' + kv + '"]', dlg); if (nb) { try { nb.focus({ preventScroll: true }); } catch (x) { nb.focus(); } }
+      }
+    });
+    dlg.addEventListener('keydown', function (e) { if (dlgCode && dlg.classList.contains('cxd--dv') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !/INPUT|TEXTAREA/.test(e.target.tagName)) { e.preventDefault(); step(e.key === 'ArrowRight' ? 1 : -1); } });
+    var sx = null, sy = 0;   // a horizontal swipe on the picture: previous / next
+    dlg.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'mouse' && e.target.closest('[data-cxd-vis]')) { sx = e.clientX; sy = e.clientY; } });
+    dlg.addEventListener('pointerup', function (e) { if (sx == null) return; var dx = e.clientX - sx, dy = e.clientY - sy; sx = null; if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.4) step(dx < 0 ? 1 : -1); });
+    dlg.addEventListener('close', function () { dlg.classList.remove('cxd--dv'); dlgCode = null; });
+  }
+
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-dv-open]'); if (!b) return;
     var k = b.getAttribute('data-dv-open');
-    openDv(dvEntry(k) || { code: k });   // a card the data does not know still opens: its code alone
+    if (view && wide()) { pin(k, { hash: true }); return; }   // desktops: the viewer beside the grid keeps it
+    openDvDialog(k);   // a card the data does not know still opens: its code alone
   });
+  if (dv6) {
+    dv6.addEventListener('click', function (e) {
+      var c = e.target.closest('[data-dvc]'); if (c) { setFilter(c.getAttribute('data-dvc')); return; }
+      var cp = view && e.target.closest('[data-dvv-copy]'); if (cp) { copy(cp.getAttribute('data-copy'), cp); return; }
+      var vb = view && e.target.closest('[data-dvv-views] [data-dvv-view]');
+      if (vb) {
+        var d0 = dvEntry(shown ? shown.split(':')[0] : pinned), kk = +vb.getAttribute('data-dvv-view');
+        if (d0) { viewK[d0.code] = kk; showInView(d0, kk); var b2 = $('[data-dvv-views] [data-dvv-view="' + kk + '"]', view); if (b2) { try { b2.focus({ preventScroll: true }); } catch (x) { b2.focus(); } } }
+      }
+    });
+    if (grid6 && view) {
+      var preview = function (b) {
+        clearTimeout(leaveT); clearTimeout(hoverT);
+        hoverT = setTimeout(function () { var d = dvEntry(b.getAttribute('data-dv-open')); if (d) showInView(d); }, 70);
+      };
+      grid6.addEventListener('pointerover', function (e) {
+        if (!wide() || !(fineMq && fineMq.matches) || e.pointerType === 'touch') return;
+        var b = e.target.closest('[data-dv-open]'); if (b) preview(b);
+      });
+      grid6.addEventListener('pointerleave', function () {   // back to the kept one
+        clearTimeout(hoverT); clearTimeout(leaveT);
+        leaveT = setTimeout(function () { var d = dvEntry(pinned); if (d) showInView(d, viewK[d.code] || 0); }, 160);
+      });
+      grid6.addEventListener('focusin', function (e) { if (!wide()) return; var b = e.target.closest('[data-dv-open]'); if (b) preview(b); });
+      grid6.addEventListener('focusout', function (e) { if (!grid6.contains(e.relatedTarget)) { clearTimeout(hoverT); var d = dvEntry(pinned); if (d) showInView(d); } });
+    }
+    // the first composition, or the one the address names (#dv-029, from the home page strip or a shared link)
+    var hm = /^#dv-(\d{1,3})$/.exec(location.hash || ''), first = $('[data-dv-open]', grid6 || dv6);
+    var start = hm && tileOf('DV ' + ('00' + hm[1]).slice(-3)) ? 'DV ' + ('00' + hm[1]).slice(-3) : (first && first.getAttribute('data-dv-open'));
+    shown = (DVL[0] && DVL[0].code) || null;   // the build already shows the first composition in the viewer
+    if (start) pin(start);
+    window.addEventListener('hashchange', function () {   // an in-page link or an edited address (#dv-056): that composition, in any filter
+      var h = /^#dv-(\d{1,3})$/.exec(location.hash || ''); if (!h) return;
+      var c = 'DV ' + ('00' + h[1]).slice(-3); if (!tileOf(c)) return;
+      if (visibleCodes().indexOf(c) < 0) setFilter('all');
+      pin(c);
+    });
+  }
 
   /* ---------- digital catalogue: only when the page renders it ---------- */
   var grid = $('[data-cat-grid]');

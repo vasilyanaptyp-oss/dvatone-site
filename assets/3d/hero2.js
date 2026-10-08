@@ -93,6 +93,9 @@ function mount(el, opts = {}) {
   const tall = (() => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r.width < r.height : matchMedia('(orientation: portrait)').matches; })();
   const posterURL = opts.poster === false ? null : (opts.poster || new URL(tall ? './hero2/poster-dv033-m.webp' : './hero2/poster-dv033.webp', BASE).href);
   const introFirst = wantIntro();
+  /* 'studio': the material close-up of the home page's story (07.10): an even, warm raking light over the whole frame, no
+     spotlight pool, no vignette, a lifted fill; the lens and its depth of field as in the macro */
+  const LOOK = opts.look || new URLSearchParams(location.search).get('look') || '';
 
   const M = { x: 0, y: 0 };                    /* macro focus point on the wall (mm); the room is built around it */
   let T, R, scene, camera, U, wallM, wallR, wallL = null, wall, tile = null, spray = null, coat = null, geo = null, room = null, gpu = null;
@@ -101,7 +104,7 @@ function mount(el, opts = {}) {
   const RM = { use: false, ready: false, busy: false, wall0: null };
   /* the story's resting frame: the photograph of the same view (DVInterior2.photoFrame); k = how much it covers */
   const PH = { mod: null, modP: null, ctl: null, host: null, ready: false, loading: false, err: false, k: 0, target: 0, cam: null, camKey: '', fcam: null };
-  const I = { on: false, clock: 0, end: 0, frame: 0, base: 0, over: false, cleanup: false };
+  const I = { on: false, clock: 0, end: 0, frame: 0, base: 0, over: false, cleanup: false, hold: false, holdT: 0, held: 0 };
   const LT = { t: 0 };                         /* loop clock (v1 drift) */
   const ptr = { on: false, x: 0, y: 0, k: 0 };
   const pool = { x: 0, y: 0, init: false };
@@ -126,6 +129,12 @@ function mount(el, opts = {}) {
     manual: tier === 'low' && !opts.live && !capture, liveLabel: LIVE[LANG][0], liveAria: LIVE[LANG][1]
   });
   if (introFirst && tier !== 'low' && posterURL) el.addEventListener('dv3d:fallback', () => stage.setPoster(posterURL), { once: true });
+  /* state for the page (data attributes on the host): whether the spray will play on its own, and where the stage is
+     (manual: low tier, poster and "Live 3D"; live; fallback: no WebGL or a failed start) */
+  el.dataset.dv3dIntro = introFirst && tier !== 'low' ? '1' : '0';
+  el.dataset.dv3dState = tier === 'low' && !opts.live && !capture ? 'manual' : 'loading';
+  el.addEventListener('dv3d:ready', () => { el.dataset.dv3dState = 'live'; }, { once: true });
+  el.addEventListener('dv3d:fallback', () => { el.dataset.dv3dState = 'fallback'; el.dataset.dv3dIntro = '0'; }, { once: true });
   /* the story's last frame as a still (the furnished room): without WebGL, and on the low tier (before and after
      "Live 3D"), it fades in over the poster or the macro while the track scrolls; the page gets the same events */
   const SS = { on: false, img: null, raf: 0, p: -1, cover: false };
@@ -282,13 +291,18 @@ function mount(el, opts = {}) {
     return PH.modP;
   }
   /* the photo's camera for the current aspect (portrait only when the phone view exists) */
-  function photoOK() { return !PH.err && camera && (camera.aspect >= 0.95 || PHOTO_TALL); }
+  function photoOK() { return !PH.err && camera && (camera.aspect >= 0.95 || (PHOTO_TALL && !PH.tallOld)); }
+  /* the phone view is used only when it was rendered from the story's portrait camera (LIVING.tall, 07.10); an older
+     render (the 4:5 view with the lounge chair up close) leaves the end of the story to the real-time room */
+  const sameView = (c, v) => !!(c && v) && [0, 1, 2].every(i => Math.abs(c.pos[i] - v.pos[i]) < 0.05 && Math.abs(c.look[i] - v.look[i]) < 0.05);
   function photoCam() {
     if (!PH.mod || !photoOK()) return Promise.resolve(null);
     const key = camera.aspect.toFixed(3);
     if (key === PH.camKey && PH.camP) return PH.camP;
     PH.camKey = key;
-    return (PH.camP = PH.mod.photoCamera('hero-end', camera.aspect).then(c => { if (PH.camKey === key) { PH.cam = c; stage.invalidate(); } return c; })
+    return (PH.camP = PH.mod.photoCamera('hero-end', camera.aspect).then(c => {
+      if (PH.camKey === key) { PH.tallOld = camera.aspect < 0.95 && !!living && !sameView(c, living.views.tall); PH.cam = PH.tallOld ? null : c; stage.invalidate(); }
+      return c; })
       .catch(e => { PH.err = true; console.warn('[dvatone 3d] photo camera unavailable:', e && e.message || e); return null; }));
   }
   async function loadPhoto() {
@@ -298,6 +312,7 @@ function mount(el, opts = {}) {
     if (!mod || stage.destroyed) return;
     await photoCam();
     if (stage.destroyed) return;
+    if (!photoOK()) { PH.loading = false; return; }          /* an old phone view: nothing more is downloaded */
     try {
       const host = document.createElement('div');
       host.className = 'dv3d__photo'; host.setAttribute('aria-hidden', 'true');
@@ -397,6 +412,9 @@ function mount(el, opts = {}) {
     if (!over || I.base > 40) { tile.ground(); I.base = 0; over = false; } else I.base += 8;
     tile.setBase(I.base); I.over = over;
     I.on = true; I.clock = 0; I.frame = 0; LT.t = 0;
+    /* the page may hold the first spray until its own opening (the headline, the lead) is in: data-intro-hold on the host
+       (removed by the page; never longer than 6 s) */
+    I.hold = !over && el.hasAttribute('data-intro-hold'); I.holdT = stage.t; I.held = 0;      /* stage clock: also right in capture */
     if (stage.applySize && (window.devicePixelRatio || 1) > 1.5) stage.applySize();
     spray.mesh.visible = true;
     U.uWet.value = 1;
@@ -413,6 +431,11 @@ function mount(el, opts = {}) {
   /* ---------- choreography ---------- */
   /* v1 drift, in wall coordinates relative to the focus */
   function loopPose(t, o) {
+    if (LOOK === 'studio') {
+      o.fx = 0; o.fy = 0; o.D = 80; o.pitch = 0.7; o.focus = 0;
+      o.D = SV.studioD || 125; o.el = SV.studioEl || 0.24; o.az = 4.25; o.px = 0; o.py = 0; o.ps = 420; o.lit = 1;
+      return o;
+    }
     const dr = Q.drift ? 1 : 0, lt = Q.drift ? t : t * 0.6;     /* phones: the camera holds still, only a slow light (battery) */
     o.fx = dr * 2.6 * Math.sin(TAU * t / 47); o.fy = dr * -1.6 * Math.sin(TAU * t / 61 + 1.1);
     o.D = 80 * (1 + dr * 0.025 * Math.sin(TAU * t / 53)); o.pitch = 0.7; o.focus = 0;
@@ -454,7 +477,7 @@ function mount(el, opts = {}) {
     else if (cam.view && cam.view.enabled) cam.clearViewOffset();
   }
   /* scroll story camera: log-distance pull-back from the macro to an architectural, level view of the room */
-  const SV = {};
+  const SV = { lift: 600, liftT: 1, level: 0.55 };   /* portrait: crane lift (mm), share of it the target follows, story ease by which the camera is level */
   function storyCamera(p, e) {
     const V3 = T.Vector3;
     const a = camera.aspect, wide = a >= 1;
@@ -472,8 +495,15 @@ function mount(el, opts = {}) {
     const rD = rDir.length(); rDir.normalize();
     const d = Math.exp(mix(L(p.D), L(rD), e));
     const tgt = mT.lerp(rT, Math.pow(e, 1.7));
-    const dir = mDir.lerp(rDir, smooth(0, 1, e)).normalize();
+    const dir = mDir.lerp(rDir, smooth(0, wide ? 1 : SV.level, e)).normalize();   /* portrait: level early, above the sofa's back */
     camera.position.copy(tgt).addScaledVector(dir, d);
+    /* portrait: the pull-back passes over the sofa's back on its way to the phone's end view; a gentle crane keeps it
+       below the frame until it is a few metres away (none in the macro, about 4 cm left when the photograph starts
+       to cover, none from 0.95 on: the end is exactly the photograph's camera) */
+    if (!wide && RM.use && SV.lift) {
+      const u = clamp((e - 0.55) / 0.4, 0, 1), k = Math.pow(Math.sin(Math.PI * u), 2);
+      camera.position.y += SV.lift * k; tgt.y += SV.lift * SV.liftT * k;
+    }
     camera.lookAt(tgt);
     camera.fov = mix(macroFov(a), fovEnd, smooth(0.25, 1, e));
     camera.near = clamp(d * 0.03, 2, 90); camera.far = d * 3 + 12000;
@@ -527,8 +557,9 @@ function mount(el, opts = {}) {
     /* intro clock + landings stamped into the coating (the mip chain is refreshed every fifth frame:
        blurred areas use the coarse mips, a frame of latency there is invisible) */
     if (I.on) {
+      if (I.hold && (!el.hasAttribute('data-intro-hold') || stage.t - I.holdT > 6)) I.hold = false;
       const prev = I.clock;
-      I.clock += dt;
+      if (!I.hold) I.clock += dt;
       if (dt > 0 && I.clock > coat.firstLanding - 0.05 && prev <= coat.lastLanding + 0.001) {
         if (!DBG.noStamp) tile.stamp(prev, I.clock, false, false);
         if (++I.frame % 5 === 0 && !DBG.noFlush) tile.flush();
@@ -580,7 +611,7 @@ function mount(el, opts = {}) {
     fp.set(M.x + p.fx, M.y + p.fy + p.focus * (1 - e), 0).sub(camera.position);
     const focus = e > 0 ? mix(Math.max(20, fp.dot(fwd)), d, smooth(0, 0.3, e)) : Math.max(20, fp.dot(fwd));
     u.uFocus.value = focus; spray.uniforms.uFocus.value = focus;
-    const aper = Q.aper * stage.pr * Math.pow(clamp(1 / kMac, 0, 1), 0.85);
+    const aper = Q.aper * stage.pr * Math.pow(clamp(1 / kMac, 0, 1), 0.85) * (LOOK === 'studio' ? (SV.studioAper || 0.45) : 1);
     u.uAper.value = aper;
     /* raking light (macro) */
     const ce = Math.cos(p.el);
@@ -597,8 +628,9 @@ function mount(el, opts = {}) {
     u.uClock.value = I.clock + I.base;
     u.uSteps.value = stepsNow();
     u.uRoom.value = kRoom;
-    u.uFade.value = 0.014 * (1 - smooth(L(95), L(420), ld));
-    u.uVig.value = mix(1, RM.use ? 0 : 0.3, kRoom);
+    u.uFade.value = LOOK === 'studio' ? 0 : 0.014 * (1 - smooth(L(95), L(420), ld));
+    u.uVig.value = LOOK === 'studio' ? 0 : mix(1, RM.use ? 0 : 0.3, kRoom);
+    if (LOOK === 'studio') { u.uAmb.value.setRGB(0.1, 0.097, 0.092, T.LinearSRGBColorSpace); u.uRelief.value = SV.studioRelief || 0.06; }
     R.toneMappingExposure = mix(0.92, 1.2, kRoom);                     /* the sunlit room is a brighter scene than the macro */
     if (RM.use) { living.setFade(kFade); living.update(still ? 0 : t, kRoom); }
     else room.setFade(kFade);
@@ -625,6 +657,7 @@ function mount(el, opts = {}) {
   }
   function render() {
     if ((PH.k >= 1 && PH.ready) || SS.cover) { gpu && gpu.end(); return; }   /* the photograph (or the still) covers: nothing to draw */
+    if (I.on && I.hold && ++I.held > 2) { gpu && gpu.end(); return; }          /* the dark wall before the spray: drawn once */
     R.render(scene, camera); gpu && gpu.end(); I.frames = (I.frames || 0) + 1;
   }
 
@@ -693,7 +726,7 @@ function mount(el, opts = {}) {
         tile: Q.px, tier, fpsCap: fpsCap(), frames: I.frames || 0, room: RM.use ? 'furnished' : 'simple', roomMs: living ? living.stats.ms : 0, photo: PH.ready ? +PH.k.toFixed(3) : (PH.err ? 'error' : (PH.loading ? 'loading' : 'off')), light: [Math.round(pool.x), Math.round(pool.y)], intro: I.on ? +I.clock.toFixed(2) : -1, story: +ST.p.toFixed(3), storyCam: +(ST.eh || 0).toFixed(3), gpuMs: gpu ? +gpu.ms.toFixed(2) : undefined });
     },
     renderFrame() { if (stage.ready) { update(stage.t, 0); render(); } },
-    get debug() { return gpu ? { U, Q, stage, DBG, living, PH, ST, SV } : null; },          /* ?gpu only: internals for profiling */
+    get debug() { return gpu ? { U, Q, stage, DBG, living, PH, ST, SV, RM, camera } : null; },          /* ?gpu only: internals for profiling */
     destroy() { stage.destroy(); }
   };
   el.dv3d = ctl;
