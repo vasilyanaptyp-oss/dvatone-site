@@ -108,12 +108,12 @@ export const PHOTO_ROOMS = [
     label: { uk: 'Коридор, стіна з покриттям Dvatone', en: 'Corridor with a Dvatone coating' } },
   { id: 'staircase', group: 'public', file: 'staircase', ready: true, name: { uk: 'Сходи', en: 'Staircase' },
     label: { uk: 'Сходи, стіна з покриттям Dvatone вздовж маршу', en: 'Staircase with a Dvatone coating on the wall along the flight' } },
-  { id: 'playroom', group: 'public', file: 'playroom', ready: true, name: { uk: 'Ігрова в садочку', en: 'Kindergarten playroom' },
-    label: { uk: 'Ігрова кімната дитячого садка, стіна з покриттям Dvatone', en: 'Kindergarten playroom with a Dvatone coating on the feature wall' } },
+  { id: 'playroom', group: 'public', file: 'playroom', ready: true, name: { uk: 'Ігрова', en: 'Playroom' },
+    label: { uk: 'Ігрова, стіна з покриттям Dvatone', en: 'Playroom with a Dvatone coating on the feature wall' } },
   { id: 'classroom', group: 'public', file: 'classroom', ready: true, name: { uk: 'Клас', en: 'Classroom' },
     label: { uk: 'Шкільний клас, задня стіна з покриттям Dvatone', en: 'Classroom with a Dvatone coating on the back wall' } },
-  { id: 'foyer', group: 'public', file: 'foyer', ready: true, name: { uk: 'Фоє школи', en: 'School foyer' },
-    label: { uk: 'Фоє школи, стіна з покриттям Dvatone', en: 'School foyer with a Dvatone coating on the feature wall' } }
+  { id: 'foyer', group: 'public', file: 'foyer', ready: true, name: { uk: 'Фойє', en: 'Foyer' },
+    label: { uk: 'Фойє, стіна з покриттям Dvatone', en: 'Foyer with a Dvatone coating on the feature wall' } }
 ];
 const ALIAS = { hallway: 'corridor' };
 const roomDef = id => PHOTO_ROOMS.find(r => r.id === (ALIAS[id] || id));
@@ -297,7 +297,7 @@ export function mountPhoto(el, opts = {}) {
   const hero = opts.view === 'hero-end';
   const S = {
     room: hero ? 'hero-end' : (roomDef(opts.room) ? roomDef(opts.room).id : 'living'),
-    colors: normColors(opts.colors), grain: clamp(+opts.grain || 1, 0.6, 1.8),
+    colors: normColors(opts.colors), grain: clamp(+opts.grain || 0.39, 0.2, 1.8),   /* r2b: down to 0.2, so fine (Ambit, 0.24) is no longer clamped up to medium */
     density: opts.density == null ? 0.92 : clamp(+opts.density, 0.4, 1), seed: opts.seed == null ? 11 : +opts.seed,
     textureUrl: opts.textureUrl || null, textureSize: +opts.textureSize || 0.6,
     structure: opts.structure === false || opts.structure === null ? null : (opts.structure || STRUCTURE),   /* null or false: synthetic granules */
@@ -619,10 +619,10 @@ export function mountPhoto(el, opts = {}) {
 
   const ctl = {
     el, get ready() { return started.then(p => p); }, start,
-    setColors(colors, grain) { S.colors = normColors(colors); if (grain != null) S.grain = clamp(+grain || 1, 0.6, 1.8); S.textureUrl = null; return refreshCoat(); },
+    setColors(colors, grain) { S.colors = normColors(colors); if (grain != null) S.grain = clamp(+grain || 0.39, 0.2, 1.8); S.textureUrl = null; return refreshCoat(); },
     setState(st = {}) {
       if (st.mix || st.colors) S.colors = normColors(st.mix || st.colors);
-      if (st.grain != null) S.grain = clamp(+st.grain, 0.6, 1.8);
+      if (st.grain != null) S.grain = clamp(+st.grain, 0.2, 1.8);
       if (st.density != null) S.density = clamp(+st.density, 0.4, 1);
       if (st.seed != null) S.seed = +st.seed;
       if (st.structure !== undefined) S.structure = st.structure || null;     /* a DV id with a structure file, or null: synthetic */

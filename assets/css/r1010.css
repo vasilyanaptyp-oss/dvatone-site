@@ -1,0 +1,80 @@
+/* Revision 10.10 (Viktor's letter), job dv3: the home page's first screen (A1) and the coating cross-section (A10).
+   Linked on every page after the other stylesheets by _src/r1010.py; scoped to its own classes (.fs*, .pie*). */
+
+/* ---------- A1: first screen, light and airy, a calm static wall ---------- */
+.fs{position:relative;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;padding-top:var(--hdr);color:var(--tl)}
+.fs__in{flex:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(32px,5vw,96px);align-items:center;padding-block:clamp(20px,3.5vh,48px)}
+.fs__txt{max-width:640px;padding-block:clamp(8px,2vh,24px)}
+.fs__eyebrow{color:var(--copper-lo,#8a6238)}
+.fs__title{margin:clamp(18px,2.6vh,30px) 0 0;font-weight:200;font-size:clamp(42px,4.9vw,92px);line-height:1.04;letter-spacing:var(--ls-display);text-wrap:balance}
+.fs__title span{display:block}
+.fs__t2{color:var(--ml)}
+.fs__lede{margin:clamp(20px,3vh,32px) 0 0;font-size:var(--fs-lede);line-height:1.65;color:var(--ml);max-width:46ch}
+.fs__ctas{display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px;margin-top:clamp(24px,4vh,44px)}
+.fs__ctas .btn-text{color:var(--tl)}
+.fs__wall{position:relative;margin:0 calc(-1 * var(--pad)) 0 0;align-self:stretch;min-height:420px;overflow:hidden}
+.fs__img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+/* r2b: the window light is in the picture itself (multiplied into the scan, so the grains keep their contrast); here only a
+   faint airy veil where the light comes in, nothing that blurs or hides the grains */
+.fs__wall::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(120% 90% at 0% 0%,rgba(255,252,246,.10) 0%,rgba(255,252,246,0) 55%)}
+.fs__code{position:absolute;left:clamp(14px,1.6vw,24px);bottom:clamp(14px,1.6vw,24px);z-index:1;padding:7px 11px;border-radius:var(--r-1);background:rgba(250,246,240,.9);color:var(--tl);font-size:11px;font-weight:600;letter-spacing:.16em;line-height:1}
+.fs__facts{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--gut);border-top:1px solid var(--line-l);padding-block:20px 26px}
+.fs .fact b{color:var(--tl)}
+.fs .fact span{color:var(--ml)}
+/* the header sits on the light first screen until the page scrolls (then it is the usual solid dark bar) */
+body:has(.fs) .hdr:not(.is-solid){color:var(--tl)}
+body:has(.fs) .hdr:not(.is-solid) .hdr__cta{border-color:rgba(25,21,17,.32);color:var(--tl)}
+@media (hover:hover){body:has(.fs) .hdr:not(.is-solid) .hdr__cta:hover{background:var(--tl);color:var(--bone);border-color:var(--tl)}}
+/* at most a gentle fade-in of the words, once; r2b: the wall itself is simply there, still (it is the largest element of the
+   first screen: a fade on it held back its first full paint, the LCP, by up to a second on phones) */
+@media (prefers-reduced-motion:no-preference){
+  .fs__txt,.fs__facts{animation:fsIn .9s cubic-bezier(.2,.7,.1,1) both}
+}
+@keyframes fsIn{from{opacity:0}to{opacity:1}}
+
+/* ---------- A10: the coating "pie", an angled cut through a wall (Technology page, _src/r1010_pie.py) ---------- */
+.pie__grid{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:clamp(28px,4vw,72px);align-items:center;margin-top:clamp(32px,4vw,64px)}
+.pie__vis{margin:0;min-width:0}
+.pie__svg{display:block;width:100%;height:auto}
+.pie__n circle{fill:rgba(18,16,14,.78);stroke:rgba(237,230,218,.5);stroke-width:1}
+.pie__n text{fill:#ede6da;font:600 12px/1 var(--f-sans);letter-spacing:.08em}
+.pie__list{list-style:none;margin:0;padding:0;counter-reset:none}
+.pie__l{display:grid;grid-template-columns:40px minmax(0,1fr);gap:4px 12px;padding:18px 0;border-top:1px solid var(--line-d)}
+.pie__l:first-child{border-top:0;padding-top:0}
+.pie__l b{font-weight:600;font-size:11px;letter-spacing:var(--ls-caps);color:var(--copper-hi,#d9a86e);padding-top:7px;font-variant-numeric:tabular-nums}
+.pie__l h3{font-weight:300;font-size:clamp(21px,1.75vw,28px);line-height:1.12;letter-spacing:-.02em;color:var(--td)}
+.pie__l p{margin-top:6px;font-size:14.5px;line-height:1.55;color:var(--md);max-width:46ch}
+.pie__note{margin-top:clamp(20px,2.4vw,32px);font-size:13px;line-height:1.55;color:var(--md)}
+@media (max-width:900px){
+  .pie__grid{grid-template-columns:minmax(0,1fr)}
+  .pie__vis{max-width:560px}
+}
+
+@media (max-width:1100px) and (min-width:761px){
+  .fs__in{grid-template-columns:minmax(0,6fr) minmax(0,5fr)}
+}
+@media (max-width:760px){
+  .fs{min-height:0}
+  .fs__in{grid-template-columns:1fr;gap:28px;padding-block:20px 0}
+  .fs__txt{padding:0}
+  .fs__title{font-size:clamp(40px,11.4vw,54px)}
+  .fs__lede{font-size:16px}
+  .fs__ctas{margin-top:24px}
+  .fs__wall{margin:0 calc(-1 * var(--pad));min-height:0;height:clamp(280px,44vh,420px)}
+  .fs__facts{grid-template-columns:1fr 1fr;row-gap:16px;border-top:0;padding-block:22px 18px}
+}
+
+/* A14 (10.10): Designer Box desktop proportions */
+/* Designer Box page: one grid whose edges line up. The large tile no longer grows taller (min-height 34vw) than the two
+   squares beside it; at 13:10 the large tile is about 4:5 and the two right tiles about square, at 1440 and 1920 alike. */
+@media (min-width:601px){
+  .dbx__photos--3{aspect-ratio:13/10;grid-template-rows:repeat(2,minmax(0,1fr))}
+  .dbx__photos--3 .dbx__ph--a{min-height:0}
+  .dbx__photos--3 .dbx__ph--b,.dbx__photos--3 .dbx__ph--c{aspect-ratio:auto}
+}
+/* Home: tile B shows the open fan cut-out on desktop on the same quiet surface as on the Designer Box page */
+#designer-box .hbox.hbox--b picture img{object-fit:contain;padding:9%}   /* beats w6-polish (loaded after r1010 on home) */
+@media (min-width:561px){
+  #designer-box .hbox.hbox--b{background:rgba(237,230,218,.05)}
+}

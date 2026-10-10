@@ -397,12 +397,12 @@
 
   /* ---------- colour fan ---------- */
   var stage = $('[data-tilt]'), fan = $('#fanPhoto'), cs = $('#casePhoto'), hots = $('#fanHots');
-  if (stage && fan && cs) {   // the fan and its case are both on the page (the hot spots are optional)
+  if (stage && fan) {   // 10.10: the fan alone (the slipcase view and the hot spots are gone; the code still copes with them)
     $$('.cat__tabs button', stage).forEach(function (b) {
       b.addEventListener('click', function () {
         var v = b.getAttribute('data-view');
         $$('.cat__tabs button', stage).forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
-        fan.classList.toggle('is-off', v !== 'fan'); cs.classList.toggle('is-off', v !== 'case');
+        fan.classList.toggle('is-off', v !== 'fan'); if (cs) cs.classList.toggle('is-off', v !== 'case');
         if (hots) { hots.style.opacity = v === 'fan' ? 1 : 0; hots.style.transition = 'opacity .5s'; }
       });
     });
@@ -410,9 +410,9 @@
       stage.addEventListener('pointermove', function (e) {
         var r = stage.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
         var t = 'rotateY(' + (x * 9).toFixed(2) + 'deg) rotateX(' + (-y * 6).toFixed(2) + 'deg)';
-        fan.style.transform = fan.classList.contains('is-off') ? '' : t; cs.style.transform = cs.classList.contains('is-off') ? '' : t;
+        fan.style.transform = fan.classList.contains('is-off') ? '' : t; if (cs) cs.style.transform = cs.classList.contains('is-off') ? '' : t;
       });
-      stage.addEventListener('pointerleave', function () { fan.style.transform = ''; cs.style.transform = ''; });
+      stage.addEventListener('pointerleave', function () { fan.style.transform = ''; if (cs) cs.style.transform = ''; });
     }
   }
 
@@ -850,10 +850,12 @@
     skyPop.setAttribute('role', 'group');   // a disclosure, not a modal: Tab leaves it and it closes behind the focus
     skyPill.addEventListener('click', function (e) { var o = !skyOpen; openSky(o, o && e.detail === 0); });   // detail 0: the click came from the keyboard or assistive tech
     $('#skyClose').addEventListener('click', function () { openSky(false); skyPill.focus(); });
-    $('#skyTime').addEventListener('input', function (e) { if (SKY.play) setPlay(false); SKY.t = +e.target.value; applySky(); });
-    $('#skySeason').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; SKY.s = +b.getAttribute('data-s'); applySky(); });
+    // 10.10 r2: the visitor's own choice (time, season or the local time) is remembered for every page; the default is a light day sky (head_sky.js)
+    var saveSky = function () { try { localStorage.setItem('dvSky', JSON.stringify({ t: SKY.t, s: SKY.s })); } catch (e) { } };
+    $('#skyTime').addEventListener('input', function (e) { if (SKY.play) setPlay(false); SKY.t = +e.target.value; applySky(); saveSky(); });
+    $('#skySeason').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; SKY.s = +b.getAttribute('data-s'); applySky(); saveSky(); });
     $('#skyPlay').addEventListener('click', function () { setPlay(!SKY.play); });
-    $('#skyLive').addEventListener('click', function () { setPlay(false); SKY.t = null; SKY.s = null; applySky(); });
+    $('#skyLive').addEventListener('click', function () { setPlay(false); SKY.t = null; SKY.s = null; applySky(); saveSky(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && skyOpen && !menuOpen) { openSky(false); skyPill.focus(); } });
     document.addEventListener('pointerdown', function (e) { if (skyOpen && !skyCtl.contains(e.target)) openSky(false); });
     skyCtl.addEventListener('keydown', function (e) {   // Tab off either end (the browser may report no related target there): the popover closes behind the focus

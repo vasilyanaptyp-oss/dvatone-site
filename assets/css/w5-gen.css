@@ -298,3 +298,10 @@ body:has(>main>.gx5) .hdr{background:rgba(18,16,14,.92);-webkit-backdrop-filter:
   .gx5 .icob[aria-pressed="true"],.gx5 .res[aria-pressed="true"] i{outline:2px solid Highlight}
   .gx5 .pcta{border:1px solid CanvasText}
 }
+
+/* 10.10 (Viktor): the four bot categories have long names (Architectural Pure ...): they wrap, 2 x 2 on narrow panels;
+   the two fractions read «Середня Dvatone / Дрібна Ambit» with the collection in small type */
+.gx5 .gcat .tt>span{white-space:normal}
+@media (max-width:520px){.gx5 .gcat{grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 16px}}
+.gx5 .tgrain .tt.tgrain__o{min-width:0;text-align:left;white-space:nowrap}
+.gx5 .tgrain .tt.tgrain__o small{font-size:11px;letter-spacing:.04em;color:var(--s-mute);margin-left:2px}

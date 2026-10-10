@@ -8,14 +8,15 @@
    areas, the flecks have the size, shape and grouping of the real material, and nothing is added: no highlight, no bright
    speck, no sparkle (no metallic finish exists in the generator yet). Granule density hands a part of the accent flecks back to
    the base colour (sparser accents; at 100 % the shares are exact).
-   Scale: the room view's (the tile is 20 cm of wall at granule size M; S 0.6, XL 1.8); at S, the standard very fine fraction, the
-   flecks have the size of the granules of the DV scans: checked side by side at the same scale, qa/w6/coat-compare.png. Every
+   Scale (r2b, 10.10 evening): the tile is 20 cm x GRAIN of wall. Medium (Dvatone) 0.39: the flecks measure 0.23 mm (width of
+   the luminance autocorrelation at half height), the median of the 44 DV scans (0.16 to 0.32 mm), so never coarser than the
+   scans; fine (Ambit) 0.24: 0.14 mm, about 60 % of medium. Measured: jobs_1010/r2b_delicate_texture/tools/grain.py. Every
    fleck keeps a soft edge (its border with the next fleck is a touch darker, as the scans show it); the average colour stays
    the recipe's (the edges are normalised away). Painting a new composition is one table lookup per pixel (about 10 ms). The wall view shows 60 cm across the frame, the macro view 16 cm.
 
    DVATONE.coat.render(canvas, state, { draft, onReady }) -> true when the scan structure painted the canvas; false while it is
    still loading (or could not load): the caller paints its own interim picture and onReady() asks it to paint again.
-   state: { mix: [{ hex, share }], grain: 'S' | 'M' | 'XL', density: 0.4..1, scale: 'wall' | 'macro', seed }. */
+   state: { mix: [{ hex, share }], grain: 'M' | 'F' (10.10: medium Dvatone / fine Ambit), density: 0.4..1, scale: 'wall' | 'macro', seed }. */
 (function () {
   'use strict';
   var NS = (window.DVATONE = window.DVATONE || {});
@@ -23,7 +24,11 @@
   var me = document.currentScript && document.currentScript.src || '';
   var ROOT = me ? me.replace(/assets\/js\/dv-coat\.js(?:\?.*)?$/, '') : '';
   var MAP = ROOT + 'assets/3d/interior2/coat/dv018.webp';
-  var TILE_M = 0.2, GRAIN = { S: 0.6, M: 1, XL: 1.8 }, VIEW_M = { wall: 0.6, macro: 0.16 };
+  /* granule fraction (Viktor 10.10, A2): M = medium, the Dvatone collection, at the median granule of the DV scans;
+     F = fine, Ambit, clearly smaller (60 % of medium). S and XL of older links are drawn as M: nothing is ever coarser than the
+     scans. Views (r2b): the wall view shows 60 cm across the frame (a wall seen from about 2 m), the close view 20 cm (about the
+     scale of a whole scan on a screen; round 1: 16 cm). */
+  var TILE_M = 0.2, GRAIN = { M: 0.39, F: 0.24, S: 0.39, XL: 0.39 }, VIEW_M = { wall: 0.6, macro: 0.2 };
   var LV = [], rank = null, failed = false, loading = null, waiters = [];   // LV[0]: the full rank map, LV[1]: half size (a slider being dragged)
 
   /* The map is decoded and prepared in a worker (dv-coat-worker.js: createImageBitmap + OffscreenCanvas), so the main thread only
@@ -156,11 +161,22 @@
       } else sx.drawImage(a, 0, 0, tp, tp);
       scaled.c = s; scaled.key = key;
     }
-    var pat = ctx.createPattern(scaled.c, 'repeat'), off = ((st.seed | 0) * 0.618) % 1;
-    ctx.save();
-    ctx.translate(-Math.round(off * tp), -Math.round(((st.seed | 0) * 0.382 % 1) * tp));
-    ctx.fillStyle = pat; ctx.fillRect(0, 0, W + tp, H + tp);
-    ctx.restore();
+    /* r2b: no visible repeat. The wall is laid in cells of half a tile, each showing the seamless tile from its own random
+       offset (fixed by the seed), so no cluster of flecks recurs on a grid; the cut between two cells runs through a random
+       fleck field and cannot be seen. */
+    var pat = ctx.createPattern(scaled.c, 'repeat'), cell = Math.max(48, Math.round(tp / 2)), sd = (st.seed | 0) + 1;
+    var rr = function (n) { var h = Math.sin(n * 127.1 + sd * 311.7) * 43758.5453; return h - Math.floor(h); };
+    ctx.fillStyle = pat;
+    for (var cy = 0, j = 0; cy < H; cy += cell, j++) {
+      for (var cx = 0, i = 0; cx < W; cx += cell, i++) {
+        var ox = Math.floor(rr(i * 7.13 + j * 91.7) * tp), oy = Math.floor(rr(i * 53.9 + j * 17.3 + 0.5) * tp);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(cx, cy, cell, cell); ctx.clip();
+        ctx.translate(cx - ox, cy - oy);
+        ctx.fillRect(ox, oy, cell, cell);
+        ctx.restore();
+      }
+    }
   }
 
   NS.coat = {
@@ -193,9 +209,10 @@
   var gt = document.querySelector('[data-gt]');
   if (!gt) return;
   var DV = window.DV || {}, PRE = DV.presets || [], NAMES = DV.presetNames || [], T = DV.gt || {};
-  var SH = [45, 25, 20, 10];
+  var SH0 = [45, 25, 20, 10], PSH = DV.presetShares || [];   // 10.10: each palette keeps the shares measured from its scan
+  var SH = PSH[0] || SH0;
   var cv = gt.querySelector('[data-gt-canvas]');
-  var st = { preset: 0, cols: (PRE[0] || []).map(function (c) { return c.slice(); }), scale: 'wall', grain: 'S', density: 0.9, seed: 11 };
+  var st = { preset: 0, cols: (PRE[0] || []).map(function (c) { return c.slice(); }), scale: 'wall', grain: 'M', density: 0.9, seed: 11 };
   var $$ = function (s) { return Array.prototype.slice.call(gt.querySelectorAll(s)); };
   var mixOf = function () { return st.cols.map(function (c, k) { return { hex: c[1].toUpperCase(), share: SH[k] || 10 }; }); };
   function compId(mix) {   // the generator's composition number (generator.js compId): the same recipe, the same number
@@ -222,7 +239,7 @@
     var title = gt.querySelector('[data-gt-title]');
     if (title) title.innerHTML = same && NAMES[st.preset] ? esc(NAMES[st.preset]) : '<span class="phead__no">' + esc(T.no || '№') + '</span>' + pad4(compId(mix));
     var sub = gt.querySelector('[data-gt-sub]');
-    if (sub && T.sub) sub.textContent = T.sub.replace('{n}', mix.length).replace('{shades}', (T.shades || {})[mix.length] || '').replace('{fraction}', st.grain).replace('{density}', Math.round(st.density * 100));
+    if (sub && T.sub) sub.textContent = T.sub.replace('{n}', mix.length).replace('{shades}', (T.shades || {})[mix.length] || '').replace('{fraction}', (T.grains || {})[st.grain] || st.grain).replace('{density}', Math.round(st.density * 100));
     var base = gt.querySelector('[data-gt-base]'); if (base) base.textContent = st.cols[0] ? st.cols[0][0] : '';
     $$('[data-gt-preset]').forEach(function (b) { b.setAttribute('aria-pressed', same && +b.getAttribute('data-gt-preset') === st.preset ? 'true' : 'false'); });
     $$('[data-gt-hex]').forEach(function (b) { b.setAttribute('aria-pressed', st.cols[0] && b.getAttribute('data-gt-hex') === st.cols[0][1] ? 'true' : 'false'); });
@@ -239,7 +256,7 @@
   }
   gt.addEventListener('click', function (e) {
     var p = e.target.closest('[data-gt-preset]');
-    if (p) { st.preset = +p.getAttribute('data-gt-preset'); st.cols = (PRE[st.preset] || []).map(function (c) { return c.slice(); }); render(); return; }
+    if (p) { st.preset = +p.getAttribute('data-gt-preset'); st.cols = (PRE[st.preset] || []).map(function (c) { return c.slice(); }); SH = PSH[st.preset] || SH0; render(); return; }
     var b = e.target.closest('[data-gt-hex]');
     if (b) {
       var pick = [b.getAttribute('data-gt-code'), b.getAttribute('data-gt-hex')];

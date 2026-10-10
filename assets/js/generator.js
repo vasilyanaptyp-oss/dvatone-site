@@ -93,24 +93,36 @@
     return '#' + c.map(function (v) { v = clamp(Math.round(v * k), 0, 255); return (v < 16 ? '0' : '') + v.toString(16); }).join('');
   };
 
-  /* ---------- colour categories by saturation (W5_SPEC 1.4) ----------
-     The page passes DV.gen.cats = [{ id, name, max }] from config.GEN_CATEGORIES: a shade belongs to the first category whose
-     max (an exclusive bound of the CIE LCh chroma C*ab, sRGB D65) is null or greater than its chroma. A hand-made list wins:
+  /* ---------- colour categories (Viktor 10.10, B1) ----------
+     The page passes DV.gen.cats = [{ id, name }] from config.GEN_CATEGORIES (c1 Architectural Pure, c2 Organic Energy, c3 Mineral
+     Silence, c4 Deep Monolith) and DV.gen.rule = config.CAT_RULES.shade; catOfHex is common.tone_cat of the build (CIE L*a*b*,
+     sRGB D65): Deep when C >= deep_c, Organic when C >= org_c, Deep when L < deep_l, Organic when C >= hue_c outside the beige
+     band, Pure when L >= pure_l and C < pure_c, else Mineral. A hand-made list wins:
      window.DV_CAT_GROUP = { "<sys>|<code>": "<category id>" } (assets/data/gen-categories.js, e.g. { "N|S 3020-Y40R": "c3" }). */
-  var CATS = (G.cats && G.cats.length ? G.cats : [{ id: 'c1', name: 'c1', max: 10 }, { id: 'c2', name: 'c2', max: 18 }, { id: 'c3', name: 'c3', max: 30 }, { id: 'c4', name: 'c4', max: null }])
-    .map(function (c) { return { id: String(c.id), name: c.name || String(c.id), max: c.max == null ? null : +c.max }; });
+  var CATS = (G.cats && G.cats.length ? G.cats : [{ id: 'c1', name: 'c1' }, { id: 'c2', name: 'c2' }, { id: 'c3', name: 'c3' }, { id: 'c4', name: 'c4' }])
+    .map(function (c) { return { id: String(c.id), name: c.name || String(c.id) }; });
+  var RULE = G.rule || { org_c: 30, deep_l: 62, hue_c: 16, beige_h: [0, -1], pure_l: 74, pure_c: 12, deep_c: 30 };
   var catById = {}; CATS.forEach(function (c) { catById[c.id] = c; });
   var catHand = window.DV_CAT_GROUP && typeof window.DV_CAT_GROUP === 'object' ? window.DV_CAT_GROUP : {};
   var chromaCache = {};
-  function chroma(hex) {
+  function lab(hex) {
     if (chromaCache[hex] != null) return chromaCache[hex];
     var c = rgb(hex).map(function (v) { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
     var X = (0.4124564 * c[0] + 0.3575761 * c[1] + 0.1804375 * c[2]) / 0.95047, Y = 0.2126729 * c[0] + 0.7151522 * c[1] + 0.0721750 * c[2],
         Z = (0.0193339 * c[0] + 0.1191920 * c[1] + 0.9503041 * c[2]) / 1.08883;
     var f = function (t) { return t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116; };
-    var a = 500 * (f(X) - f(Y)), b = 200 * (f(Y) - f(Z)); return (chromaCache[hex] = Math.sqrt(a * a + b * b));
+    var a = 500 * (f(X) - f(Y)), b = 200 * (f(Y) - f(Z)); return (chromaCache[hex] = [116 * f(Y) - 16, a, b]);
   }
-  var catOfHex = function (hex) { var cc = chroma(hex); for (var i = 0; i < CATS.length; i++) if (CATS[i].max == null || CATS[i].max > cc) return CATS[i].id; return CATS[CATS.length - 1].id; };
+  var catOfHex = function (hex) {
+    var l = lab(hex), L = l[0], C = Math.sqrt(l[1] * l[1] + l[2] * l[2]), h = (Math.atan2(l[2], l[1]) * 180 / Math.PI + 360) % 360;
+    var bh = RULE.beige_h || [0, -1], beige = h >= bh[0] && h <= bh[1];
+    if (RULE.deep_c != null && C >= RULE.deep_c) return 'c4';
+    if (C >= RULE.org_c) return 'c2';
+    if (L < RULE.deep_l) return 'c4';
+    if (C >= RULE.hue_c && !beige) return 'c2';
+    if (L >= RULE.pure_l && C < RULE.pure_c) return 'c1';
+    return 'c3';
+  };
   var catsSorted = false;
   function sortCats() {   // once, in a later task of the start-up (or at the first need)
     if (catsSorted) return; catsSorted = true;
@@ -120,7 +132,7 @@
 
   /* ---------- state ---------- */
   var SHARES = [45, 25, 20, 10];
-  var state = { mix: [], grain: 'S', density: 0.9, scale: 'wall', seed: 11, area: '', lock: false };
+  var state = { mix: [], grain: 'M', density: 0.9, scale: 'wall', seed: 11, area: '', lock: false };
   var ui = { sel: 0, filter: 'all', q: '', shown: 0, list: cat, cat: CATS[0].id, view: 'wall', dv: '', dvMix: '' };   // view: wall | macro | room (room is not part of the state); dv: the DV composition the catalogue opened (?dv=DV 029) and its mix
 
   function normList(m) {  // integer shares that always add up to 100 (largest remainder)
@@ -178,7 +190,9 @@
     for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
     return (h % 65536).toString(16).toUpperCase().padStart(4, '0');
   }
-  var presetShares = (G.presets || []).map(function (p) { return startShares(p.cols.length); });
+  var presetShares = (G.presets || []).map(function (p) { return p.shares && p.shares.length === p.cols.length ? p.shares.slice() : startShares(p.cols.length); });
+  var scanHex = {};   // 10.10: the presets are DV compositions measured from their scans, so their colours say «зі скану»
+  (G.presets || []).forEach(function (p) { if (p.dv) p.cols.forEach(function (h) { scanHex[h] = 1; }); });
   function presetIndex() {   // the curated palette this composition is exactly (same colours, same order, its starting shares), or -1
     var ps = G.presets || [];
     for (var k = 0; k < ps.length; k++) {
@@ -201,7 +215,7 @@
   };
   var recipeText = function () {
     return fmt(T.previewTitle, { id: compId() }) + '\n' + state.mix.map(function (c) { return labelOf(c.hex) + ' · #' + c.hex + ' · ' + c.share + '%'; }).join('\n') + '\n' +
-      T.fraction + ' ' + state.grain + ' · ' + T.density + ' ' + Math.round(state.density * 100) + '%' + (state.area ? '\n' + T.areaLabel + ': ' + state.area + ' ' + T.areaUnit : '');
+      T.fraction + ' ' + grainName() + ' · ' + T.density + ' ' + Math.round(state.density * 100) + '%' + (state.area ? '\n' + T.areaLabel + ': ' + state.area + ' ' + T.areaUnit : '');
   };
 
   /* ---------- events ---------- */
@@ -226,7 +240,11 @@
      there. The procedural granules below are only the last resort, for a page without dv-coat.js. */
   var mulberry = function (a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
   var shade = function (c, k) { return 'rgb(' + c.map(function (v) { return clamp(Math.round(v * k), 0, 255); }).join(',') + ')'; };
-  var GR = { S: 1, M: 1.8, XL: 3.2 };   // fraction multipliers: the product line is very fine, so S is the default
+  /* granule fraction (Viktor 10.10, A2): M = medium (the Dvatone collection, the flecks of the DV scans 1:1, the default),
+     F = fine (Ambit, a smaller granule). Old share links and states with S / XL open as M. */
+  var GR = { M: 1, F: 0.7 };   // multipliers of the last-resort procedural engine below
+  function grainKey(g) { return g === 'F' ? 'F' : 'M'; }
+  function grainName() { return (G.grains && G.grains[state.grain]) || state.grain; }
   var coatWait = false;
   /* Performance (07.10): a picture of the default composition rendered with this very engine ([data-dv-poster], AVIF / WebP)
      holds the first paint, and the engine with its fleck map starts at idle (the map is decoded in a worker, dv-coat.js). The
@@ -319,7 +337,7 @@
      (lock on the base, "make it the base" on an accent, remove) and the thin slider under them */
   function rowHTML(c, i) {
     var lab = labelOf(c.hex), base = i === 0, mx = 100 - MINSH * (state.mix.length - 1);
-    var own = !byHex[c.hex] ? (ui.dv ? tx('scanColour') : tx('ownColour')) : '#' + c.hex;   // a colour that is not a catalogue shade: say where it comes from, not its hex twice
+    var own = !byHex[c.hex] ? ((ui.dv || scanHex[c.hex]) ? tx('scanColour') : tx('ownColour')) : '#' + c.hex;   // a colour that is not a catalogue shade: say where it comes from, not its hex twice
     var role = base ? T.base + ' · ' + (state.lock && T.locked ? T.locked : own) : T.accent + ' · ' + own;
     var act = base
       ? '<button type="button" class="icob" data-act="lock" aria-pressed="' + !!state.lock + '" aria-label="' + esc(tx('lockBase') + ': ' + lab) + '" title="' + esc(state.lock ? tx('unlockBase') : tx('lockBase')) + '">' + (state.lock ? ico.lock : ico.unlock) + '</button>'
@@ -362,7 +380,7 @@
         return '<li><i style="background:#' + c.hex + '"></i><span class="c">' + esc(labelOf(c.hex)) + (i === 0 ? '<small>' + esc(tx('recipeBase')) + '</small>' : '') + '</span><span class="f"></span><b>' + c.share + '%</b></li>';
       }).join('');
     });
-    $$('[data-dv-recipe-tex]').forEach(function (e) { e.textContent = fmt(tx('recipeTex'), { g: state.grain, d: Math.round(state.density * 100) }); });
+    $$('[data-dv-recipe-tex]').forEach(function (e) { e.textContent = fmt(tx('recipeTex'), { g: grainName(), d: Math.round(state.density * 100) }); });
     $$('[data-dv-recipe-id]').forEach(function (e) { e.textContent = fmt(tx('titleId'), { id: id }); });
   }
   function renderMeta() {
@@ -370,7 +388,7 @@
     $$('[data-dv-id]').forEach(function (e) { e.textContent = id; });
     $$('[data-dv-title]').forEach(function (e) { e.innerHTML = titleHTML(id, pk); });
     var dvn = dvShown() ? dvName() : '';
-    $$('[data-dv-sub]').forEach(function (e) { e.textContent = (dvn ? dvn + ' · ' : '') + fmt(T.previewSub, { n: state.mix.length, shades: plural(state.mix.length), fraction: state.grain, density: d }); });
+    $$('[data-dv-sub]').forEach(function (e) { e.textContent = (dvn ? dvn + ' · ' : '') + fmt(T.previewSub, { n: state.mix.length, shades: plural(state.mix.length), fraction: grainName(), density: d }); });
     $$('[data-dv-grain]').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-dv-grain') === state.grain ? 'true' : 'false'); });
     $$('[data-dv-view]').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-dv-view') === ui.view ? 'true' : 'false'); });
     $$('[data-dv-density]').forEach(function (r) { r.value = d; r.style.setProperty('--v', ((d - 40) / 60 * 100) + '%'); r.setAttribute('aria-valuetext', d + ' %'); });
@@ -556,8 +574,8 @@
         var mm = partial.mix.map(function (c) { return { hex: String(c && c.hex).replace('#', '').toUpperCase(), share: +(c && c.share) || 10 }; }).filter(function (c) { return /^[0-9A-F]{6}$/.test(c.hex); });
         if (mm.length) { state.mix = mm.slice(0, MAX); normalise(); ui.sel = 0; }
       }
-      if (GR[partial.grain]) state.grain = partial.grain;
-      if (partial.scale === 'wall' || partial.scale === 'macro') state.scale = partial.scale;
+      if (partial.grain != null) state.grain = grainKey(partial.grain);
+      if (partial.scale === 'wall' || partial.scale === 'macro') state.scale = 'wall';   // r2c: macro view retired (Viktor A2)
       if (partial.lock != null) state.lock = !!partial.lock;
       if (partial.density != null) state.density = clamp(+partial.density, 0.4, 1);
       if (partial.seed != null) state.seed = +partial.seed | 0;
@@ -650,7 +668,8 @@
   var prevEl = document.getElementById('dvPrev');
   function setView(v, o) {
     o = o || {};
-    if (v !== 'wall' && v !== 'macro' && v !== 'room') return;
+    if (v === 'macro') v = 'wall';   // r2c (Viktor A2): the macro view is not offered any more; old links and saved states show the wall
+    if (v !== 'wall' && v !== 'room') return;
     if (v === 'room' && (room.off || !roomPane)) v = 'wall';
     ui.view = v;
     if (v !== 'room' && state.scale !== v) { state.scale = v; if (!o.quiet) { renderMeta(); paint(); changed('scale'); } }
@@ -673,7 +692,7 @@
      (corridor -> poster-hallway.webp), never by its id. No WebGL 2 or no ES modules: the room view is not offered. */
   var roomPane = $('[data-dv-room]'), roomHost = roomPane ? $('[data-dv-room-host]', roomPane) : null, roomNow = $('[data-room-now]');
   var roomBar = $('.view__rooms') || root, RC = DV.roomCopy || {}, RCg = RC.groups || {}, RCr = RC.rooms || {};
-  var ROOM_GRAIN = { S: 0.6, M: 1, XL: 1.8 };   // the fractions on the 3D modules' grain scale (DONE_3D.md: granules of about 1.1, 1.9 and 3.4 mm)
+  var ROOM_GRAIN = { M: 0.39, F: 0.24 };   // r2b: the same fractions as the 2D preview (dv-coat.js GRAIN): medium = the DV scans' median granule, fine (Ambit) 60 % of it   // 10.10: medium = the old S (the scans' granule), fine (Ambit) smaller still   // the fractions on the 3D modules' grain scale (DONE_3D.md: granules of about 1.1, 1.9 and 3.4 mm)
   var room = { name: roomPane ? roomPane.getAttribute('data-dv-room') : 'living', want: null, ctl: null, imp: null, mounting: false, ready: false, dirty: true, key: '', off: false, sig: '' };
   var roomKey = function () { return state.mix.map(function (c) { return c.hex + ':' + c.share; }).join(',') + '|' + state.grain + '|' + state.density + '|' + state.seed; };
   var roomColours = function () { return state.mix.map(function (c) { return { hex: c.hex, share: c.share }; }); };
@@ -688,7 +707,7 @@
     room.dirty = false;
     var k = roomKey(); if (k === room.key) return;
     room.key = k;
-    room.ctl.setState({ mix: roomColours(), grain: ROOM_GRAIN[state.grain] || 1, density: state.density, seed: state.seed });
+    room.ctl.setState({ mix: roomColours(), grain: ROOM_GRAIN[state.grain] || 0.6, density: state.density, seed: state.seed });
   }
   function roomSync(id) {   // tabs, group switch, the pane's attributes and the page's own poster follow the room
     var tab = roomTab(id); if (!tab || !roomPane) return null;
@@ -768,7 +787,7 @@
       room.mounting = false;
       if (room.ctl || room.off || typeof m.mountPhoto !== 'function') return;
       room.key = roomKey(); room.dirty = false;
-      var ctl = room.ctl = m.mountPhoto(roomHost, { room: room.name, colors: roomColours(), grain: ROOM_GRAIN[state.grain] || 1, density: state.density, seed: state.seed });
+      var ctl = room.ctl = m.mountPhoto(roomHost, { room: room.name, colors: roomColours(), grain: ROOM_GRAIN[state.grain] || 0.6, density: state.density, seed: state.seed });
       var pre = $('[data-dv-room-poster]', roomHost), own = $('.dv3d__poster', roomHost), drop = function () { if (pre && pre.parentNode) pre.parentNode.removeChild(pre); };
       if (pre) { if (!own || own.complete) setTimeout(drop, 60); else { own.addEventListener('load', function () { setTimeout(drop, 60); }, { once: true }); setTimeout(drop, 2500); } }   // the module's poster is the same picture
       Promise.resolve(ctl.ready).then(roomReady, function () { roomReady(false); });
@@ -822,10 +841,10 @@
     var pr = t.closest('[data-preset]');
     if (pr) {
       var p = G.presets[+pr.getAttribute('data-preset')], bp = { st: copyState(), sel: ui.sel }, dp = dirty;
-      setMix(state.lock && state.mix.length ? lockedCols(p.cols) : p.cols); renderAll(); changed('preset');
+      if (state.lock && state.mix.length) setMix(lockedCols(p.cols)); else setMix(p.cols, presetShares[+pr.getAttribute('data-preset')]); renderAll(); changed('preset');
       offerUndo(bp, dp ? fmt(tx('presetOn'), { name: p.name }) : ''); dirty = false; return;   // a toast only when hand-made work was replaced
     }
-    var gr = t.closest('[data-dv-grain]'); if (gr) { state.grain = gr.getAttribute('data-dv-grain'); renderAll(); changed('texture'); return; }
+    var gr = t.closest('[data-dv-grain]'); if (gr) { state.grain = grainKey(gr.getAttribute('data-dv-grain')); renderAll(); changed('texture'); return; }
     var fl = t.closest('[data-dv-filter]');
     if (fl) { ui.filter = fl.getAttribute('data-dv-filter'); $$('[data-dv-filter]').forEach(function (x) { x.setAttribute('aria-pressed', x === fl ? 'true' : 'false'); }); applySearch(true); return; }
     if (t.closest('[data-dv-more]')) { pageResults(); return; }
@@ -881,7 +900,7 @@
       (state.area ? '&a=' + encodeURIComponent(state.area) : '') + (ui.view === 'room' ? '&v=room&room=' + encodeURIComponent(room.name) : '') + (dvShown() ? '&dv=' + encodeURIComponent(ui.dv) : '');
   }
   function setDefault() {
-    var p = G.presets[0]; state.lock = false; setMix(p.cols); state.grain = 'S'; state.density = 0.9; state.scale = 'wall'; state.seed = 11;
+    var p = G.presets[0]; state.lock = false; setMix(p.cols, presetShares[0]); state.grain = 'M'; state.density = 0.9; state.scale = 'wall'; state.seed = 11;
   }
   function fromUrl() {
     var s = location.search, ok = false, m;
@@ -908,13 +927,13 @@
         setMix(hx2); ok = true;
       }
     }
-    if ((m = /[?&]g=(S|M|XL)\b/.exec(s))) state.grain = m[1];
+    if ((m = /[?&]g=(S|M|XL|F)\b/.exec(s))) state.grain = grainKey(m[1]);
     if ((m = /[?&]d=(\d{2,3})/.exec(s))) state.density = clamp(+m[1] / 100, 0.4, 1);
-    if ((m = /[?&]s=(wall|macro)\b/.exec(s))) state.scale = m[1];
+    if ((m = /[?&]s=(wall|macro)\b/.exec(s))) state.scale = 'wall';   // r2c: macro view retired (Viktor A2)
     if ((m = /[?&]seed=(\d{1,9})\b/.exec(s))) state.seed = +m[1] | 0;
     if ((m = /[?&]a=([^&]+)/.exec(s))) { try { state.area = decodeURIComponent(m[1]); } catch (e) {} }
     ui.view = state.scale;
-    if ((m = /[?&]v=(wall|macro|room)\b/.exec(s))) { ui.view = m[1]; if (m[1] !== 'room') state.scale = m[1]; }
+    if ((m = /[?&]v=(wall|macro|room)\b/.exec(s))) { ui.view = m[1] === 'macro' ? 'wall' : m[1]; if (m[1] !== 'room') state.scale = 'wall'; }
     if ((m = /[?&]room=([\w-]{1,40})/.exec(s))) room.want = m[1];
     return ok;
   }
@@ -967,7 +986,7 @@
      slow phone never sees one long start-up task ---------- */
   var later = function (f) { if (window.scheduler && typeof window.scheduler.yield === 'function') window.scheduler.yield().then(f); else setTimeout(f, 0); };
   var fromQuery = fromUrl();
-  if (!fromQuery) setMix(G.presets[0].cols);
+  if (!fromQuery) setMix(G.presets[0].cols, presetShares[0]);
   if (poster) { if (fromQuery || state.scale !== 'wall' || ui.view !== 'wall') dropPoster(); else posterSig = sigOf(state); }
   if (areaIn) areaIn.value = state.area;
   sizeCanvases();

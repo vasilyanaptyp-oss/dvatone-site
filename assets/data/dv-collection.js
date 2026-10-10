@@ -1,8 +1,15 @@
 /* Named DV collection, taken from the client's own Telegram bot text (names and descriptions are never invented).
    Photos: "photo" below is the fallback; scans processed by _src/make_dv_photos.py (assets/data/dv-photos.json) win over it,
    and codes known only from scans are added by the build without a name (common.dv_collection(), W5_SPEC 0.4.2).
-   No hex values are known for the DV colours, so none are shown. */
+   No hex values are known for the DV colours, so none are shown.
+   DV 050 comes first (10.10, Viktor A1/A2): the catalogue opens on the delicate first-screen scan; its name is not known yet. */
 window.DV_COLLECTION=[
+ {
+  "code": "DV 050",
+  "name": null,
+  "desc": null,
+  "photo": null
+ },
  {
   "code": "DV 033",
   "name": {
@@ -58,8 +65,8 @@ window.DV_COLLECTION=[
    "uk": "Теплий пісок"
   },
   "desc": {
-   "uk": "М’який бежевий відтінок із глибиною каменю, фактура висушеного сонцем пісковика.",
-   "en": "A soft beige with the depth of stone, a texture like sun-dried sandstone."
+   "uk": "М’який бежевий відтінок із глибиною каменю, теплий, як прогрітий сонцем пісок.",
+   "en": "A soft beige with the depth of stone, warm as sun-warmed sand."
   },
   "photo": null
  },

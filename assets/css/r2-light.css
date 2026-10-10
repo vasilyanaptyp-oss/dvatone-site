@@ -1,0 +1,126 @@
+/* Dvatone, 10.10 round 2 (job r2a, Viktor: «супер світло, повітряно», inventwood.com as the reference; his second note:
+   «нестиковка рівня у хедері»). Linked last on every page by _src/layout.py (LIGHT_CSS); critical.py inlines its first-screen rules.
+
+   LIGHT is the default on every page. The live-sky pill keeps working: a visitor who picks a night time there (or follows the
+   local time at night) gets the original dark look, because every rule here is scoped to html:not([data-sky="night"]).
+   Approach: the dark sections (.sec--dark, .sec--warm), the footer, the mobile menu and the header keep their own rules, and
+   their colour tokens are swapped for light ones inside them; the rest are the few hard-coded dark colours.
+   Contrast (WCAG AA) of the swapped tokens on the light surfaces #faf7f2 / #f4eee5 / #efe8de:
+   text #191511 >= 15:1, muted #5f564b >= 6:1, copper #8a4f1f >= 5.6:1, second heading tone #7d7266 >= 4.1:1 (large text only). */
+
+/* ---------- 1. tokens inside the formerly dark parts ---------- */
+html:not([data-sky="night"]) {
+  --lt-hdr: #f6f2ec;          /* the flat header (and the phone's browser bar, config.THEME_COLOR) */
+  --lt-paper: #faf7f2;        /* a former dark section: warm white */
+  --lt-cream: #f3ede4;        /* a former warm section (Designer Box): warm cream */
+  --lt-foot: #efe9e0;         /* the footer */
+  --lt-line: rgba(25,21,17,.11);
+  --lt-sh: 0 1px 2px rgba(60,44,28,.05), 0 18px 44px -26px rgba(60,44,28,.28);   /* soft shadow */
+  background: var(--lt-hdr);
+}
+html:not([data-sky="night"]) :is(.sec--dark, .sec--warm, .ftr, .mnav, .hdr, .origin) {
+  --ink: #faf7f2; --ink-2: #fffdf9; --ink-3: #f1ebe2; --warm: #f3ede4;
+  --td: #191511; --md: #5f564b; --mute-d: #7d7266;
+  --copper: #8a4f1f; --copper-hi: #6e3c14;
+  --stone: #191511; --stone-h: #3a322a;
+  --line-d: rgba(25,21,17,.12); --line-d2: rgba(25,21,17,.26);
+  --focus: #8a4f1f; --ok: #3f6e3a; --err: #a3402f;
+}
+html:not([data-sky="night"]) .sec--dark { background: var(--lt-paper); }
+html:not([data-sky="night"]) .sec--warm { background: var(--lt-cream); }
+/* a light section that follows a light section of another tone: a hairline keeps the change calm and level */
+html:not([data-sky="night"]) :is(.sec--dark, .sec--warm) { box-shadow: inset 0 1px 0 var(--lt-line), inset 0 -1px 0 var(--lt-line); }
+
+/* ---------- 2. the header: one flat light bar with a straight, level lower edge, on every page and at every width ---------- */
+html:not([data-sky="night"]) .hdr,
+html:not([data-sky="night"]) .hdr.is-solid,
+html:not([data-sky="night"]) body:has(>main>.gx5) .hdr,
+html:not([data-sky="night"]):not(.dv-js) .hdr,
+html:not([data-sky="night"]).js-off .hdr {
+  background: var(--lt-hdr);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  border-bottom: 1px solid var(--lt-line);
+  box-shadow: none;
+  color: #191511;
+}
+html:not([data-sky="night"]) .hdr .hdr__cta { border-color: rgba(25,21,17,.32); color: #191511; }
+@media (hover:hover) {
+  html:not([data-sky="night"]) .hdr .hdr__cta:hover { background: #191511; color: var(--lt-hdr); border-color: #191511; }
+}
+html:not([data-sky="night"]) .hdr .nav a { color: #191511; }
+/* logo, language switch and menu icon on one optical centre line */
+html:not([data-sky="night"]) .hdr__in { align-items: center; }
+html:not([data-sky="night"]) .hdr__logo img { display: block; }
+html:not([data-sky="night"]) .lang a { opacity: .62; }
+html:not([data-sky="night"]) .lang a[aria-current="true"], html:not([data-sky="night"]) .lang a:hover { opacity: 1; }
+
+/* ---------- 3. the mobile menu ---------- */
+html:not([data-sky="night"]) .mnav { background: var(--lt-hdr); color: #191511; }
+html:not([data-sky="night"]) .mnav__foot { background: var(--lt-hdr); color: #5f564b; }
+html:not([data-sky="night"]) .mnav__links a[aria-current="page"] span { color: #8a4f1f; }
+
+/* ---------- 4. footer ---------- */
+html:not([data-sky="night"]) .ftr { background: var(--lt-foot); color: #191511; }
+
+/* ---------- 5. dark decorations of the former dark intros and contact blocks: a texture under a dark veil ---------- */
+html:not([data-sky="night"]) :is(.intro__tex, .contact__tex) { display: none; }
+
+/* ---------- 6. forms on the former dark surfaces ---------- */
+html:not([data-sky="night"]) .contact__form { background: #fffdf9; border-color: var(--lt-line); box-shadow: var(--lt-sh); -webkit-backdrop-filter: none; backdrop-filter: none; }
+html:not([data-sky="night"]) :is(.sec--dark, .sec--warm) .field input::placeholder,
+html:not([data-sky="night"]) :is(.sec--dark, .sec--warm) .field textarea::placeholder { color: rgba(25,21,17,.5); }
+html:not([data-sky="night"]) .sec--dark .tab[aria-selected="false"]:hover { background: rgba(25,21,17,.04); }
+html:not([data-sky="night"]) :is(.sec--dark, .sec--warm) .pslot { background: rgba(25,21,17,.035); }
+html:not([data-sky="night"]) .dbx__photos .dbx__ph--b,
+html:not([data-sky="night"]) #designer-box .hbox.hbox--b { background: #fffdf9; }
+
+/* ---------- 7. the live-sky pill and its panel: light ---------- */
+html:not([data-sky="night"]) .skyctl__pill { background: rgba(255,253,249,.92); color: #191511; box-shadow: 0 0 0 1px var(--lt-line), 0 8px 24px -12px rgba(60,44,28,.35); }
+html:not([data-sky="night"]) .skyctl__pop { background: rgba(255,253,249,.97); color: #191511; box-shadow: 0 0 0 1px var(--lt-line), 0 24px 60px -24px rgba(60,44,28,.4);
+  --td: #191511; --md: #5f564b; --line-d: rgba(25,21,17,.12); --line-d2: rgba(25,21,17,.26); --copper: #8a4f1f; --copper-hi: #6e3c14; --stone: #191511; --ink: #fffdf9; }
+html:not([data-sky="night"]) .skyctl__seg button:hover { color: #000; }
+
+/* ---------- 8. cards and labels that were dark on the light pages ---------- */
+/* «Європейська якість» (Technology): a white card with a soft shadow instead of a black panel */
+html:not([data-sky="night"]) .origin { background: #fffdf9; box-shadow: var(--lt-sh); border: 1px solid var(--lt-line); }
+html:not([data-sky="night"]) .origin__mark { background: radial-gradient(120% 90% at 100% 0%, rgba(196,147,92,.12), rgba(196,147,92,0) 60%); }
+/* small captions on photos and renders: light chips with dark text (they sat as dark chips on the dark page) */
+html:not([data-sky="night"]) .app__cap span,
+html:not([data-sky="night"]) .rooms__ba { background: rgba(255,253,249,.9); color: #191511; }
+/* the video cards keep light type over their own dark gradient (it is over a video frame, not on the page) */
+html:not([data-sky="night"]) .vplay { --td: #ede6da; --md: #c9bfb2; --copper: #dcba94; --copper-hi: #e8cfae; color: #ede6da; }
+/* r2c: a lighter veil on the light pages: the frame stays bright, only the caption area is shaded; light letterbox while playing */
+html:not([data-sky="night"]) .vplay { background: #e7e0d6; }
+html:not([data-sky="night"]) .vplay::after { background: linear-gradient(0deg, rgba(20,16,12,.74) 0%, rgba(20,16,12,.42) 30%, rgba(20,16,12,0) 58%); }
+html:not([data-sky="night"]) .vplay__meta { text-shadow: 0 1px 14px rgba(0,0,0,.35); }
+html:not([data-sky="night"]) .vplay.is-playing video { background: #efe9e0; }
+@media (max-width:900px) { html:not([data-sky="night"]) .vplay::after { background: linear-gradient(0deg, rgba(20,16,12,.8) 0%, rgba(20,16,12,.55) 38%, rgba(20,16,12,0) 72%); } }
+/* the frame behind a photo while it loads: light, not near-black */
+html:not([data-sky="night"]) .tin__fig { background: #ebe5dc; }
+html:not([data-sky="night"]) :is(.app__vis) { background-color: #e7e0d6; }
+
+/* ---------- 9. Technology: the coating "pie" (drawn for a black page) on the light page ---------- */
+html:not([data-sky="night"]) .pie__n circle { fill: #fffdf9; stroke: rgba(138,79,31,.55); }
+html:not([data-sky="night"]) .pie__n text { fill: #191511; }
+/* the drawing itself: a lighter ground shadow, and the clear protective layer as a faint cool glaze with a fine grey edge
+   (white glass at 7 % opacity only read on black; on the light page it vanished) */
+html:not([data-sky="night"]) .pie__svg line[stroke="#000"] { stroke-opacity: .2; }
+html:not([data-sky="night"]) .pie__svg polygon[fill="rgba(255,255,255,.07)"] { fill: rgba(196,212,220,.1); }
+html:not([data-sky="night"]) .pie__svg polygon[fill="rgba(255,255,255,.30)"] { fill: rgba(170,186,194,.55); }
+html:not([data-sky="night"]) .pie__svg polygon[fill="rgba(255,255,255,.42)"] { fill: rgba(196,208,214,.7); }
+html:not([data-sky="night"]) .pie__svg polyline[stroke-opacity=".55"] { stroke: #8fa2ab; stroke-opacity: .75; }
+
+/* ---------- 10. generator: the four category names (Viktor B1) no longer run into each other in the narrow panel ---------- */
+.gx5 .gcat { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 20px; }
+.gx5 .gcat .tt > span { white-space: normal; overflow-wrap: anywhere; }
+
+/* ---------- 11. the dark look (a night time chosen in the sky pill): the header is a flat bar there too ---------- */
+html[data-sky="night"] .hdr { background: #14110f !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  border-bottom: 1px solid rgba(237,230,218,.12) !important; color: var(--td) !important; }
+html[data-sky="night"] .hdr .hdr__cta { border-color: var(--line-d2) !important; color: var(--td) !important; }
+
+/* ---------- 12. WCAG AA on the light pages: text that was dimmed below 4.5:1 ---------- */
+/* Technology «Від стіни до гранули»: the steps not being read were at 40 % (about 1.9:1); now about 5:1, the step being read stays at 100 % */
+.tzm__s:not(.is-on) { opacity: .9; }
+/* catalogue filter counts (11 px): full strength instead of 80 % (4.1:1 -> 6:1) */
+.dv6__c small { opacity: 1; }

@@ -48,7 +48,7 @@ html{-webkit-tap-highlight-color:transparent}
    3. Catalogue: the DV collection (build_inner.dv_block, catalogue.js)
    A quiet bar (the generator's four tone categories, text toggles with their counts), a compact grid of square swatches cut
    from the real scans (code and name under each) and, from 1100 px, a sticky viewer on the left: the macro crop of the scan
-   (a 6.5 cm field, a 1 cm scale), the name, the description and «Open in the generator». No frames, no plates.
+   (a 20 cm field since r2b, a 1 cm scale), the name, the description and «Open in the generator». No frames, no plates.
    ========================================================= */
 .dvx--w6 .dvx__head{margin-bottom:clamp(24px,2.6vw,40px)}
 .dv6{display:grid;grid-template-columns:minmax(0,1fr);gap:clamp(28px,3vw,48px)}
