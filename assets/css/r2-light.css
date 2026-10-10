@@ -124,3 +124,10 @@ html[data-sky="night"] .hdr .hdr__cta { border-color: var(--line-d2) !important;
 .tzm__s:not(.is-on) { opacity: .9; }
 /* catalogue filter counts (11 px): full strength instead of 80 % (4.1:1 -> 6:1) */
 .dv6__c small { opacity: 1; }
+
+/* ---------- 13. 320 px phones (10.10 live check): long uppercase labels may wrap instead of widening the page ---------- */
+@media (max-width: 380px) {
+  .btn { height: auto; min-height: var(--h); white-space: normal; padding: 14px 20px; text-align: center; line-height: 1.35; }
+  .btn-text { white-space: normal; height: auto; min-height: 54px; }
+  .gx5 .tgrain .tt.tgrain__o { white-space: normal; }
+}
