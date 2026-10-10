@@ -131,3 +131,7 @@ html[data-sky="night"] .hdr .hdr__cta { border-color: var(--line-d2) !important;
   .btn-text { white-space: normal; height: auto; min-height: 54px; }
   .gx5 .tgrain .tt.tgrain__o { white-space: normal; }
 }
+
+/* ---------- 14. Room tabs (10.10, Artur's phone): in the scrolling tab rows the flex items shrank below their text, so the
+   eight commercial room names overlapped («Хол02 Кабіне…»). Items keep their own width; the row scrolls sideways. ---------- */
+.gx5 .rsel__t, .gx5 .rsel__gb, #interiors .rsel__t, #interiors .rsel__gb { flex: 0 0 auto; }
