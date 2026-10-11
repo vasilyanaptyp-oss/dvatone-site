@@ -16,9 +16,9 @@ Facts from Dvatone (see the FAQ page):
 
 ## Pages in English
 
-- [Home](https://vasylian.com/dvatone-site/en/): the coating, the catalogue, the generator, interiors and the Designer Box
+- [Home](https://vasylian.com/dvatone-site/en/): the coating, the catalogue, interiors, the Designer Box and the desktop app for architects
 - [Colour catalogue](https://vasylian.com/dvatone-site/en/catalogue.html): the colour fan and the DV collection
-- [Composition generator](https://vasylian.com/dvatone-site/en/generator.html): build a composition and try it on a wall in a room
+- [Desktop app for architects](https://vasylian.com/dvatone-site/en/app.html): coming to macOS and Windows: palettes from the DVATONE collection, granule sizes, the try-on on a wall in a room; a download request (the link is sent when the app is released)
 - [Technology](https://vasylian.com/dvatone-site/en/technology.html): properties, how to get the multicolour effect on the wall
 - [Designer Box](https://vasylian.com/dvatone-site/en/designer-box.html): the sample set for designers and architects
 - [Professional application](https://vasylian.com/dvatone-site/en/service.html)
@@ -27,9 +27,9 @@ Facts from Dvatone (see the FAQ page):
 
 ## Сторінки українською
 
-- [Головна](https://vasylian.com/dvatone-site/): мультикольорове декоративне покриття, каталог, генератор, інтер’єри, Designer Box
+- [Головна](https://vasylian.com/dvatone-site/): мультикольорове декоративне покриття, каталог, інтер’єри, Designer Box, десктопний додаток для архітекторів
 - [Каталог](https://vasylian.com/dvatone-site/catalogue.html): колірне віяло й колекція DV
-- [Генератор композицій](https://vasylian.com/dvatone-site/generator.html): складіть композицію й приміряйте її на стіні
+- [Десктопний додаток для архітекторів](https://vasylian.com/dvatone-site/app.html): скоро для macOS і Windows: палітри з колекції DVATONE, фракції, примірка на стіні в інтер’єрі; заявка на завантаження (посилання надішлемо, коли додаток вийде)
 - [Технологія](https://vasylian.com/dvatone-site/technology.html): характеристики, як отримати мультикольоровий ефект на стіні
 - [Designer Box](https://vasylian.com/dvatone-site/designer-box.html): набір зразків для дизайнерів і архітекторів
 - [Професійне нанесення](https://vasylian.com/dvatone-site/service.html)

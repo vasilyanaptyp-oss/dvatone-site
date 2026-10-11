@@ -218,6 +218,7 @@
     dvFilter = cat;
     $$('[data-dvc]', dv6).forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-dvc') === cat ? 'true' : 'false'); });
     $$('.dv6__i', grid6).forEach(function (li) { var on = cat === 'all' || li.getAttribute('data-cat') === cat; li.hidden = !on; li.style.display = on ? '' : 'none'; });
+    $$('[data-dvc-note]', dv6).forEach(function (p) { p.hidden = p.getAttribute('data-dvc-note') !== cat; });   // r3e: the bot's category text
     var vis = visibleCodes();
     if (vis.length && vis.indexOf(pinned) < 0) pin(vis[0]);   // the kept composition left the filter: the first one of it takes its place
     if (live) { live.textContent = fmt(C.shown || '{n}', { n: vis.length }); setTimeout(function () { live.textContent = ''; }, 2600); }

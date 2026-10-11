@@ -1,0 +1,132 @@
+/* r3-content.css: Viktor 11.10 (round 3), points 2, 5, 6, 7, 8 (job r3b). Linked last on every page (layout.CONTENT_CSS).
+   No url(): pictures are in the markup. */
+
+/* ---- point 6: the property grid = eight even icon tiles (icon + title), symmetric at every width, no empty areas.
+   4 x 2 from 701 px up, 2 x 4 on phones; inner hairlines only, the same rhythm in every cell. ---- */
+.specs.specs--icons{grid-template-columns:repeat(4,minmax(0,1fr))}
+.specs.specs--icons .spec{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center;
+  padding:clamp(28px,3vw,44px) clamp(10px,1.4vw,22px);border-left:1px solid var(--line-l);border-bottom:1px solid var(--line-l)}
+.specs.specs--icons .spec:nth-child(4n+1){border-left:0}
+.specs.specs--icons .spec>.ico{grid-row:auto;width:34px;height:34px;margin:0 0 18px}
+.specs.specs--icons .spec h3{max-width:17ch;text-wrap:balance}
+/* point 2: the granule icon is a real micro-crop of the DV 050 scan, a round 30 px sample inside the 34 px icon box */
+.specs.specs--icons .spec>.ico--scan,.ico--scan{display:block;width:30px;height:30px;margin:2px 2px 20px;border-radius:50%;
+  box-shadow:0 0 0 1px rgba(138,79,31,.32),0 1px 3px rgba(25,21,17,.14)}
+@media (max-width:700px){
+  .specs.specs--icons{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .specs.specs--icons .spec{padding:24px 10px 22px;border-left:1px solid var(--line-l)}
+  .specs.specs--icons .spec:nth-child(2n+1){border-left:0}
+  .specs.specs--icons .spec>.ico{width:30px;height:30px;margin:0 0 12px}
+  .specs.specs--icons .spec>.ico--scan{width:27px;height:27px;margin:1px 1px 13px}
+}
+@media (max-width:400px){.specs.specs--icons .spec h3{font-size:15px}}
+
+/* ---- point 5: Technology intro, the phyto-picture photo: the whole 3:2 frame, larger (about 62 % of the row on desktops,
+   full width below 1100 px, edge to edge on phones); a click opens it full screen (scan viewer, group "photo") ---- */
+.intro--tech-wide .tin{grid-template-columns:minmax(0,4fr) minmax(0,7fr);gap:clamp(32px,4.4vw,72px)}
+.intro--tech-wide .tin__fig{aspect-ratio:3/2;max-height:none;justify-self:stretch}
+.tin__full{position:relative;display:block;width:100%;height:100%;cursor:zoom-in;-webkit-tap-highlight-color:transparent}
+.tin__full:focus-visible{outline:2px solid #d9a46b;outline-offset:3px}
+.tin__full img{transition:transform .9s cubic-bezier(.2,.7,.2,1)}
+.tin__x{position:absolute;right:14px;bottom:14px;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;
+  background:rgba(250,248,244,.88);color:#191511;box-shadow:0 4px 14px rgba(0,0,0,.18);transition:background .2s}
+.tin__x svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+@media (hover:hover){.tin__full:hover img{transform:scale(1.015)}.tin__full:hover .tin__x{background:#fff}}
+@media (prefers-reduced-motion:reduce){.tin__full img{transition:none}.tin__full:hover img{transform:none}}
+@media (max-width:1099.98px){.intro--tech-wide .tin{grid-template-columns:minmax(0,1fr);gap:var(--s-7)}}
+@media (max-width:760px){.intro--tech-wide .tin__fig{aspect-ratio:3/2}.tin__x{right:10px;bottom:10px;width:36px;height:36px}}
+
+/* ---- point 8: Technology, «Колекція кольорів DVATONE» above the row of scans (no caption under it); point 4: code + name on
+   each tile; the expand mark says a tile opens full screen ---- */
+.tstrip__head{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px 32px;
+  padding-top:clamp(56px,7vw,112px);padding-bottom:clamp(22px,2.4vw,36px)}
+.tstrip__h{margin:0;font-weight:300;font-size:clamp(30px,3.4vw,52px);line-height:1.06;letter-spacing:-.025em;color:var(--tl,#191511)}
+.tstrip__h em{font-style:normal;color:var(--ml,#5f564b)}
+.tstrip__head .link-arrow{margin-bottom:.35em;color:var(--tl,#191511);opacity:1}
+.tstrip .tstrip__c{display:flex;align-items:baseline;gap:8px;max-width:calc(100% - 64px);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  padding:4px 9px;font-size:11px;letter-spacing:.06em}
+.tstrip .tstrip__c i{font-style:normal;letter-spacing:.01em;font-size:12px;color:#5f564b;overflow:hidden;text-overflow:ellipsis}
+.tstrip__x{position:absolute;top:10px;right:10px;display:grid;place-items:center;width:32px;height:32px;border-radius:50%;
+  background:rgba(250,248,244,.86);color:#191511;opacity:.0;transition:opacity .2s;pointer-events:none}
+.tstrip__x svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.tstrip__t>a:hover .tstrip__x,.tstrip__t>a:focus-visible .tstrip__x{opacity:1}
+@media (hover:none){.tstrip__x{opacity:1}}
+@media (max-width:700px){.tstrip__head{padding-top:var(--s-8,56px)}.tstrip__head .link-arrow{margin-bottom:0}}
+
+/* ---- point 7: the coating «pie» per the DVATONE technological card (_src/r1110_pie.py). Four stepped sheets, each lower one
+   lying over the one above and ending in the card's arrow point; real matte materials, the finish layer = the DV 004 scan
+   front-on (crisp). Right: the card's application facts. ---- */
+.pie2__grid{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,4fr);gap:clamp(40px,6vw,104px);align-items:start;margin-top:clamp(40px,5vw,72px)}
+.pie2__vis{margin:0}
+.pie2__stack{position:relative;list-style:none;margin:0;padding:0;aspect-ratio:10/10.4}
+.pie2__l{position:absolute;left:0;bottom:0;
+  filter:drop-shadow(0 -2px 5px rgba(40,28,18,.10)) drop-shadow(0 14px 22px rgba(40,28,18,.13)) drop-shadow(0 1px 1px rgba(40,28,18,.16))}
+.pie2__l--1{top:0;width:100%}
+.pie2__l--2{top:19%;width:95%}
+.pie2__l--3{top:38%;width:89.5%}
+.pie2__l--4{top:56%;width:84%}
+.pie2__sheet{position:absolute;inset:0;overflow:hidden;border-radius:10px 0 0 10px;background:#e9e4dc;
+  clip-path:polygon(0 0,86% 0,100% 50%,86% 100%,0 100%)}
+.pie2__sheet picture{display:block;position:absolute;inset:0}
+.pie2__mat{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover;max-width:none}
+.pie2__sheet::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.6) 0,rgba(255,255,255,0) 3px),linear-gradient(118deg,rgba(255,255,255,.16),rgba(255,255,255,0) 46%,rgba(30,20,10,.05))}
+.pie2__l--4 .pie2__sheet::after{background:linear-gradient(180deg,rgba(255,255,255,.6) 0,rgba(255,255,255,0) 3px)}   /* the scan stays untouched */
+.pie2__txt{position:absolute;left:clamp(14px,3.6%,40px);right:17%;top:clamp(10px,1.7vw,26px);display:flex;align-items:flex-start;gap:clamp(10px,1.2vw,16px)}
+.pie2__l--4 .pie2__txt{right:auto;max-width:72%;padding:clamp(8px,1vw,12px) clamp(12px,1.4vw,18px) clamp(9px,1.1vw,14px) clamp(10px,1.1vw,14px);
+  background:rgba(250,247,242,.88);border-radius:3px;box-shadow:0 2px 12px rgba(40,28,18,.10)}
+.pie2__n{flex:none;font-weight:200;font-size:clamp(28px,3.3vw,48px);line-height:.86;color:#8f877b;font-variant-numeric:lining-nums}
+.pie2__body{min-width:0}
+.pie2__body h3{margin:0;font-weight:600;font-size:clamp(15px,1.3vw,19px);line-height:1.25;letter-spacing:-.005em;color:#191511}
+.pie2__meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin:clamp(6px,.7vw,10px) 0 0;font-size:clamp(13px,1.1vw,16px);line-height:1.3;color:#2b2520}
+.pie2__tools{display:inline-flex;gap:6px}
+.pie2__tool{display:grid;place-items:center;width:clamp(28px,2.4vw,36px);height:clamp(28px,2.4vw,36px);border-radius:50%;background:rgba(255,255,255,.94);
+  box-shadow:0 1px 3px rgba(40,28,18,.18)}
+.pie2__tool .pie2__ico{width:64%;height:64%;stroke:#3a312a}
+.pie2__ico{fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+.pie2__std{color:#4d443b;font-size:.92em}
+.pie2__note{margin-top:clamp(18px,2vw,28px);font-size:13px;line-height:1.6;color:var(--ml,#5f564b);max-width:66ch}
+.pie2__side{padding-top:4px}
+.pie2__eb{font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--copper-lo,#8a4f1f)}
+.pie2__cond{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(8px,1vw,14px);list-style:none;margin:18px 0 6px;padding:0}
+.pie2__cond li{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;aspect-ratio:1;padding:8px;border:1px solid var(--line-l2,rgba(25,21,17,.16));
+  border-radius:50%;text-align:center;font-size:12.5px;line-height:1.3;color:var(--tl,#191511)}
+.pie2__cond .pie2__ico{width:26px;height:26px;color:var(--copper-lo,#8a4f1f)}
+.pie2__facts{margin:20px 0 0}
+.pie2__f{display:grid;grid-template-columns:24px minmax(0,1fr);column-gap:14px;padding:14px 0;border-top:1px solid var(--line-l,rgba(25,21,17,.1))}
+.pie2__f:last-child{border-bottom:1px solid var(--line-l,rgba(25,21,17,.1))}
+.pie2__f .pie2__ico{grid-row:1/span 2;width:22px;height:22px;margin-top:1px;color:var(--copper-lo,#8a4f1f)}
+.pie2__f dt{font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--ml,#5f564b)}
+.pie2__f dd{margin:4px 0 0;font-size:16px;line-height:1.45;color:var(--tl,#191511)}
+.pie2__tg{margin-top:22px}
+@media (max-width:900px){
+  .pie2__grid{grid-template-columns:minmax(0,1fr)}
+  .pie2__side{max-width:560px}
+  .pie2__cond{max-width:420px}
+}
+@media (max-width:560px){
+  .pie2__stack{aspect-ratio:10/13.4}
+  .pie2__l--2{top:18.5%}.pie2__l--3{top:37%}.pie2__l--4{top:55.5%}
+  .pie2__sheet{border-radius:7px 0 0 7px;clip-path:polygon(0 0,88% 0,100% 50%,88% 100%,0 100%)}
+  .pie2__txt{right:13%}
+  .pie2__l--4 .pie2__txt{max-width:80%}
+  .pie2__cond li{font-size:12px}
+}
+
+/* r3d (11.10, final check): the home interiors palettes on phones showed cut names («DV 004 Ти…»). Viktor wants the colour names
+   seen (point 4), so on phones the pills keep their natural width and wrap to the next line; a name longer than the row breaks
+   inside its pill instead of being cut. */
+@media (max-width:760px){
+  #interiors .rooms__chips{display:flex;flex-wrap:wrap;gap:8px 8px}
+  #interiors .rooms__chips .preset{width:auto;max-width:100%;height:auto;min-height:40px;padding:8px 14px 8px 12px;line-height:1.25}
+  #interiors .rooms__chips .preset span{overflow:visible;text-overflow:clip;white-space:normal;text-align:left}
+}
+
+/* r3d (11.10, final check): phone first screen eyebrow: «Мультикольорове декоративне покриття» stood over the sunlit sofa at about half veil and
+   read weakly; the veil is a little deeper at that height and the eyebrow lighter with a soft shadow (the picture above stays open). */
+@media (max-width: 760px), (max-aspect-ratio: 4/5) and (max-width: 1100px) {
+  .fs--deep .fs__bg::after { background:
+      linear-gradient(180deg, rgba(12,10,8,.62) 0%, rgba(12,10,8,.2) 12%, rgba(12,10,8,0) 22%),
+      linear-gradient(0deg, #0f0d0b 0%, rgba(15,13,11,.94) 22%, rgba(15,13,11,.82) 40%, rgba(15,13,11,.66) 52%, rgba(15,13,11,.3) 64%, rgba(15,13,11,0) 76%); }
+  .fs--deep .fs__eyebrow { color: #ead2b4; text-shadow: 0 1px 14px rgba(10,8,6,.7), 0 0 2px rgba(10,8,6,.5); }
+}

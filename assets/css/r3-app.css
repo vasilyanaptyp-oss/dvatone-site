@@ -1,0 +1,167 @@
+/* Dvatone, 11.10 round 3 (job r3c), Viktor point 10: «Поточну веб-версію прибираємо. Замість неї на сайті робимо презентаційний
+   блок із прев'ю/відео майбутнього десктопного додатку для архітекторів та кнопками завантаження (macOS / Windows)… преміальну
+   промо-секцію з можливістю залишити заявку на скачування.»
+   The app promo page (app.html, .apx-*) and its home teaser (.apt-*), in the deep atmosphere of round 3 (r3-atmos.css): a deep
+   first screen with white light type, the app window floating in a soft glow of its own picture, the light airy features, a deep
+   request band with the form as a light card (an expensive contrast). Linked on every page, last (_src/layout.py); critical.py
+   inlines its first-screen rules. No url(): the pictures are in the markup. */
+
+/* ---------- the app window: a quiet dark title bar over a 16:10 screen ---------- */
+.apx-win { position: relative; border-radius: 12px; overflow: hidden; background: #1c1916;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.07), 0 2px 6px rgba(0,0,0,.18), 0 50px 110px -40px rgba(0,0,0,.62); }
+.apx-win__bar { position: relative; display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px;
+  background: linear-gradient(#2a2622, #221f1b); border-bottom: 1px solid rgba(0,0,0,.35); }
+.apx-win__bar i { width: 10px; height: 10px; border-radius: 50%; background: rgba(241,235,226,.2); flex: none; }
+.apx-win__bar span { position: absolute; left: 50%; transform: translateX(-50%); font-size: 10.5px; font-weight: 600; letter-spacing: .24em;
+  color: rgba(241,235,226,.58); white-space: nowrap; }
+.apx-win__screen { position: relative; aspect-ratio: 16 / 10; background: #f5f5f5; overflow: hidden; }
+.apx-win__screen picture { display: contents; }
+.apx-win__screen img, .apx-win__vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.apx-win__vid { opacity: 0; transition: opacity .7s ease; background: transparent; }
+.apx-win__vid.is-live { opacity: 1; }
+.apx-play { position: absolute; right: 12px; bottom: 12px; z-index: 2; width: 44px; height: 44px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; color: #f7f2ea; background: rgba(20,17,15,.58); box-shadow: 0 0 0 1px rgba(255,255,255,.14);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: background .2s; }
+.apx-play:hover { background: rgba(20,17,15,.8); }
+.apx-play:focus-visible { outline: 2px solid #e6c9a4; outline-offset: 3px; }
+.apx-play svg { width: 16px; height: 16px; fill: currentColor; grid-area: 1 / 1; }
+.apx-play .apx-play__pause, .apx-play.is-on .apx-play__play { display: none; }
+.apx-play.is-on .apx-play__pause { display: block; }
+.apx-play[hidden] { display: none; }
+
+/* ---------- the download buttons ---------- */
+.apx-oss { display: flex; flex-wrap: wrap; gap: 12px; }
+.apx-os { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center;
+  min-width: 196px; min-height: 62px; padding: 10px 22px 10px 18px; border-radius: 2px; text-decoration: none;
+  transition: background .25s, color .25s, border-color .25s, transform .25s; }
+.apx-os__ico { grid-row: 1 / 3; width: 24px; height: 24px; fill: currentColor; }
+.apx-os__k { grid-column: 2; font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; font-weight: 600; opacity: .72; line-height: 1.3; }
+.apx-os__n { grid-column: 2; font-size: 21px; font-weight: 400; letter-spacing: -.01em; line-height: 1.15; }
+.apx-os--light { background: #e3d8c8; color: #14110f; }
+.apx-os--light:hover { background: #f1e9dc; }
+.apx-os--line { color: #f4efe8; box-shadow: inset 0 0 0 1px rgba(244,239,232,.42); }
+.apx-os--line:hover { background: rgba(244,239,232,.08); box-shadow: inset 0 0 0 1px rgba(244,239,232,.8); }
+.apx-os:focus-visible { outline: 2px solid #e6c9a4; outline-offset: 3px; }
+@media (hover: hover) { .apx-os:hover { transform: translateY(-1px); } }
+
+/* ---------- 1. the deep first screen ---------- */
+.apx-hero { position: relative; isolation: isolate; overflow: hidden; padding-top: calc(var(--hdr) + clamp(36px, 6vh, 72px)); padding-bottom: clamp(56px, 8vw, 112px); color: #f4efe8; }
+html:not([data-sky="night"]) .sec.apx-hero, .sec.apx-hero { background: radial-gradient(70% 60% at 72% 30%, rgba(201,153,95,.12), rgba(201,153,95,0) 65%), #110f0d; }
+.apx-hero__bg { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.apx-hero__glow { position: absolute; left: 34%; top: 6%; width: 70%; height: auto; filter: blur(70px) saturate(1.15); opacity: .42; transform: translateZ(0); }
+.apx-hero__bg::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(17,15,13,.55) 0%, rgba(17,15,13,0) 30%, rgba(17,15,13,0) 70%, rgba(17,15,13,.7) 100%),
+              radial-gradient(120% 90% at 50% 40%, rgba(17,15,13,0) 50%, rgba(17,15,13,.6) 100%); }
+.apx-hero__in { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); gap: clamp(32px, 4.5vw, 80px); align-items: center; }
+.apx-hero__eyebrow { color: #dcba94; }
+.apx-hero__h { margin-top: 22px; font-weight: 200; font-size: clamp(40px, 4.2vw, 76px); line-height: 1.04; letter-spacing: -.035em; color: #f7f2ea; text-wrap: balance; }
+.apx-hero__h em { font-style: normal; color: rgba(247,242,234,.56); }
+.apx-hero__lede { margin-top: 22px; max-width: 42ch; font-size: clamp(16px, 1.15vw, 18px); line-height: 1.65; color: rgba(247,242,234,.8); }
+.apx-hero .apx-oss { margin-top: 34px; }
+.apx-hero__note { display: flex; gap: 12px; align-items: baseline; margin-top: 22px; max-width: 44ch; font-size: 13.5px; line-height: 1.55; color: rgba(247,242,234,.62); }
+.apx-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #dcba94; box-shadow: 0 0 0 4px rgba(220,186,148,.16); transform: translateY(-1px); }
+.apx-hero__fig { margin: 0; min-width: 0; }
+.apx-win--hero { box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 3px 10px rgba(0,0,0,.25), 0 70px 140px -40px rgba(0,0,0,.8); }
+.apx-hero__cap { margin-top: 16px; font-size: 12.5px; line-height: 1.5; color: rgba(247,242,234,.5); }
+@media (max-width: 1100px) {
+  .apx-hero__in { grid-template-columns: minmax(0, 1fr); }
+  .apx-hero__txt { max-width: 640px; }
+}
+@media (max-width: 760px) {
+  .apx-hero { padding-top: calc(var(--hdr) + 30px); padding-bottom: 56px; }
+  .apx-hero__h { font-size: clamp(36px, 10.6vw, 52px); margin-top: 16px; }
+  .apx-hero__lede { font-size: 16px; margin-top: 16px; }
+  .apx-hero .apx-oss { margin-top: 26px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .apx-os { min-width: 0; padding: 10px 12px; column-gap: 10px; }
+  .apx-os__n { font-size: 18px; }
+  .apx-os__k { font-size: 9.5px; letter-spacing: .12em; }
+  .apx-os__ico { width: 20px; height: 20px; }
+  .apx-hero__glow { left: -10%; top: 45%; width: 120%; }
+  .apx-win { border-radius: 8px; }
+  .apx-win__bar { height: 24px; padding: 0 10px; gap: 5px; }
+  .apx-win__bar i { width: 7px; height: 7px; }
+  .apx-win__bar span { font-size: 9px; }
+  .apx-play { width: 36px; height: 36px; right: 8px; bottom: 8px; }
+}
+
+/* ---------- 2. what the app does: light, airy rows (window | words, alternating) ---------- */
+.apx-what__head { max-width: 760px; }
+.apx-feats { display: grid; gap: clamp(64px, 9vw, 140px); margin-top: clamp(48px, 6vw, 96px); }
+.apx-feat { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); gap: clamp(28px, 5vw, 96px); align-items: center; }
+.apx-feat--rev { grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); }
+.apx-feat--rev .apx-feat__vis { order: 2; }
+.apx-feat__n { display: block; font-weight: 300; font-size: 14px; letter-spacing: .14em; color: var(--copper-lo, #8a5a2b); font-variant-numeric: tabular-nums; }
+.apx-feat__n::after { content: ""; display: block; width: 40px; height: 1px; margin-top: 18px; background: currentColor; opacity: .5; }
+.apx-feat__h { margin-top: 22px; font-weight: 300; font-size: clamp(26px, 2.2vw, 36px); line-height: 1.16; letter-spacing: -.02em; color: inherit; }
+.apx-feat__txt p { margin-top: 16px; font-size: 16px; line-height: 1.7; color: var(--ml); max-width: 44ch; }
+@media (max-width: 900px) {
+  .apx-feat, .apx-feat--rev { grid-template-columns: minmax(0, 1fr); gap: 26px; }
+  .apx-feat--rev .apx-feat__vis { order: 0; }
+}
+
+/* ---------- 3. the request band: deep, the steps, the form as a light card ---------- */
+.apx-get__txt .h2, .apx-what__head .h2 { margin-top: var(--s-5, 24px); }
+.apx-get__txt .lede, .apx-what__head .lede { margin-top: var(--s-5, 24px); }
+.apx-get__in { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(36px, 6vw, 110px); align-items: start; }
+.apx-steps { list-style: none; margin: clamp(32px, 4vw, 52px) 0 0; padding: 0; display: grid; gap: 0; counter-reset: none; }
+.apx-steps li { display: grid; grid-template-columns: 56px 1fr; grid-template-rows: auto auto; column-gap: 8px; padding: 20px 0; border-top: 1px solid var(--line-d, rgba(241,235,226,.13)); }
+.apx-steps li:last-child { border-bottom: 1px solid var(--line-d, rgba(241,235,226,.13)); }
+.apx-steps b { grid-row: 1 / 3; font-weight: 300; font-size: 14px; letter-spacing: .12em; color: var(--copper-hi, #dcba94); padding-top: 4px; font-variant-numeric: tabular-nums; }
+.apx-steps h3 { font-weight: 400; font-size: 19px; line-height: 1.3; color: var(--td); }
+.apx-steps p { margin-top: 4px; font-size: 14.5px; line-height: 1.55; color: var(--md); }
+@media (max-width: 960px) { .apx-get__in { grid-template-columns: minmax(0, 1fr); } }
+
+.apx-card { --td: #191511; --md: #5f564b; --mute-d: #7d7266; --tl: #191511; --ml: #5f564b;
+  --copper: #8a4f1f; --copper-hi: #6e3c14; --copper-lo: #8a4f1f; --stone: #191511; --stone-h: #3a322a; --ink: #faf7f2;
+  --line-d: rgba(25,21,17,.12); --line-d2: rgba(25,21,17,.26); --line-l: rgba(25,21,17,.12); --line-l2: rgba(25,21,17,.26);
+  --focus: #8a4f1f; --focus-l: #8a4f1f; --err: #a3402f; --err-l: #a3402f;
+  color: #191511; background: #fbf8f3; padding: clamp(24px, 3.2vw, 48px); box-shadow: 0 40px 90px -40px rgba(0,0,0,.6); }
+.apx-card .field input::placeholder { color: rgba(25,21,17,.5); }
+.apx-card .btn--stone { --stone: #191511; --stone-h: #3a322a; --ink: #faf7f2; justify-self: start; }
+.apx-form__head .eyebrow { color: #8a4f1f; }
+.apx-form__head h3 { margin-top: 14px; font-weight: 300; font-size: clamp(22px, 1.8vw, 28px); line-height: 1.22; letter-spacing: -.015em; color: #191511; }
+.apx-form__note { margin: 0; font-size: 13px; line-height: 1.55; color: #5f564b; }
+.apx-seg { margin: 0; padding: 0; border: 0; min-width: 0; }
+.apx-seg legend { padding: 0; margin-bottom: 10px; font-size: var(--fs-micro, 11px); letter-spacing: var(--ls-caps, .14em); text-transform: uppercase; font-weight: 600; color: #5f564b; }
+.apx-seg__r { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.apx-seg__o { position: relative; display: block; cursor: pointer; }
+.apx-seg__o input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.apx-seg__o span { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 0 14px; font-size: 16px;
+  color: #191511; box-shadow: inset 0 0 0 1px rgba(25,21,17,.22); transition: background .2s, color .2s, box-shadow .2s; }
+.apx-seg__o span .apx-os__ico { width: 18px; height: 18px; }
+.apx-seg__o input:checked + span { background: #191511; color: #faf7f2; box-shadow: inset 0 0 0 1px #191511; }
+.apx-seg__o input:focus-visible + span { outline: 2px solid #8a4f1f; outline-offset: 3px; }
+.apx-seg__o:hover input:not(:checked) + span { box-shadow: inset 0 0 0 1px rgba(25,21,17,.6); }
+.apx-card .form__ok { border-color: rgba(25,21,17,.2); color: #191511; }
+.apx-card .form__fail { color: #a3402f; border-color: #a3402f; }
+@media (max-width: 520px) { .apx-card .form__row { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- the dialog: the same card, centred over a dimmed page ---------- */
+.apx-dlg { width: min(600px, calc(100% - 24px)); max-width: none; max-height: calc(100% - 24px); margin: auto; padding: 0; border: 0; background: transparent;
+  color: inherit; overflow: auto; overscroll-behavior: contain; }
+.apx-dlg::backdrop { background: rgba(10,8,6,.74); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.apx-dlg[open] { animation: apxIn .32s cubic-bezier(.2,.7,.2,1); }
+@keyframes apxIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.apx-dlg .apx-card { box-shadow: 0 50px 120px -30px rgba(0,0,0,.75); padding-top: clamp(40px, 4vw, 52px); }
+.apx-dlg__x { position: absolute; top: 8px; right: 8px; z-index: 2; width: 44px; height: 44px; border: 0; background: transparent; cursor: pointer; color: #191511;
+  display: grid; place-items: center; border-radius: 50%; }
+.apx-dlg__x svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.apx-dlg__x:hover { background: rgba(25,21,17,.06); }
+.apx-dlg__x:focus-visible { outline: 2px solid #8a4f1f; outline-offset: 2px; }
+.apx-dlg__slot { position: relative; }
+html.apx-locked { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .apx-dlg[open] { animation: none; } .apx-win__vid { transition: none; } .apx-os { transition: none; } }
+
+/* ---------- the home teaser (light): words on the left, the app window on the right ---------- */
+.apt__in { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(32px, 5vw, 96px); align-items: center; }
+.apt .lede { margin-top: var(--s-5, 24px); }
+.apt__list { list-style: none; margin: 28px 0 0; padding: 0; display: grid; gap: 0; max-width: 46ch; }
+.apt__list li { position: relative; padding: 13px 0 13px 28px; border-top: 1px solid var(--line-l, rgba(25,21,17,.12)); font-size: 15px; line-height: 1.5; color: var(--ml); }
+.apt__list li:last-child { border-bottom: 1px solid var(--line-l, rgba(25,21,17,.12)); }
+.apt__list li::before { content: ""; position: absolute; left: 2px; top: 21px; width: 12px; height: 1px; background: var(--copper-lo, #8a5a2b); }
+.apt__cta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; margin-top: 32px; }
+.apt__os { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: var(--ml); }
+.apt__os svg { width: 16px; height: 16px; fill: currentColor; }
+.apt__vis { min-width: 0; }
+.apt__soon { margin-top: 14px; font-size: 12.5px; color: var(--ml); }
+@media (max-width: 960px) { .apt__in { grid-template-columns: minmax(0, 1fr); } .apt__vis { order: -1; } }

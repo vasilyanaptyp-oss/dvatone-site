@@ -15,9 +15,11 @@
   if (NS.scans) return;
   var en = (document.documentElement.lang || '').slice(0, 2) === 'en';
   var T = en ? { view: 'Scan viewer', prev: 'Previous scan', next: 'Next scan', close: 'Close', fs: 'Full screen', fsOff: 'Exit full screen',
-                 z1: 'Actual size', z0: 'Fit to screen', of: '{n} of {total}', hint: 'Click the scan to see it at its actual size' }
+                 z1: 'Actual size', z0: 'Fit to screen', of: '{n} of {total}', hint: 'Click the scan to see it at its actual size',
+                 viewP: 'Photo viewer', hintP: 'Click the photo to see it at its actual size' }
                : { view: 'Перегляд скану', prev: 'Попередній скан', next: 'Наступний скан', close: 'Закрити', fs: 'На весь екран', fsOff: 'Вийти з повного екрана',
-                 z1: 'Реальний розмір', z0: 'Вмістити в екран', of: '{n} з {total}', hint: 'Натисніть на скан, щоб побачити його в реальному розмірі' };
+                 z1: 'Реальний розмір', z0: 'Вмістити в екран', of: '{n} з {total}', hint: 'Натисніть на скан, щоб побачити його в реальному розмірі',
+                 viewP: 'Перегляд фото', hintP: 'Натисніть на фото, щоб побачити його в реальному розмірі' };
   var svg = function (d) { return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + d + '"/></svg>'; };
   var dlg = null, img, capB, capS, capN, zoomB, fsB, stage, set = [], idx = 0, zoom = false, opener = null, ownFs = false;
   var canFs = !!(document.documentElement.requestFullscreen && document.fullscreenEnabled !== false);
@@ -30,7 +32,7 @@
       var code = el.getAttribute('data-scan');
       if (seen[code]) return; seen[code] = 1;
       out.push({ code: code, name: el.getAttribute('data-scan-name') || '', full: el.getAttribute('href'), m: el.getAttribute('data-scan-m') || el.getAttribute('href'),
-                 w: +el.getAttribute('data-w') || 0, h: +el.getAttribute('data-h') || 0 });
+                 w: +el.getAttribute('data-w') || 0, h: +el.getAttribute('data-h') || 0, photo: group === 'photo' });
     });
     return out;
   }
@@ -99,6 +101,7 @@
     img.src = it.full;
     if (it.w && it.h) { img.width = it.w; img.height = it.h; }
     img.alt = it.code + (it.name ? ' ' + it.name : '');
+    dlg.setAttribute('aria-label', it.photo ? T.viewP : T.view); img.title = it.photo ? T.hintP : T.hint;   // 11.10: group "photo" (Technology intro)
     capB.textContent = it.code; capS.textContent = it.name; capS.hidden = !it.name;
     capN.textContent = set.length > 1 ? fmt(T.of, { n: idx + 1, total: set.length }) : '';
     Array.prototype.forEach.call(dlg.querySelectorAll('[data-scv-step]'), function (b) { b.hidden = set.length < 2; });

@@ -29,7 +29,7 @@ html.scv-open{overflow:hidden}
 .scv__nav:hover{background:rgba(15,13,11,.8)}
 .scv__nav--p{left:clamp(6px,1.6vw,24px)}
 .scv__nav--n{right:clamp(6px,1.6vw,24px)}
-.scv.is-zoom .scv__nav{display:none}
+.scv.is-zoom .scv__nav,.scv__nav[hidden]{display:none}   /* 11.10: a single picture (the Technology photo) has no previous / next */
 @media (max-width:620px){
   .scv__b span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .scv__b{padding:0}
