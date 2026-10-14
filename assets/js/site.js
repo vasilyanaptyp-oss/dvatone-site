@@ -23,6 +23,24 @@
     }, { rootMargin: '150% 0px' });
     $$('main>section:not(:first-child)').forEach(function (s) { if (s.querySelector('img')) cvIo.observe(s); });
   }
+  
+  var renderAll = function () { $$('main>section,.ftr').forEach(function (s) { if (s.style.contentVisibility !== 'visible') s.style.contentVisibility = 'visible'; }); };
+  var settle = function (id) {
+    var t = null; try { t = id && document.getElementById(decodeURIComponent(id)); } catch (x) {}
+    for (var el = t; el && el !== document.body; el = el.parentElement) {
+      if (!el.hasAttribute('data-reveal') || el.classList.contains('is-in')) continue;
+      el.style.transition = 'none'; el.classList.add('is-in');
+      (function (n) { requestAnimationFrame(function () { requestAnimationFrame(function () { n.style.transition = ''; }); }); })(el);
+    }
+  };
+  if (location.hash.length > 1) { renderAll(); settle(location.hash.slice(1)); }
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href]'); if (!a) return;
+    var h = a.getAttribute('href') || '', i = h.indexOf('#');
+    if (i < 0 || h.length - i < 2) return;
+    if (i > 0) { var u; try { u = new URL(h, location.href); } catch (x) { return; } if (u.pathname !== location.pathname) return; }
+    renderAll(); settle(h.slice(i + 1));
+  }, true);
   window.addEventListener('load', function () {
     setTimeout(function () {
       if ($('main>section:first-child canvas, main>section:first-child video')) return;
@@ -565,6 +583,7 @@
       if (cap && el.type !== 'checkbox' && ((er && fld.contains(er)) || (hint && fld.contains(hint)))) { if (!cap.id) cap.id = uid('lbl'); el.setAttribute('aria-labelledby', cap.id); }
     });
     var cerr = $('[data-err-consent]', f); if (cerr) { if (!cerr.id) cerr.id = uid('err'); cerr.setAttribute('role', 'alert'); }
+    if (cerr && f.elements.consent && f.elements.consent.getAttribute) addDesc(f.elements.consent, cerr.id, false);
     var mark = function (el, msg) {
       var fld = el.closest('.field'), er = errOf(fld);
       if (fld) fld.classList.toggle('is-bad', !!msg);
@@ -653,7 +672,13 @@
       v.src = (matchMedia('(max-width: 760px)').matches && b.getAttribute('data-video-m')) || b.getAttribute('data-video');
       v.poster = b.getAttribute('data-poster') || '';
       v.controls = true; v.playsInline = true; v.preload = lite ? 'metadata' : 'auto'; v.autoplay = !lite;
-      v.setAttribute('aria-label', b.getAttribute('aria-label')); v.setAttribute('tabindex', '-1');
+      v.setAttribute('aria-label', b.getAttribute('aria-label')); v.setAttribute('tabindex', '0');
+      if (navigator.vendor === 'Apple Computer, Inc.') v.addEventListener('keydown', function (e) {
+        if (e.target !== v || e.altKey || e.ctrlKey || e.metaKey || !(e.key === ' ' || e.key === 'Enter' || e.key === 'k' || e.key === 'K')) return;
+        e.preventDefault();
+        var was = v.paused;
+        setTimeout(function () { if (v.paused !== was) return; if (was) { var pp = v.play(); if (pp && pp.catch) pp.catch(function () {}); } else v.pause(); }, 0);
+      });
       var d = document.createElement('div'); d.className = 'vplay is-playing'; d.appendChild(v);
       b.replaceWith(d); try { v.focus({ preventScroll: true }); } catch (e) {}
       collide = null; tickPillSoon();

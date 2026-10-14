@@ -47,9 +47,17 @@
       if (t.closest('[data-scv-x]')) { dlg.close(); return; }
       var st = t.closest('[data-scv-step]'); if (st) { step(+st.getAttribute('data-scv-step')); return; }
             if (t.closest('[data-scv-fs]')) { toggleFs(); return; }
-      if (t === dlg || t === stage) dlg.close();
+      if ((t === dlg || t === stage) && !moved) dlg.close();
     });
     dlg.addEventListener('keydown', function (e) {
+      if (e.key === 'Tab') {
+        var l = Array.prototype.filter.call(dlg.querySelectorAll('button'), function (b) { return !b.hidden && !b.disabled && b.getClientRects().length > 0; });
+        if (!l.length) return;
+        var a = document.activeElement, i = l.indexOf(a);
+        if (e.shiftKey && i <= 0) { e.preventDefault(); l[l.length - 1].focus(); }
+        else if (!e.shiftKey && (i < 0 || i === l.length - 1)) { e.preventDefault(); l[0].focus(); }
+        return;
+      }
       if (e.key === 'ArrowLeft' && !zoom) { e.preventDefault(); step(-1); }
       else if (e.key === 'ArrowRight' && !zoom) { e.preventDefault(); step(1); }
     });

@@ -238,7 +238,7 @@ window.DV_COLLECTION=[
   "code": "DV 045",
   "name": {
    "en": "Soft Limestone",
-   "uk": "М'який вапняк"
+   "uk": "М’який вапняк"
   },
   "desc": null,
   "photo": null
@@ -247,7 +247,7 @@ window.DV_COLLECTION=[
   "code": "DV 045.1",
   "name": {
    "en": "Warm Stone Quartz",
-   "uk": "Теплий Кам'яний Кварц"
+   "uk": "Теплий Кам’яний Кварц"
   },
   "desc": null,
   "photo": null
@@ -292,7 +292,7 @@ window.DV_COLLECTION=[
   "code": "DV 053",
   "name": {
    "en": "Soft Chrome",
-   "uk": "М'який хром"
+   "uk": "М’який хром"
   },
   "desc": null,
   "photo": null
@@ -346,7 +346,7 @@ window.DV_COLLECTION=[
   "code": "DV 061",
   "name": {
    "en": "Stone Velvet",
-   "uk": "Кам'яний оксамит"
+   "uk": "Кам’яний оксамит"
   },
   "desc": null,
   "photo": null
