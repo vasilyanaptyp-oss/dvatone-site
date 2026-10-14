@@ -20,8 +20,9 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-scan]'), function (el) {
       if ((el.getAttribute('data-scan-group') || '') !== group || !visible(el)) return;
       var code = el.getAttribute('data-scan');
-      if (seen[code]) return; seen[code] = 1;
-      out.push({ code: code, name: el.getAttribute('data-scan-name') || '', alt: el.getAttribute('data-scan-alt') || '', full: el.getAttribute('href'), m: el.getAttribute('data-scan-m') || el.getAttribute('href'),
+      var key = group === 'photo' ? (el.getAttribute('href') || code) : code;
+      if (seen[key]) return; seen[key] = 1;
+      out.push({ code: code, key: key, name: el.getAttribute('data-scan-name') || '', alt: el.getAttribute('data-scan-alt') || '', full: el.getAttribute('href'), m: el.getAttribute('data-scan-m') || el.getAttribute('href'),
                  w: +el.getAttribute('data-w') || 0, h: +el.getAttribute('data-h') || 0, photo: group === 'photo' });
     });
     return out;
@@ -116,7 +117,8 @@
     if (!set.length) return false;
     if (!dlg) build();
     opener = from || document.activeElement;
-    var i = 0; set.forEach(function (it, k) { if (it.code === code) i = k; });
+    var want = group === 'photo' && from && from.getAttribute && from.getAttribute('href') ? from.getAttribute('href') : code;
+    var i = 0; set.forEach(function (it, k) { if ((group === 'photo' ? it.key : it.code) === want) i = k; });
     show(i);
     document.documentElement.classList.add('scv-open');
     if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); }
