@@ -47,6 +47,7 @@
       if (t.closest('[data-scv-x]')) { dlg.close(); return; }
       var st = t.closest('[data-scv-step]'); if (st) { step(+st.getAttribute('data-scv-step')); return; }
             if (t.closest('[data-scv-fs]')) { toggleFs(); return; }
+      if (t === dlg || t === stage) dlg.close();
     });
     dlg.addEventListener('keydown', function (e) {
       if (e.key === 'ArrowLeft' && !zoom) { e.preventDefault(); step(-1); }

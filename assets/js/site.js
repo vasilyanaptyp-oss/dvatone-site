@@ -462,8 +462,8 @@
   var fmt = function (kind, v) {
     v = v.trim(); if (!v) return '';
     if (kind === 'email') return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) ? '' : ERR.email;
-    if (kind === 'phone') return (tgNick(v) || (v.replace(/\D/g, '').length >= 9 && /^[+\d\s()\-]+$/.test(v))) ? '' : (v.charAt(0) === '@' ? ERR.telegram : ERR.phone);
-    if (kind === 'contact') return (/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) || tgNick(v) || (v.replace(/\D/g, '').length >= 9 && /^[+\d\s()\-]+$/.test(v))) ? '' : ERR.contact;
+    if (kind === 'phone') return (tgNick(v) || (v.replace(/\D/g, '').length >= 9 && v.replace(/\D/g, '').length <= 15 && /^[+\d\s()\-]+$/.test(v))) ? '' : (v.charAt(0) === '@' ? ERR.telegram : ERR.phone);
+    if (kind === 'contact') return (/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) || tgNick(v) || (v.replace(/\D/g, '').length >= 9 && v.replace(/\D/g, '').length <= 15 && /^[+\d\s()\-]+$/.test(v))) ? '' : ERR.contact;
     if (kind === 'area') { var ar = NS.parseArea(v); return ar.err === 'big' ? SH.areaBig : (ar.err ? ERR.area : ''); }
     return '';
   };
