@@ -1,23 +1,4 @@
-/* DVATONE rooms: photo-based wall recolouring (interiors block on the home page, room view in generator option C).
 
-   How it works (ported from the approved concept):
-   - every room has a photo, a MASK (RGB = light and shadow measured on the original wall, alpha = wall area),
-     an EDGE layer (object outlines with the old wall colour taken out, no halo) and optionally a GLASS layer
-     (vase, decanters: the new wall shows through while rims and highlights stay);
-   - a finish (seamless texture) is tiled over the whole picture, multiplied by the mask, cut to the wall area,
-     then the edge and glass layers are laid back on top. The wall takes the chosen shade with the real light of the photo.
-
-   Mount point (one per stage):
-     <div data-rooms data-rooms-base="assets/img/rooms/" data-texture-base="assets/img/tex/">
-       <canvas data-room-canvas></canvas>            the picture
-       [data-room-tab="d|a|c"]   (anywhere on the page, inside data-rooms-scope or the stage's section)  room switch
-       [data-room-finish]        buttons; data-hex="B8A389" and optional data-texture-url="https://.../seamless.webp"
-       [data-room-handle]        before/after handle (role="slider"); [data-room-label="l|r"] captions (left = coated, right = original photo)
-       [data-room-now]           text node that receives the finish code
-     </div>
-   Texture hook for the client's seamless textures: put the file URL in data-texture-url on a finish button,
-   or call  DVATONE.rooms.get(stage).setFinish({ url: '...' })  /  setFinish({ canvas: HTMLCanvasElement, key: 'unique' }).
-*/
 (function () {
   'use strict';
   var NS = (window.DVATONE = window.DVATONE || {});
@@ -25,14 +6,12 @@
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // focal point (fx, fy) = which part of the photo stays in view when the stage crops it; tile = texture width / photo width
   var ROOMS = {
     d: { img: 'room-d.jpg', mask: 'room-d-mask.webp', edge: 'room-d-edge.webp', fx: 0.55, fy: 0.55, tile: 0.36, glass: { src: 'room-d-glass.webp', x: 1067, y: 682 } },
     a: { img: 'room-a.jpg', mask: 'room-a-mask.webp', edge: 'room-a-edge.webp', fx: 0.78, fy: 0.5, tile: 0.34 },
     c: { img: 'room-c.jpg', mask: 'room-c-mask.webp', edge: 'room-c-edge.webp', fx: 0.5, fy: 0.5, tile: 0.34, glass: { src: 'room-c-glass.webp', x: 899, y: 407 } }
   };
   var SHADE_GAIN = 1.3;
-  /* the heavy per-pixel work is cut into ~10 ms slices (long tasks on a phone freeze taps); between slices the thread goes back to the browser */
   var yieldMain = function () {
     if (window.scheduler && window.scheduler.yield) return window.scheduler.yield();
     return new Promise(function (res) { setTimeout(res, 0); });
@@ -51,8 +30,7 @@
     return imgCache[src];
   }
 
-  /* seamless tile without mirror symmetry: the texture is cross-faded with a half-offset copy of itself,
-     first across x then across y, with variance-preserving weights so the grain contrast stays even */
+  
   function seamlessTile(src, tw, th, isStale) {
     tw = Math.max(8, Math.round(tw)); th = Math.max(8, Math.round(th));
     var c = document.createElement('canvas'); c.width = tw; c.height = th;
@@ -76,7 +54,7 @@
       return w;
     }
     var wx = wts(tw), wy = wts(th), hw = tw >> 1, hh = th >> 1;
-    var pass = 0, row = 0;   // pass 0: cross-fade across x, pass 1: across y; one row at a time, many rows per slice
+    var pass = 0, row = 0;
     function slice() {
       var t0 = performance.now();
       while (pass < 2 && performance.now() - t0 < SLICE_MS) {
@@ -118,7 +96,6 @@
     }
     return o;
   }
-  /* glass file = 3 stacked blocks: T x wall light, R (highlights), refraction amount */
   function glassLayer(o, gimg, G) {
     var w = gimg.naturalWidth, h = Math.round(gimg.naturalHeight / 3);
     try {
@@ -157,7 +134,7 @@
     this.scope = el.closest('[data-rooms-scope]') || document;
     this.nowEl = $('[data-room-now]', this.scope);
     this.wired = false;
-    this.fails = 0; this.failAt = 0; this.retryT = 0;   // failed photo requests in a row, when the last one failed, the pending retry
+    this.fails = 0; this.failAt = 0; this.retryT = 0;
     this.wire();
   }
   Stage.prototype.src = function (f) { return this.base + f; };
@@ -167,7 +144,7 @@
     return loadImg(f.url || (this.texBase + f.hex + '.webp'));
   };
   Stage.prototype.coated = function (roomId, f) {
-    var self = this, key = roomId + '|' + this.finishKey(f), stale = function () { return self.finish !== f && !self.cache[key]; };   // a newer finish replaced this one while it was being prepared
+    var self = this, key = roomId + '|' + this.finishKey(f), stale = function () { return self.finish !== f && !self.cache[key]; };
     if (this.cache[key]) return Promise.resolve(this.cache[key]);
     var R = ROOMS[roomId];
     var glP = R.glass ? loadImg(this.src(R.glass.src)).catch(function () { return null; }) : Promise.resolve(null);
@@ -206,8 +183,8 @@
     var self = this; if (!this.canvas || !this.finish) return;
     var tok = ++this.token, R = ROOMS[this.room];
     this.placeUI();
-    if (this.retryT) return;   // a failed photo is fetched again shortly, and that draw shows the latest state
-    if (this.fails > 1 && performance.now() - this.failAt < 2000) { this.plain(true); return; }   // still no photo: at most one new request every 2 s
+    if (this.retryT) return;
+    if (this.fails > 1 && performance.now() - this.failAt < 2000) { this.plain(true); return; }
     Promise.all([loadImg(this.src(R.img)), this.coated(this.room, this.finish)]).then(function (r) {
       if (tok !== self.token) return;
       self.fails = 0; self.plain(false);
@@ -233,14 +210,12 @@
       self.el.classList.add('is-ready');
     }).catch(function (e) {
       if (e === STALE || tok !== self.token) return;
-      // the room photo (or its mask) did not arrive: one more try in 2 s (a flaky mobile connection), then the finish itself
-      // fills the stage, so the visitor sees the colour instead of an empty box; every later draw tries the photo again
       self.fails = (self.fails || 0) + 1; self.failAt = performance.now();
       if (self.fails === 1) { self.retryT = setTimeout(function () { self.retryT = 0; self.draw(); }, 2000); return; }
       self.plain(true);
     });
   };
-  Stage.prototype.plain = function (on) {   // fallback without the room photo: the finish alone, cover-fitted; the before/after controls step aside
+  Stage.prototype.plain = function (on) {
     var el = this.el, ui = [this.handle, $('.rooms__line', el), this.labels.l, this.labels.r];
     if (!on) {
       if (el.classList.contains('is-plain')) { el.classList.remove('is-plain'); ui.forEach(function (n) { if (n) n.style.visibility = ''; }); }
@@ -322,7 +297,6 @@
       self.setSplit(Math.abs(d) === 1 ? (d < 0 ? 0.02 : 0.98) : self.split + d);
     });
     window.addEventListener('resize', function () { clearTimeout(self._rz); self._rz = setTimeout(function () { self.draw(); }, 120); });
-    // a short sweep when the stage first comes into view, so the before/after reads at once
     if ('IntersectionObserver' in window && !reduce && el.hasAttribute('data-room-hint')) {
       var hinted = false;
       new IntersectionObserver(function (ents) {
@@ -353,7 +327,7 @@
   if ('IntersectionObserver' in window) {
     $$('[data-rooms]').forEach(function (el) {
       if (el.hasAttribute('data-rooms-manual')) return;
-      new IntersectionObserver(function (es, o) { if (es[0].isIntersecting) { o.disconnect(); idle(function () { if (!NS.rooms.get(el)) NS.rooms.mount(el); }); } }, { rootMargin: '100% 0px 100% 0px' }).observe(el);   // about one screen ahead, then in an idle slot
+      new IntersectionObserver(function (es, o) { if (es[0].isIntersecting) { o.disconnect(); idle(function () { if (!NS.rooms.get(el)) NS.rooms.mount(el); }); } }, { rootMargin: '100% 0px 100% 0px' }).observe(el);
     });
   } else mountAll();
 })();

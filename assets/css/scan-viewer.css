@@ -1,5 +1,3 @@
-/* DVATONE scan viewer (10.10, Viktor A8 / A12): the full-screen dialog of assets/js/scan-viewer.js and its triggers on the
-   catalogue (the expand mark on every DV card, «Повний скан» in the viewer) and in the technology page's strip of scans. */
 html.scv-open{overflow:hidden}
 .scv{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;max-width:none;max-height:none;margin:0;padding:0;border:0;
   background:#0f0d0b;color:#f3efe8;overflow:hidden;font-family:var(--f-sans,system-ui,sans-serif)}
@@ -20,7 +18,7 @@ html.scv-open{overflow:hidden}
 .scv__x{padding:0;justify-content:center}
 .scv__stage{position:relative;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;
   padding:clamp(8px,2vw,28px) clamp(8px,6vw,96px);touch-action:pan-y}
-.scv__img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;cursor:zoom-in;user-select:none;-webkit-user-drag:none;
+.scv__img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;cursor:default;user-select:none;-webkit-user-drag:none;
   box-shadow:0 18px 60px rgba(0,0,0,.35)}
 .scv.is-zoom .scv__stage{display:block;overflow:auto;padding:0;touch-action:auto;cursor:grab}
 .scv.is-zoom .scv__img{max-width:none;max-height:none;cursor:zoom-out;box-shadow:none}
@@ -29,7 +27,7 @@ html.scv-open{overflow:hidden}
 .scv__nav:hover{background:rgba(15,13,11,.8)}
 .scv__nav--p{left:clamp(6px,1.6vw,24px)}
 .scv__nav--n{right:clamp(6px,1.6vw,24px)}
-.scv.is-zoom .scv__nav,.scv__nav[hidden]{display:none}   /* 11.10: a single picture (the Technology photo) has no previous / next */
+.scv.is-zoom .scv__nav,.scv__nav[hidden]{display:none}
 @media (max-width:620px){
   .scv__b span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .scv__b{padding:0}
@@ -37,7 +35,6 @@ html.scv-open{overflow:hidden}
   .scv__stage{padding:8px 8px 72px}
 }
 
-/* catalogue: the expand mark on every DV card (opens the whole scan) */
 .dv6__i{position:relative}
 .dv6__full{position:absolute;top:6px;right:6px;z-index:2;display:grid;place-items:center;width:34px;height:34px;border-radius:50%;
   background:rgba(250,248,244,.86);color:#191511;opacity:0;transition:opacity .2s;-webkit-tap-highlight-color:transparent}
@@ -53,7 +50,6 @@ html.scv-open{overflow:hidden}
 .dvx__all svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
 .dvx__head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px}
 
-/* technology: the strip of scans, each a link to the whole scan */
 .tstrip__t>a{display:block;width:100%;height:100%;cursor:zoom-in}
 .tstrip__t>a:focus-visible{outline:2px solid var(--focus-l,#8a4f1f);outline-offset:-4px}
 .tstrip__t figcaption,.tstrip__c{position:absolute;left:10px;bottom:10px;padding:3px 8px;font-size:11px;letter-spacing:.06em;line-height:1.4;

@@ -1,41 +1,4 @@
-/* Dvatone 3D Interiors v2: architectural rooms whose feature wall wears the live granular coating.
 
-   Two modes, one API:
-   - photo (default, ./photoroom.js): photoreal Cycles renders of each room with the wall recoloured live and exactly
-     (the photograph never changes, only the coating and a slow push-in); also the hero story's end frame
-     (DVInterior2.photoFrame, DVInterior2.photoCamera);
-   - live (mode: 'live', this file): the rooms rendered in real time with three.js from baked lightmaps.
-
-   DVInterior2.mount(el, { room:'living'|'bedroom'|'hallway', colors:[{hex, share}], grain:0.6..1.8, density?, seed?,
-                           textureUrl?, textureSize? (metres per tile), drift?, poster? (false = none),
-                           quality? 'auto'|'high'|'mid'|'low', swipe? (true), autostart? (low tier: start without the tap),
-                           maxHeight? (number in px or CSS length: caps the host's height, no stylesheet needed) })
-   -> { setColors(colors, grain?), setState(generatorState), setRoom(name), setTexture(url|null, size?),
-        destroy(), stats(), renderFrame(), start(), ready: Promise<boolean>, room }   events: dv3d:ready, dv3d:fallback, dv3d:room
-   Declarative: <div data-dv3d="interior2" data-room="living" data-colors='[{"hex":"B8A389","share":45},...]' data-grain="1"></div>
-
-   How it is lit
-   - Every static surface (walls, floor, furniture AND the feature wall) carries a Cycles lightmap baked in Blender
-     (_blender/scripts): RGB = diffuse light from the sky, the bounces and ambient occlusion (sqrt encoded, white balanced
-     on the feature wall), plus a second map with the sun's visibility (window frames, furniture and the plants' leaves).
-     The sun itself is added in the shader with that visibility, so it reacts to normal maps and to the coating's relief.
-     Reflections come from an HDR probe of the same room (box projected).
-   - The feature wall's albedo is the generator's coating, baked on the GPU from the composition (core.js bakeGranules:
-     exact colours, fine granules, wipe when the composition changes), laid out without repetition (Voronoi texture
-     bombing), filtered for distance (no shimmer), with cavity shading, a relief response to the window light and
-     contact occlusion at the floor, ceiling and corners.
-   - Image stability first: the canvas always renders at one pixel per CSS pixel or more (effects degrade, never the
-     resolution), temporal anti-aliasing (jittered camera, history with variance clipping) instead of FXAA, light shafts
-     computed analytically (no ray-march noise), dust as soft energy-preserving sprites, no dithering. Slow GPUs get a
-     deliberate, evenly paced 30 fps instead of an uneven 40-60.
-   - Camera: one composed, level view per room (two-point perspective), a slow critically damped drift that pauses while
-     the visitor interacts.
-   - Tiers (MOBILE_STRATEGY.md section 3): high (desktop; Intel HD/UHD: bilinear lightmaps, 30 fps), mid (flagship phones:
-     pixel ratio 1.5, 1K lightmaps, light post), low (still + "Live 3D" button, then 30 fps). 4:5 phone stages use their
-     own framing; a horizontal swipe changes the room; 30 fps after 20 s without interaction.
-   Lazy (nothing loads before the module nears the viewport), paused off screen, reduced motion = one converged still,
-   no WebGL2 = poster. Assets per room: interior2/<room>.glb (meshopt), -lm/-sun/-env.webp, <room>.json; shared textures
-   interior2/tex/*.webp and interior2/exterior.webp. */
 import { createStage, createBaker, bakeGranules, normColors, clamp, crossfade, THREE_VERSION } from './core.js';
 import { mountPhoto, photoFrame, photoCamera, PHOTO_ROOMS, PHOTO_GROUPS } from './photoroom.js';
 
@@ -48,13 +11,11 @@ const LABEL = {
   en: { living: 'Living room with a Dvatone multicolour coating on the feature wall in daylight', bedroom: 'Bedroom with a Dvatone coating on the wall behind the bed', hallway: 'Hallway with a Dvatone coating along the long wall' }
 };
 const posterOf = (room, portrait) => ASSET + 'poster-' + room + (portrait ? '-p' : '') + '.webp';
-const SUN_K = 0.72;                    /* direct sun relative to the bake (see useRoom) */
-const CELL_M = 0.0021;                 /* granule lattice cell in metres at grain 1 (v1 scale: fleck about 1.9 mm, M) */
+const SUN_K = 0.72;
+const CELL_M = 0.0021;
 const G = window.DV3D || (window.DV3D = {});
 
-/* ------------------------------------------------------------------ quality tiers (MOBILE_STRATEGY.md section 3)
-   decided once per visit (sessionStorage), shared with the other modules through window.DV3D.tier;
-   ?dv3d-tier=high|mid|low forces one, ?dv3d-gpu=lite|full the desktop integrated-GPU profile. */
+
 const TIERS = {
   high: { prCap: 2, bloom: 4, dust: 480, lm: '', lmq: '', cubic: true, fps: 60, camSlow: 1, shafts: true },
   mid: { prCap: 1.5, bloom: 3, dust: 220, lm: '-1k', lmq: '-m', cubic: false, fps: 60, camSlow: 1.3, shafts: true },
@@ -78,7 +39,7 @@ function detectTier() {
     try {
       const s = sessionStorage.getItem('dv3d-tier');
       if (TIERS[s]) { G.gpuLite = sessionStorage.getItem('dv3d-gpulite') === '1'; return (G.tier = s); }
-    } catch (e) { /* storage blocked */ }
+    } catch (e) {  }
   }
   const nav = navigator, conn = nav.connection || {};
   const ua = nav.userAgent || '';
@@ -95,17 +56,15 @@ function detectTier() {
     else tier = (weakGPU || mem <= 3 || cores <= 4) ? 'low' : 'mid';
   }
   if (TIERS[forced]) tier = forced;
-  /* desktop integrated GPUs before Intel Xe (a UHD 620 needs 14 to 19 ms for a 1440 x 900 frame): bilinear lightmaps and
-     a deliberate, evenly paced 30 fps. ?dv3d-gpu=lite|full forces it */
+  
   G.gpuLite = gpuQ === 'lite' ? true : gpuQ === 'full' ? false : (tier === 'high' && /Intel.*(HD|UHD) Graphics/i.test(gpu) && !/Xe|Iris/i.test(gpu));
   G.tier = tier;
   if (!TIERS[forced] && !gpuQ) {
-    try { sessionStorage.setItem('dv3d-tier', tier); sessionStorage.setItem('dv3d-gpulite', G.gpuLite ? '1' : '0'); } catch (e) { /* storage blocked */ }
+    try { sessionStorage.setItem('dv3d-tier', tier); sessionStorage.setItem('dv3d-gpulite', G.gpuLite ? '1' : '0'); } catch (e) {  }
   }
   return tier;
 }
 
-/* scoped CSS: the canvas never traps vertical page scroll; the tap-to-start gate of the low tier */
 function injectCSS2() {
   if (document.getElementById('dv3d2-css')) return;
   const s = document.createElement('style'); s.id = 'dv3d2-css';
@@ -121,11 +80,9 @@ function injectCSS2() {
   document.head.appendChild(s);
 }
 
-/* ------------------------------------------------------------------ three.js addons without an import map
-   The addons import from the bare specifier 'three'. They are fetched once, their imports are pointed at the exact
-   three.js module core.js loaded (same URL = same module instance) and they run from blob URLs. */
-const THREE_ABS = new URL((typeof window !== 'undefined' && window.DV3D_THREE_URL) || ('https://cdn.jsdelivr.net/npm/three@' + THREE_VERSION + '/build/three.module.min.js'), location.href).href;
-const ADDONS = (typeof window !== 'undefined' && window.DV3D_THREE_ADDONS) || ('https://cdn.jsdelivr.net/npm/three@' + THREE_VERSION + '/examples/jsm/');
+
+const THREE_ABS = new URL((typeof window !== 'undefined' && window.DV3D_THREE_URL) || new URL('./vendor/three.module.min.js', import.meta.url).href, location.href).href;
+const ADDONS = (typeof window !== 'undefined' && window.DV3D_THREE_ADDONS) || new URL('./vendor/jsm/', import.meta.url).href;
 const blobs = new Map();
 function rewritten(url) {
   if (blobs.has(url)) return blobs.get(url);
@@ -152,8 +109,8 @@ let gltfP = null;
 function gltfLoader() {
   if (!gltfP) gltfP = (async () => {
     const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
-      import(/* @vite-ignore */ await rewritten(new URL('loaders/GLTFLoader.js', ADDONS).href)),
-      import(/* @vite-ignore */ new URL('libs/meshopt_decoder.module.js', ADDONS).href)
+      import( await rewritten(new URL('loaders/GLTFLoader.js', ADDONS).href)),
+      import( new URL('libs/meshopt_decoder.module.js', ADDONS).href)
     ]);
     await MeshoptDecoder.ready;
     const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
@@ -162,10 +119,7 @@ function gltfLoader() {
   return gltfP;
 }
 
-/* ------------------------------------------------------------------ runtime material table
-   Blender material names -> textures (interior2/tex/<id>-c.webp colour, -n.webp normal xy + roughness in B, -m.webp metal)
-   tile = metres per texture tile for the box-projected UVs of the custom pieces (Poly Haven models keep their UVs).
-   ibl = glossy enough to show the room's reflection (probe); matte surfaces use the baked light for their faint sheen. */
+
 const MAT = {
   floor_herringbone: { ibl: true, tex: 'herringbone_parquet', tile: 3.4, rough: 0.95, nrm: 0.8, spec: 0.5 },
   floor_oak: { ibl: true, tex: 'laminate_floor_02', tile: 1.7, rough: 0.95, nrm: 0.7, spec: 0.5 },
@@ -194,13 +148,12 @@ const MAT = {
   opal_glass: { color: [0.85, 0.85, 0.83], rough: 0.12, nolm: true, glow: 0.07 },
   curtain_sheer: { curtain: true },
   glass: { glass: true },
-  /* Poly Haven models: own textures */
   coffee_table_round_01: { tex: 'coffee_table_round_01', metalMap: true },
   wooden_bowl_01: { ibl: true, tex: 'wooden_bowl_01' },
   mid_century_lounge_chair: { tex: 'mid_century_lounge_chair', metalMap: true },
   modern_wooden_cabinet: { ibl: true, tex: 'modern_wooden_cabinet' },
   standing_picture_frame_01: { ibl: true, tex: 'standing_picture_frame_01' },
-  standing_picture_frame_01_artwork: { tex: 'standing_picture_frame_01_artwork', nolm: true, ibl: true, glow: 0 },   /* baked dark behind its glass */
+  standing_picture_frame_01_artwork: { tex: 'standing_picture_frame_01_artwork', nolm: true, ibl: true, glow: 0 },
   standing_picture_frame_01_glass: { color: [0.02, 0.02, 0.02], rough: 0.05, glassy: true, opacity: 0.12 },
   side_table_01: { ibl: true, tex: 'side_table_01' },
   potted_plant_04: { tex: 'potted_plant_04' },
@@ -218,8 +171,7 @@ function matDef(name) {
   return MAT[base] || { color: [0.6, 0.6, 0.6], rough: 0.8 };
 }
 
-/* one composed, level view per room (three.js coordinates, metres; hfov at 16:9, p = 4:5 phone stage at its own hfov)
-   and a slow drift around it: side = truck left/right, push = dolly in, look = how far the aim point follows */
+
 const LOOK = {
   living: {
     exposure: 4.2, shafts: 0.07,
@@ -241,7 +193,6 @@ const LOOK = {
   }
 };
 
-/* ------------------------------------------------------------------ GLSL */
 const GLSL_COMMON = `
 uniform float uLmScale; uniform vec2 uLmSize; uniform vec2 uSunSize; uniform sampler2D uSunMap;
 uniform vec3 uProbePos; uniform vec3 uProbeMin; uniform vec3 uProbeMax; uniform float uSpecRef;
@@ -266,7 +217,6 @@ vec3 dvBoxProject( vec3 dir ) {
 float dvLum( vec3 c ) { return dot( c, vec3( 0.2126, 0.7152, 0.0722 ) ); }
 `;
 
-/* Tangent-space normal with roughness packed in B: rebuild z from xy */
 const NORMAL_PACKED = `
 #if defined( USE_NORMALMAP_TANGENTSPACE )
 	vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;
@@ -276,9 +226,7 @@ const NORMAL_PACKED = `
 #endif
 `;
 
-/* the coating on the wall: Voronoi texture bombing (every irregular cell of about 1.4 tiles reads the seamless tile with
-   its own offset, quarter turn and mirror, so it never repeats visibly; textureGrad keeps the correct mip level across
-   the cell borders), relief faded by the on-screen size of a granule (no shimmer at any distance), contact occlusion */
+
 const GLSL_COAT = `
 uniform float uCoatBias; uniform float uDeLight; uniform float uLowLod; uniform float uCoatCells;
 uniform float uWipe; uniform vec3 uWipeAxis; uniform vec2 uWipeRange;
@@ -301,7 +249,6 @@ void dvBomb( vec2 uv, out vec2 buv, out mat2 bm ) {
 }
 `;
 
-/* point lit by the sun through a window opening (analytic, used by the dust and the curtains) */
 const GLSL_WINDOWS = `
 #define DV_MAXWIN 2
 uniform int uWinCount;
@@ -337,7 +284,6 @@ float dvNoise( vec3 x ) {
 }
 `;
 
-/* plant sway (world space) */
 const GLSL_SWAY = `
 uniform float uTime; uniform vec3 uPlantBase; uniform float uPlantH; uniform float uSway;
 vec3 dvSway( vec3 p ) {
@@ -354,8 +300,7 @@ vec3 dvSway( vec3 p ) {
 }
 `;
 
-/* hue-preserving tone curve: identity below 0.76 (the coating's colours stay exact), Khronos-Neutral shoulder above,
-   no black offset */
+
 const GLSL_TONE = `
 vec3 dvTone( vec3 c ) {
   const float S = 0.76; const float D = 0.15;
@@ -370,7 +315,6 @@ vec3 dvTone( vec3 c ) {
 vec3 dvSRGB( vec3 c ) { return mix( c * 12.92, 1.055 * pow( c, vec3( 1.0 / 2.4 ) ) - 0.055, step( 0.0031308, c ) ); }
 `;
 
-/* smooth, critically damped approach (Game Programming Gems 4, 1.10) */
 function damp(cur, target, vel, smoothTime, dt) {
   const omega = 2 / smoothTime, x = omega * dt, e = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
   const change = cur - target, temp = (vel.v + omega * change) * dt;
@@ -379,9 +323,7 @@ function damp(cur, target, vel, smoothTime, dt) {
 }
 const halton = (i, b) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
 
-/* ------------------------------------------------------------------ module */
-/* photoRooms: [{ id, group: 'residential' | 'public', name: { uk, en }, ready }] (photo mode, setRoom(id));
-   groups: [{ id, name: { uk, en }, rooms: [ready ids] }]; rooms: the live mode's rooms */
+
 const photoRooms = PHOTO_ROOMS.map(r => ({ id: r.id, group: r.group, name: Object.assign({}, r.name), ready: r.ready }));
 const groups = PHOTO_GROUPS.map(g => ({ id: g.id, name: Object.assign({}, g.name), rooms: photoRooms.filter(r => r.group === g.id && r.ready).map(r => r.id) }));
 export const DVInterior2 = { mount, photoFrame, photoCamera, photoRooms, groups, rooms: ROOMS.slice(), modes: ['photo', 'live'] };
@@ -399,20 +341,19 @@ function mount(el, opts = {}) {
   };
   const QUALITY = TIERS[opts.quality] ? opts.quality : detectTier();
   const box0 = el.getBoundingClientRect();
-  const portrait = box0.width > 0 && box0.height > 0 && box0.width / box0.height < 0.95;     /* 4:5 phone stage */
+  const portrait = box0.width > 0 && box0.height > 0 && box0.width / box0.height < 0.95;
   const poster = room => posterOf(room, portrait);
   let Q = Object.assign({}, TIERS[QUALITY]);
   if (QUALITY === 'high' && G.gpuLite) Q = Object.assign(Q, { cubic: false, fps: 30, dust: 360 });
   injectCSS2();
   let T, R, baker, scene, camera, sun, post = null, U = null, coatMats = null, dbs = null;
   let tiles = { cur: null, next: null }, wipe = null, coatTok = 0, roomTok = 0;
-  let cur = null;                                   /* current room record */
-  const cache = new Map();                          /* loaded rooms (keep two) */
+  let cur = null;
+  const cache = new Map();
   const texCache = new Map();
   let exterior = null, dust = null;
   let lastInput = 0, hover = false, pauseUntil = 0;
-  /* interaction timers run on the stage clock: it only advances while the room is on screen (and is deterministic in
-     capture mode) */
+  
   const clock = () => (stage ? stage.t * 1000 : 0);
   let stage = null, startResolve, gate = null;
   const started = new Promise(r => (startResolve = r));
@@ -428,8 +369,7 @@ function mount(el, opts = {}) {
     bindInput();
     startResolve(stage.readyP);
   }
-  /* input: hovering or touching the stage pauses the drift; a horizontal swipe changes the room; vertical scrolling stays
-     with the page (touch-action: pan-y) */
+  
   function poke(ms) { lastInput = clock(); pauseUntil = Math.max(pauseUntil, lastInput + (ms || 0)); }
   function bindInput() {
     const w = stage.wrap;
@@ -455,10 +395,9 @@ function mount(el, opts = {}) {
   }
   const interacting = () => hover || clock() < pauseUntil;
 
-  /* ---------------------------------------------------------- pixel ratio: one render pixel per CSS pixel or more,
-     never the 0.7 floor of core.js's adaptive resolution (blurry, and every change reallocates the canvas) */
+  
   let setPR0 = null, setSize0 = null, curPR = 1, curW = 0, curH = 0, inner = false;
-  let prLimit = 4;                                  /* lowered once by the GPU probe on dense screens, never below 1 */
+  let prLimit = 4;
   const targetPR = () => Math.max(1, Math.min(window.devicePixelRatio || 1, Q.prCap, prLimit));
   function wrapSize() {
     setPR0 = R.setPixelRatio.bind(R); setSize0 = R.setSize.bind(R);
@@ -477,15 +416,13 @@ function mount(el, opts = {}) {
     return true;
   }
 
-  /* ---------------------------------------------------------- build */
   async function build(st) {
     T = st.THREE; R = st.renderer;
     wrapSize();
     curW = 0; curPR = 0; applyPR();
     R.toneMapping = T.NoToneMapping;
     R.outputColorSpace = T.SRGBColorSpace;
-    R.shadowMap.enabled = false;                       /* leaf shadows are baked: nothing can crawl */
-    /* every lightmapped surface shares one program, so opaque objects can go strictly front to back (less overdraw) */
+    R.shadowMap.enabled = false;
     R.setOpaqueSort((a, b) => (a.groupOrder - b.groupOrder) || (a.renderOrder - b.renderOrder) || (a.z - b.z) || (a.id - b.id));
     baker = createBaker(T, R);
     scene = new T.Scene();
@@ -511,7 +448,6 @@ function mount(el, opts = {}) {
     scene.add(sun, sun.target);
     post = createPost(T, R, Q);
     const tm = { t0: performance.now() }; st.stats.timing = tm;
-    /* network and image decoding first, the GPU work (coat bake) runs while they arrive */
     const roomP = loadRoom(S.room), extP = loadExterior();
     roomP.catch(() => {}); extP.catch(() => {});
     makeCoatMaterials();
@@ -525,20 +461,18 @@ function mount(el, opts = {}) {
     dust = makeDust();
     scene.add(dust);
     useRoom(rec);
-    lastInput = clock();                             /* the 20 s idle timer starts with the first live frame */
-    if (rec.name !== S.room) {                       /* the room was changed while the first one loaded */
+    lastInput = clock();
+    if (rec.name !== S.room) {
       const want = S.room; S.room = rec.name;
       stage.readyP.then(ok => { if (ok) ctl.setRoom(want); });
     }
-    /* core.js precompiles the scene right after build(): with the HDR target bound the programs are compiled for the
-       linear output they are rendered with (otherwise every program would be compiled twice) */
+    
     R.setRenderTarget(post.rtScene);
     if (/[?&]debug(&|$)/.test(location.search)) G.i2 = { T, R, U, sun, scene, camera, get post() { return post; }, get cur() { return cur; }, dust,
       get Q() { return Q; }, set(o) { Q = Object.assign({}, Q, o); rebuildPost(); },
       shot(o, portraitShot) { const L = LOOK[cur.name]; if (portraitShot) L.p = o; else L.shot = o; rig = makeRig(cur.meta); lastCamT = null; placeCamera(stage.t); post.reset(); accumLeft = 16; } };
   }
 
-  /* ---------------------------------------------------------- textures */
   function loadImage(url) {
     return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.decoding = 'async'; im.onload = () => res(im); im.onerror = () => rej(new Error('image ' + url)); im.src = url; });
   }
@@ -576,14 +510,12 @@ function mount(el, opts = {}) {
         }`,
       side: T.BackSide, depthWrite: true
     }));
-    exterior.renderOrder = 10;              /* after the room: early depth test skips it everywhere but in the windows */
+    exterior.renderOrder = 10;
     exterior.frustumCulled = false;
     scene.add(exterior);
   }
 
-  /* ---------------------------------------------------------- materials */
   function patch(mat, kind, def = {}) {
-    /* kind: 'lm' lightmapped static, 'coat', 'plant', 'glass' */
     const isCoat = kind === 'coat', isPlant = kind === 'plant', isGlass = kind === 'glass';
     mat.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, {
@@ -608,7 +540,6 @@ function mount(el, opts = {}) {
       if (def.packed) f = f.replace('#include <normal_fragment_maps>', NORMAL_PACKED);
       if (def.packed) f = f.replace('#include <roughnessmap_fragment>', T.ShaderChunk.roughnessmap_fragment.replace('texelRoughness.g', 'texelRoughness.b'));
       if (def.metalSep) f = f.replace('#include <metalnessmap_fragment>', T.ShaderChunk.metalnessmap_fragment.replace('texelMetalness.b', 'texelMetalness.r'));
-      /* lighting inputs: baked indirect light + sun visibility */
       let pre = 'vec3 dvLmI = vec3( 0.0 ); float dvSunVis = 0.0;\n';
       if (isPlant) pre += 'dvLmI = vDvCol.rgb * uVScale; dvSunVis = vDvCol.a;\n';
       else if (!isGlass) pre += `#ifdef USE_LIGHTMAP
@@ -661,7 +592,6 @@ function mount(el, opts = {}) {
         #endif`);
       f = f.replace('#include <envmap_physical_pars_fragment>', T.ShaderChunk.envmap_physical_pars_fragment
         .replace('reflectVec = inverseTransformDirection( reflectVec, viewMatrix );', 'reflectVec = dvBoxProject( inverseTransformDirection( reflectVec, viewMatrix ) );'));
-      /* specular occlusion from the baked light (corners, under furniture) */
       if (!isGlass) f = f.replace('#include <aomap_fragment>', `#include <aomap_fragment>
         { float dvAO = clamp( dvLum( dvLmI ) / uSpecRef, 0.0, 1.0 );
           reflectedLight.indirectSpecular *= mix( 0.15, 1.0, sqrt( dvAO ) ); }`);
@@ -722,8 +652,7 @@ function mount(el, opts = {}) {
     return mat;
   }
 
-  /* one shader program for every lightmapped surface (D3D shader compiles are the slowest part of the start):
-     every material samples colour, normal+roughness and metal maps; untextured ones get 1x1 neutral textures */
+  
   let dummies = null;
   function dummy() {
     if (dummies) return dummies;
@@ -758,7 +687,6 @@ function mount(el, opts = {}) {
     return patch(mat, kind, def);
   }
 
-  /* coating materials: A shows the current coat, B the next one wiping in */
   function makeCoatMaterials() {
     const mk = (wipeLayer) => {
       const m = new T.MeshStandardMaterial({ roughness: 1, metalness: 1, bumpScale: 0.3, transparent: wipeLayer });
@@ -793,7 +721,6 @@ function mount(el, opts = {}) {
     return b;
   }
 
-  /* ---------------------------------------------------------- rooms */
   function loadRoom(name) {
     if (cache.has(name)) return cache.get(name);
     const p = (async () => {
@@ -823,7 +750,7 @@ function mount(el, opts = {}) {
     const lut = new Uint16Array(256);
     for (let i = 0; i < 256; i++) lut[i] = T.DataUtils.toHalfFloat(Math.pow(2, i / 255 * k) - 1);
     const one = T.DataUtils.toHalfFloat(1);
-    for (let y = 0; y < h; y++) {                 /* rows bottom-up: data row 0 = v 0 = bottom of the panorama */
+    for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = (y * w + x) * 4, j = ((h - 1 - y) * w + x) * 4;
         out[j] = lut[px[i]]; out[j + 1] = lut[px[i + 1]]; out[j + 2] = lut[px[i + 2]]; out[j + 3] = one;
@@ -863,7 +790,6 @@ function mount(el, opts = {}) {
       }
       jobs.push(buildMaterial(name, 'lm').then(m => {
         if (d.nolm) {
-          /* small milky-glass pieces: daylight scattered inside the glass instead of a coarse lightmap */
           const gl = (d.glow != null ? d.glow : 0.5) * (meta.lm_scale || 0.7);
           m.emissive = new T.Color(gl, gl, gl * 0.98); m.envMap = rec.env.texture;
         } else {
@@ -874,14 +800,12 @@ function mount(el, opts = {}) {
       }));
     });
     await Promise.all(jobs);
-    /* glass, curtains */
     for (const o of rec.glass) {
       const m = patch(new T.MeshStandardMaterial({ color: 0x000000, roughness: 0.04, metalness: 0, transparent: true, depthWrite: false, envMap: rec.env.texture }), 'glass');
       m.blending = T.CustomBlending; m.blendSrc = T.OneFactor; m.blendDst = T.OneMinusSrcAlphaFactor;
       o.material = m; o.renderOrder = 2; rec.mats.push(m);
     }
     for (const o of rec.curtains) { o.material = curtainMaterial(o, meta); o.renderOrder = 3; rec.mats.push(o.material); }
-    /* feature wall: two coat layers sharing the baked lightmap UVs */
     if (rec.feature) {
       const fw = rec.feature;
       fw.material = coatMats.A;
@@ -892,13 +816,11 @@ function mount(el, opts = {}) {
     }
   }
 
-  /* sheer curtain: a breeze in the vertex shader, light coming through the fabric from the window */
   function curtainMaterial(o, meta) {
     o.geometry.computeBoundingBox();
     const bb = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
     const size = bb.getSize(new T.Vector3());
     const n = new T.Vector3(), a = new T.Vector3();
-    /* curtain plane: thin along the wall normal */
     if (size.x < size.z) { a.set(0, 0, 1); n.set(Math.sign(-bb.getCenter(new T.Vector3()).x) || 1, 0, 0); }
     else { a.set(1, 0, 0); n.set(0, 0, Math.sign(-bb.getCenter(new T.Vector3()).z) || 1); }
     const uni = {
@@ -954,28 +876,23 @@ function mount(el, opts = {}) {
     if (cur && cur.group.parent) scene.remove(cur.group);
     cur = rec;
     scene.add(rec.group);
-    /* lightmap */
     U.lmScale.value = meta.lm_scale; U.sunMap.value = rec.sm;
     const im = rec.lm.image, si = rec.sm.image; U.lmSize.value.set(im.width || 1024, im.height || 1024); U.sunSize.value.set(si.width || 1024, si.height || 1024);
-    /* probe */
     U.probePos.value.fromArray(meta.probe);
     const mn = meta.bounds.min, mx = meta.bounds.max;
     U.probeMin.value.set(Math.min(mn[0], mx[0]), Math.min(mn[1], mx[1]), Math.min(mn[2], mx[2]));
     U.probeMax.value.set(Math.max(mn[0], mx[0]), Math.max(mn[1], mx[1]), Math.max(mn[2], mx[2]));
     U.specRef.value = meta.lm_scale * 0.18;
     U.vscale.value = meta.vscale || 1;
-    /* sun: Blender strength and colour */
     const sd = new T.Vector3().fromArray(meta.sun.dir).normalize();
     const sc = meta.sun.color_wb || meta.sun.color;
     sun.color.setRGB(sc[0], sc[1], sc[2], T.LinearSRGBColorSpace);
-    /* the direct sun a little below the baked strength: with the room exposed for the shade, the sun patch keeps the
-       coating's colours instead of burning to white */
+    
     const sunK = meta.sun.strength * SUN_K;
     sun.intensity = sunK;
     sun.position.copy(sd).multiplyScalar(-10); sun.target.position.set(0, 0, 0); sun.target.updateMatrixWorld(); sun.updateMatrixWorld();
     U.sunCol.value.setRGB(sc[0] * sunK, sc[1] * sunK, sc[2] * sunK, T.LinearSRGBColorSpace);
     U.sunDirW.value.copy(sd);
-    /* windows */
     const ws = meta.windows || [];
     U.winCount.value = Math.min(2, ws.length);
     ws.slice(0, 2).forEach((w, i) => {
@@ -985,14 +902,12 @@ function mount(el, opts = {}) {
     });
     U.frameW.value = (ws[0] && ws[0].frame) || 0.05;
     if (ws[0]) U.winC.value.copy(U.winO.value[0]).addScaledVector(U.winU.value[0], ws[0].w / 2).addScaledVector(U.winV.value[0], ws[0].h / 2);
-    /* sky light through the windows and the room's ambient for the curtains */
     const amb = meta.lm_scale * 0.35;
     U.roomAmb.value.setRGB(amb, amb * 0.98, amb * 0.95);
     U.skyCol.value.setRGB(1.6, 1.65, 1.75);
     U.extRot.value = meta.world_rot || 0;
-    U.extGain.value = (1 / 0.3) * (meta.world_strength || 1);     /* exterior.webp stores radiance * 0.3 */
+    U.extGain.value = (1 / 0.3) * (meta.world_strength || 1);
     U.extCenter.value.copy(U.probePos.value);
-    /* coat: feature wall bounds (contact occlusion), wipe axis along the wall */
     if (rec.feature) {
       const bb = rec.feature.geometry.boundingBox.clone().applyMatrix4(rec.feature.matrixWorld);
       const sz = bb.getSize(new T.Vector3());
@@ -1016,8 +931,7 @@ function mount(el, opts = {}) {
     accumLeft = 16;
   }
 
-  /* ---------------------------------------------------------- dust in the sun shafts: soft sprites, never smaller than
-     2.5 px (a mote that would be smaller gets dimmer instead), so nothing aliases or twinkles from pixel to pixel */
+  
   function makeDust() {
     const n = Q.dust;
     const g = new T.BufferGeometry();
@@ -1068,7 +982,6 @@ function mount(el, opts = {}) {
     return pts;
   }
   function placeDust(rec) {
-    /* bounding box of the sun shafts: window corners and their footprints on the floor */
     const box = new T.Box3();
     const sd = U.sunDirW.value;
     const mn = U.probeMin.value, mx = U.probeMax.value;
@@ -1087,9 +1000,7 @@ function mount(el, opts = {}) {
     dust.material.uniforms.uSize.value.copy(box.getSize(new T.Vector3()));
   }
 
-  /* ---------------------------------------------------------- camera: one composed, level view per room (two-point
-     perspective, verticals stay vertical); a slow drift around it whose speed is critically damped, so it starts,
-     stops (while the visitor interacts) and resumes without a jolt */
+  
   let rig = null, lastCamT = null, driftT = 0, driftRate = 0;
   const rateVel = { v: 0 };
   function makeRig(meta) {
@@ -1121,14 +1032,12 @@ function mount(el, opts = {}) {
     const dx = _look.x - _pos.x, dz = _look.z - _pos.z;
     camera.rotation.set(0, Math.atan2(-dx, -dz), 0);
     camera.updateMatrixWorld();
-    /* lens: the composition is set at 16:9; wider stages keep its height and show more width, narrower ones keep its
-       width; portrait stages use their own shot (its hfov is set at 4:5) */
+    
     const hf = k.hfov * Math.PI / 180, a = camera.aspect, ref = portraitNow ? 0.8 : 16 / 9;
     let vf = a >= ref ? 2 * Math.atan(Math.tan(hf / 2) / ref) : 2 * Math.atan(Math.tan(hf / 2) / a);
     vf = Math.min(vf, 76 * Math.PI / 180);
     camera.fov = vf * 180 / Math.PI;
     camera.updateProjectionMatrix();
-    /* vertical lens shift instead of tilting */
     const dist = Math.hypot(dx, dz) || 1;
     const shift = ((_look.y - _pos.y) / dist) / Math.tan(vf / 2);
     camera.projectionMatrix.elements[9] = clamp(shift, -0.6, 0.6);
@@ -1136,7 +1045,6 @@ function mount(el, opts = {}) {
     camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
   }
 
-  /* ---------------------------------------------------------- per frame */
   function resize(w, h) {
     if (!camera) return;
     camera.aspect = w / h;
@@ -1147,9 +1055,7 @@ function mount(el, opts = {}) {
     placeCamera(stage.t);
     accumLeft = 16;
   }
-  /* frame pacing: a GPU that cannot hold 60 fps gets an evenly paced 30 (every second display refresh) instead of an
-     uneven 40-60; the camera then moves in equal steps. Measured once: display refresh (rAF interval) and GPU time
-     per frame (timer query, or the frame interval when the extension is missing) */
+  
   let rafN = 0, rafTimes = [], refreshMs = 16.7, skip = false, accumLeft = 0, jitterN = 0, lock = Q.fps <= 30 ? 30 : 0, lastRender = 0, rEma = 0;
   const gpuT = { ext: undefined, pending: [], list: [], done: false, frames: [], active: null, warm: 45 };
   function fpr() {
@@ -1159,7 +1065,7 @@ function mount(el, opts = {}) {
   }
   function update(t, dt) {
     rafN++;
-    if (rafTimes && stage.ready && !G.capture) {          /* display refresh: a low percentile of the rAF interval */
+    if (rafTimes && stage.ready && !G.capture) {
       rafTimes.push(performance.now());
       if (rafTimes.length >= 41) {
         const d = []; for (let i = 1; i < rafTimes.length; i++) d.push(rafTimes[i] - rafTimes[i - 1]);
@@ -1167,7 +1073,6 @@ function mount(el, opts = {}) {
         stage.stats.refreshMs = Math.round(refreshMs * 10) / 10;
       }
     }
-    /* the wipe advances with the real clock, also on frames that are not rendered */
     if (wipe) {
       wipe.k += (dt || 0) / wipe.dur;
       const k = stage.reduced ? 1 : Math.min(1, wipe.k);
@@ -1182,11 +1087,10 @@ function mount(el, opts = {}) {
   function frameNow() { skip = false; U.time.value = stage.t; placeCamera(stage.t); render(); }
   function gpuProbe(begin) {
     if (gpuT.done || G.capture || stage.reduced) return;
-    if (begin && gpuT.warm > 0) { gpuT.warm--; return; }       /* textures, programs and caches settle first */
+    if (begin && gpuT.warm > 0) { gpuT.warm--; return; }
     const gl = R.getContext();
     if (gpuT.ext === undefined) gpuT.ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') || null;
     if (!gpuT.ext) {
-      /* no timer: the interval between rendered frames tells whether 60 fps holds (only meaningful while unlocked) */
       if (!begin) return;
       if (lock) { gpuT.done = true; stage.stats.lock = lock; return; }
       gpuT.frames.push(performance.now());
@@ -1219,9 +1123,7 @@ function mount(el, opts = {}) {
     gpuT.done = true;
     stage.stats.gpuMs = Math.round(ms * 10) / 10;
     if (!lock && ms > 13.5) lock = 30;
-    /* degrade effects, not the resolution: if even 30 fps would be tight -> no light shafts, fewer motes, lighter bloom
-       (about 3 ms on a UHD 620). Only screens denser than 1x may then come down towards 1 render pixel per CSS pixel,
-       once; below that the frame rate is locked lower (an even 20 fps rather than an uneven 25) */
+    
     if (ms > 29) {
       Q = Object.assign({}, Q, { shafts: false, bloom: 2 });
       if (dust) dust.geometry.setDrawRange(0, Math.floor(Q.dust / 2));
@@ -1236,7 +1138,6 @@ function mount(el, opts = {}) {
   function render() {
     if (!cur || skip) return;
     R.info.autoReset = false; R.info.reset();
-    /* sub-pixel jitter for the temporal anti-aliasing (Halton 2,3; 16 positions) */
     jitterN = (jitterN % 16) + 1;
     const W = post.size.x, H = post.size.y;
     camera.projectionMatrix.copy(projBase);
@@ -1262,7 +1163,6 @@ function mount(el, opts = {}) {
     post.volU.uDensity.value = lk.shafts != null ? lk.shafts : 0.3;
   }
 
-  /* ---------------------------------------------------------- coat transitions (v1 logic) */
   function startWipe(next) {
     if (wipe) finishWipe();
     applyTiles(coatMats.B, next);
@@ -1294,7 +1194,6 @@ function mount(el, opts = {}) {
     startWipe(tl);
   }
 
-  /* ---------------------------------------------------------- public API */
   const ctl = {
     el, get ready() { return started.then(p => p); },
     start,
@@ -1335,7 +1234,6 @@ function mount(el, opts = {}) {
     destroy() { if (gate) { gate.remove(); gate = null; } if (stage) stage.destroy(); }
   };
   el.dv3d = ctl;
-  /* low tier: a still with a small "Live 3D" button; nothing heavy loads until it is pressed */
   if (QUALITY === 'low' && opts.autostart !== true) {
     gate = document.createElement('div'); gate.className = 'dv3d2-gate';
     const im = document.createElement('img'); im.alt = LABEL[LANG][S.room]; im.decoding = 'async';
@@ -1349,7 +1247,6 @@ function mount(el, opts = {}) {
   return ctl;
 
   function trimCache(keep) {
-    /* keep the current room and the previous one */
     const names = [...cache.keys()];
     if (names.length <= 2) return;
     names.filter(n => n !== keep).slice(0, names.length - 2).forEach(n => {
@@ -1377,13 +1274,12 @@ function mount(el, opts = {}) {
   }
 }
 
-/* ------------------------------------------------------------------ post: HDR scene -> analytic light shafts, window
-   bloom, hue-preserving tone curve -> temporal anti-aliasing -> sRGB */
+
 function createPost(T, R, Q) {
   const mk = (w, h, o = {}) => new T.WebGLRenderTarget(w, h, Object.assign({ type: T.HalfFloatType, depthBuffer: false, minFilter: T.LinearFilter, magFilter: T.LinearFilter, generateMipmaps: false }, o));
   const depth = new T.DepthTexture(4, 4); depth.type = T.UnsignedIntType;
   const rtScene = mk(4, 4, { depthBuffer: true, depthTexture: depth });
-  const rtVol = mk(4, 4), rtComp = mk(4, 4, { type: T.UnsignedByteType });   /* display-encoded frame */
+  const rtVol = mk(4, 4), rtComp = mk(4, 4, { type: T.UnsignedByteType });
   const hist = [mk(4, 4), mk(4, 4)];
   const LV = Q.bloom;
   const down = [], up = [];
@@ -1398,9 +1294,7 @@ function createPost(T, R, Q) {
   const VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
   const sm = (frag, uniforms, defines) => new T.ShaderMaterial({ vertexShader: VS, fragmentShader: frag, uniforms, defines: defines || {}, depthTest: false, depthWrite: false });
 
-  /* light shafts, computed analytically: along the view ray the sun-lit part behind each window pane is one interval
-     (projection along the sun direction is affine), so its length is exact, smooth and free of sampling noise;
-     soft edges = mean of three pane sizes; the haze varies slowly in space */
+  
   const volU = {
     tDepth: { value: depth }, uProjInv: { value: new T.Matrix4() }, uViewInv: { value: new T.Matrix4() }, uCam: { value: new T.Vector3() },
     uBoxMin: { value: new T.Vector3() }, uBoxMax: { value: new T.Vector3() }, uTime: { value: 0 }, uSunCol: { value: new T.Color() },
@@ -1465,7 +1359,6 @@ function createPost(T, R, Q) {
       float phase = mix( 0.0795775, hg, 0.8 );
       gl_FragColor = vec4( uSunCol * acc * uDensity * phase, 1.0 );
     }`, volU);
-  /* bloom: only what is far away (the view through the windows), bright pass + dual-filter pyramid from quarter resolution */
   const brightM = sm(`
     varying vec2 vUv; uniform sampler2D tIn; uniform sampler2D tDepth; uniform vec2 uTexel; uniform float uNear; uniform float uFar; uniform float uThr;
     float lin( float d ){ float z = d * 2.0 - 1.0; return 2.0 * uNear * uFar / ( uFar + uNear - z * ( uFar - uNear ) ); }
@@ -1497,8 +1390,7 @@ function createPost(T, R, Q) {
            + texture2D( tIn, vUv + uTexel * vec2( -1.0, 1.0 ) ).rgb + texture2D( tIn, vUv + uTexel * vec2( 1.0, 1.0 ) ).rgb ) * 2.0;
       gl_FragColor = vec4( c / 12.0 + texture2D( tAdd, vUv ).rgb, 1.0 );
     }`, { tIn: { value: null }, tAdd: { value: null }, uTexel: { value: new T.Vector2() } });
-  /* composite: scene + shafts + bloom, exposure, vignette, hue-preserving tone curve -> display encoded, 8 bit
-     (no dithering, nothing temporal) */
+  
   const compM = sm(`
     varying vec2 vUv; uniform sampler2D tScene; uniform sampler2D tVol; uniform sampler2D tBloom;
     uniform float uExposure; uniform float uBloom; uniform float uVol; uniform float uAspect; uniform float uVig;
@@ -1509,9 +1401,7 @@ function createPost(T, R, Q) {
       c *= uExposure * mix( 1.0, smoothstep( 1.3, 0.25, length( q ) ), uVig );
       gl_FragColor = vec4( dvSRGB( clamp( dvTone( max( c, 0.0 ) ), 0.0, 1.0 ) ), 1.0 );
     }`, { tScene: { value: rtScene.texture }, tVol: { value: black }, tBloom: { value: black }, uExposure: { value: 1.6 }, uBloom: { value: 0.08 }, uVol: { value: 1 }, uAspect: { value: 1 }, uVig: { value: 0.15 } });
-  /* temporal anti-aliasing: the jittered frames accumulate in a history buffer; the history is re-projected with the
-     camera motion (depth), read with a Catmull-Rom filter (stays sharp) and clipped to the current pixel's neighbourhood
-     in YCoCg (variance clipping), so edges and the coating's grain are supersampled over time and never shimmer */
+  
   const taaU = {
     tCur: { value: rtComp.texture }, tHist: { value: null }, tDepth: { value: depth }, uTexel: { value: new T.Vector2() },
     uInvVP: { value: new T.Matrix4() }, uCurVP: { value: new T.Matrix4() }, uPrevVP: { value: new T.Matrix4() }, uValid: { value: 0 }
@@ -1557,7 +1447,6 @@ function createPost(T, R, Q) {
       }
       gl_FragColor = vec4( res, 1.0 );
     }`, taaU);
-  /* to the screen, with a fixed (screen-locked, never animated) dither against 8-bit banding */
   const outM = sm(`
     varying vec2 vUv; uniform sampler2D tIn;
     ${GLSL_TONE}
@@ -1589,7 +1478,6 @@ function createPost(T, R, Q) {
     render(scene, camera, projBase, U, Q) {
       R.setRenderTarget(rtScene);
       R.render(scene, camera);
-      /* light shafts (analytic, half resolution) */
       if (Q.shafts) {
         volU.uProjInv.value.copy(camera.projectionMatrixInverse);
         volU.uViewInv.value.copy(camera.matrixWorld);
@@ -1602,7 +1490,6 @@ function createPost(T, R, Q) {
         pass(volM, rtVol);
         compM.uniforms.tVol.value = rtVol.texture; compM.uniforms.uVol.value = 1;
       } else { compM.uniforms.tVol.value = black; compM.uniforms.uVol.value = 0; }
-      /* window bloom */
       if (LV >= 2) {
         brightM.uniforms.tIn.value = rtScene.texture; brightM.uniforms.uTexel.value.set(1 / W, 1 / H);
         brightM.uniforms.uNear.value = camera.near; brightM.uniforms.uFar.value = camera.far;
@@ -1620,7 +1507,6 @@ function createPost(T, R, Q) {
         compM.uniforms.tBloom.value = src.texture; compM.uniforms.uBloom.value = 0.08;
       } else { compM.uniforms.tBloom.value = black; compM.uniforms.uBloom.value = 0; }
       pass(compM, rtComp);
-      /* temporal resolve */
       camera.updateMatrixWorld();
       tmp.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
       taaU.uInvVP.value.copy(tmp).invert();
@@ -1645,7 +1531,6 @@ function createPost(T, R, Q) {
   };
 }
 
-/* declarative mounting */
 function autoMount() {
   document.querySelectorAll('[data-dv3d="interior2"]').forEach(el => {
     if (el.dv3d) return;

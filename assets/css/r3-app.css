@@ -1,12 +1,4 @@
-/* Dvatone, 11.10 round 3 (job r3c), Viktor point 10: «Поточну веб-версію прибираємо. Замість неї на сайті робимо презентаційний
-   блок із прев'ю/відео майбутнього десктопного додатку для архітекторів та кнопками завантаження (macOS / Windows)… преміальну
-   промо-секцію з можливістю залишити заявку на скачування.»
-   The app promo page (app.html, .apx-*) and its home teaser (.apt-*), in the deep atmosphere of round 3 (r3-atmos.css): a deep
-   first screen with white light type, the app window floating in a soft glow of its own picture, the light airy features, a deep
-   request band with the form as a light card (an expensive contrast). Linked on every page, last (_src/layout.py); critical.py
-   inlines its first-screen rules. No url(): the pictures are in the markup. */
 
-/* ---------- the app window: a quiet dark title bar over a 16:10 screen ---------- */
 .apx-win { position: relative; border-radius: 12px; overflow: hidden; background: #1c1916;
   box-shadow: 0 0 0 1px rgba(255,255,255,.07), 0 2px 6px rgba(0,0,0,.18), 0 50px 110px -40px rgba(0,0,0,.62); }
 .apx-win__bar { position: relative; display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px;
@@ -29,7 +21,6 @@
 .apx-play.is-on .apx-play__pause { display: block; }
 .apx-play[hidden] { display: none; }
 
-/* ---------- the download buttons ---------- */
 .apx-oss { display: flex; flex-wrap: wrap; gap: 12px; }
 .apx-os { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center;
   min-width: 196px; min-height: 62px; padding: 10px 22px 10px 18px; border-radius: 2px; text-decoration: none;
@@ -44,7 +35,6 @@
 .apx-os:focus-visible { outline: 2px solid #e6c9a4; outline-offset: 3px; }
 @media (hover: hover) { .apx-os:hover { transform: translateY(-1px); } }
 
-/* ---------- 1. the deep first screen ---------- */
 .apx-hero { position: relative; isolation: isolate; overflow: hidden; padding-top: calc(var(--hdr) + clamp(36px, 6vh, 72px)); padding-bottom: clamp(56px, 8vw, 112px); color: #f4efe8; }
 html:not([data-sky="night"]) .sec.apx-hero, .sec.apx-hero { background: radial-gradient(70% 60% at 72% 30%, rgba(201,153,95,.12), rgba(201,153,95,0) 65%), #110f0d; }
 .apx-hero__bg { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
@@ -81,10 +71,9 @@ html:not([data-sky="night"]) .sec.apx-hero, .sec.apx-hero { background: radial-g
   .apx-win__bar { height: 24px; padding: 0 10px; gap: 5px; }
   .apx-win__bar i { width: 7px; height: 7px; }
   .apx-win__bar span { font-size: 9px; }
-  .apx-play { width: 36px; height: 36px; right: 8px; bottom: 8px; }
+  .apx-play { width: 44px; height: 44px; right: 6px; bottom: 6px; }
 }
 
-/* ---------- 2. what the app does: light, airy rows (window | words, alternating) ---------- */
 .apx-what__head { max-width: 760px; }
 .apx-feats { display: grid; gap: clamp(64px, 9vw, 140px); margin-top: clamp(48px, 6vw, 96px); }
 .apx-feat { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); gap: clamp(28px, 5vw, 96px); align-items: center; }
@@ -99,7 +88,6 @@ html:not([data-sky="night"]) .sec.apx-hero, .sec.apx-hero { background: radial-g
   .apx-feat--rev .apx-feat__vis { order: 0; }
 }
 
-/* ---------- 3. the request band: deep, the steps, the form as a light card ---------- */
 .apx-get__txt .h2, .apx-what__head .h2 { margin-top: var(--s-5, 24px); }
 .apx-get__txt .lede, .apx-what__head .lede { margin-top: var(--s-5, 24px); }
 .apx-get__in { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(36px, 6vw, 110px); align-items: start; }
@@ -136,7 +124,6 @@ html:not([data-sky="night"]) .sec.apx-hero, .sec.apx-hero { background: radial-g
 .apx-card .form__fail { color: #a3402f; border-color: #a3402f; }
 @media (max-width: 520px) { .apx-card .form__row { grid-template-columns: minmax(0, 1fr); } }
 
-/* ---------- the dialog: the same card, centred over a dimmed page ---------- */
 .apx-dlg { width: min(600px, calc(100% - 24px)); max-width: none; max-height: calc(100% - 24px); margin: auto; padding: 0; border: 0; background: transparent;
   color: inherit; overflow: auto; overscroll-behavior: contain; }
 .apx-dlg::backdrop { background: rgba(10,8,6,.74); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
@@ -152,7 +139,6 @@ html:not([data-sky="night"]) .sec.apx-hero, .sec.apx-hero { background: radial-g
 html.apx-locked { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .apx-dlg[open] { animation: none; } .apx-win__vid { transition: none; } .apx-os { transition: none; } }
 
-/* ---------- the home teaser (light): words on the left, the app window on the right ---------- */
 .apt__in { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(32px, 5vw, 96px); align-items: center; }
 .apt .lede { margin-top: var(--s-5, 24px); }
 .apt__list { list-style: none; margin: 28px 0 0; padding: 0; display: grid; gap: 0; max-width: 46ch; }

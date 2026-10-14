@@ -1,18 +1,4 @@
-/* Dvatone, 11.10 round 3 (job r3a). Viktor: «сайт наразі виглядає занадто просто і блякло (особливо на мобільних пристроях, де
-   світлий плоский фон втрачає всю преміальну атмосферу)»; «Нам потрібна глибина, архітектурне «повітря» та дорогі контрасти»;
-   «повернути темну/напівпрозору атмосферну підкладку (або глибокий фон з інтер'єром) принаймні на головний екран, щоб білий
-   мінімалістичний шрифт виглядав вишукано й дорого»; point 9: «Європейська якість» back on a black block.
-   References: inventwood.com (a dark first screen that dissolves into warm cream, dark brown bands, a black footer) and mir.no
-   (deep architectural imagery, white minimal type).
 
-   Linked on every page after r2-light.css (_src/layout.py keeps it last); critical.py inlines its first-screen rules.
-   The light pages stay light and airy; a few parts become deep: the home first screen (an interior under an atmospheric veil),
-   the inner pages' intros (the same language, quieter), the home interiors and video bands, Technology «Колір є відчуттям»,
-   the closing bands, the footer and the black «Європейська якість» panel. Everything except the first screen itself is scoped
-   to the light look (html:not([data-sky="night"])): the opt-in night look is unchanged.
-   No url() in this file: the pictures are <img>/<picture> in the markup (critical CSS is inlined at two page depths). */
-
-/* ---------- 1. the deep colour tokens: the original dark design's values, for both token sets used inside a block ---------- */
 html:not([data-sky="night"]) .r3-deep,
 html:not([data-sky="night"]) .sec.sec--deep,
 html:not([data-sky="night"]) .sec.r3-deep,
@@ -28,7 +14,6 @@ html:not([data-sky="night"]) .sec .origin {
   --focus: #e6c9a4; --focus-l: #e6c9a4; --ok: #8fb08a; --err: #e09a8c; --err-l: #e09a8c;
   color: var(--td);
 }
-/* the deep ground: warm near-black with a faint warm light falling from above (no texture, no picture) */
 html:not([data-sky="night"]) .sec.sec--deep,
 html:not([data-sky="night"]) .sec.r3-deep {
   background: radial-gradient(90% 70% at 78% 0%, rgba(201,153,95,.075), rgba(201,153,95,0) 62%), #14110f;
@@ -38,9 +23,6 @@ html:not([data-sky="night"]) .sec.sec--warm.r3-deep { background: radial-gradien
 html:not([data-sky="night"]) .r3-deep :is(.h1, .h2) em,
 html:not([data-sky="night"]) .sec--deep :is(.h1, .h2) em { color: var(--mute-d); }
 
-/* ---------- 2. the header: transparent with light type while it sits on a deep first screen; after 40 px of scroll (or with the
-   menu open) it is the flat, level light bar of round 2 again. No blur, no gradient in the bar itself: the picture's own veil
-   darkens evenly under it, so its lower edge is never seen as a line (Viktor's note on the header level). ---------- */
 html.dv-js:not([data-sky="night"]) body:has(main > section.r3-deep:first-of-type) .hdr:not(.is-solid) {
   background: transparent; border-bottom-color: transparent; color: #f4efe8;
 }
@@ -52,19 +34,16 @@ html.dv-js:not([data-sky="night"]) body:has(main > section.r3-deep:first-of-type
 html.dv-js:not([data-sky="night"]) body:has(main > section.r3-deep:first-of-type) .hdr:not(.is-solid) .lang a { opacity: .7; }
 html.dv-js:not([data-sky="night"]) body:has(main > section.r3-deep:first-of-type) .hdr:not(.is-solid) .lang a[aria-current="true"] { opacity: 1; }
 
-/* ---------- 3. the home first screen (Viktor point 1) ---------- */
 .fs.fs--deep { position: relative; isolation: isolate; min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column;
   padding-top: var(--hdr); color: #f4efe8; background: #0f0d0b; overflow: hidden; }
 .fs--deep .fs__bg { position: absolute; inset: 0; margin: 0; z-index: -1; overflow: hidden; }
 .fs--deep .fs__bg picture { display: contents; }
 .fs--deep .fs__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 50%; }
-/* the atmospheric veil: deep on the left where the words are, the sun and the plant breathing on the right; a soft shade under
-   the header and a deep floor under the facts */
 .fs--deep .fs__bg::after { content: ""; position: absolute; inset: 0; pointer-events: none;
   background:
     linear-gradient(180deg, rgba(12,10,8,.58) 0%, rgba(12,10,8,.18) 16%, rgba(12,10,8,0) 30%),
     linear-gradient(0deg, rgba(12,10,8,.9) 0%, rgba(12,10,8,.55) 16%, rgba(12,10,8,0) 38%),
-    linear-gradient(90deg, rgba(12,10,8,.86) 0%, rgba(12,10,8,.74) 30%, rgba(12,10,8,.42) 48%, rgba(12,10,8,.1) 66%, rgba(12,10,8,0) 84%); }
+    linear-gradient(90deg, rgba(12,10,8,.78) 0%, rgba(12,10,8,.66) 30%, rgba(12,10,8,.34) 48%, rgba(12,10,8,.06) 64%, rgba(12,10,8,0) 78%); }
 .fs--deep .fs__code { position: absolute; z-index: 1; right: var(--pad); top: calc(var(--hdr) + clamp(14px, 2.4vh, 28px)); left: auto; bottom: auto;
   padding: 0 0 0 30px; background: none; border-radius: 0; color: rgba(244,239,232,.78); font-size: 10.5px; font-weight: 600; letter-spacing: .2em;
   text-transform: uppercase; line-height: 1.2; }
@@ -83,19 +62,16 @@ html.dv-js:not([data-sky="night"]) body:has(main > section.r3-deep:first-of-type
 .fs--deep .fact b { color: #f7f2ea; }
 .fs--deep .fact span { color: rgba(247,242,234,.68); }
 .fs--deep .fact { display: block; }
-/* the first screen opens into the light page through a short deep-to-cream fall (inventwood): no hard edge */
 html:not([data-sky="night"]) .fs--deep + .sec { position: relative; }
 html:not([data-sky="night"]) .fs--deep + .sec::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: clamp(40px, 7vw, 110px);
   background: linear-gradient(180deg, rgba(15,13,11,.16), rgba(15,13,11,0)); pointer-events: none; }
 
-/* phones and portrait tablets: the tall picture; the words stand at the foot of the picture on the deep veil, the four facts
-   continue below on the deep ground (the picture is never squeezed) */
 @media (max-width: 760px), (max-aspect-ratio: 4/5) and (max-width: 1100px) {
   .fs.fs--deep { display: block; min-height: 0; padding-top: 0; }
   .fs--deep .fs__bg { inset: 0 0 auto 0; height: 100vh; height: 100svh; min-height: 560px; }
   .fs--deep .fs__img { object-position: 22% 0%; }
   .fs--deep .fs__bg::after { background:
-      linear-gradient(180deg, rgba(12,10,8,.62) 0%, rgba(12,10,8,.2) 12%, rgba(12,10,8,0) 22%),
+      linear-gradient(180deg, rgba(12,10,8,.8) 0%, rgba(12,10,8,.42) 11%, rgba(12,10,8,.1) 22%, rgba(12,10,8,0) 30%),
       linear-gradient(0deg, #0f0d0b 0%, rgba(15,13,11,.94) 22%, rgba(15,13,11,.78) 40%, rgba(15,13,11,.5) 52%, rgba(15,13,11,.16) 64%, rgba(15,13,11,0) 74%); }
   .fs--deep .fs__in { min-height: 100vh; min-height: 100svh; display: flex; align-items: flex-end; padding-top: calc(var(--hdr) + 32px); padding-bottom: 8px; }
   .fs--deep .fs__code { top: calc(var(--hdr) + 12px); }
@@ -110,12 +86,10 @@ html:not([data-sky="night"]) .fs--deep + .sec::before { content: ""; position: a
   .fs--deep .fs__in { min-height: 88vh; min-height: 88svh; }
   .fs--deep .fs__facts { grid-template-columns: repeat(4, 1fr); }
 }
-/* landscape tablets and small laptops: the words keep clear of the sofa */
 @media (min-width: 761px) and (max-width: 1100px) and (min-aspect-ratio: 4/5) {
   .fs--deep .fs__img { object-position: 38% 50%; }
 }
 
-/* ---------- 4. inner pages: the dark intro over a deep interior (the same language as the first screen, quieter) ---------- */
 html:not([data-sky="night"]) .intro.r3-deep { position: relative; isolation: isolate; overflow: hidden; }
 html:not([data-sky="night"]) .intro.r3-deep > .wrap { position: relative; z-index: 1; }
 .r3-ibg { display: none; }
@@ -133,21 +107,16 @@ html:not([data-sky="night"]) .intro.r3-deep .lede { color: rgba(241,235,226,.84)
       linear-gradient(180deg, rgba(14,12,10,.86) 0%, rgba(14,12,10,.5) 18%, rgba(14,12,10,.46) 34%, rgba(14,12,10,.8) 62%, rgba(14,12,10,.92) 100%); }
 }
 
-/* ---------- 5. the black «Європейська якість» panel (Viktor point 9): solid and expensive, as in the earlier version ---------- */
 html:not([data-sky="night"]) .sec .origin { background: #0b0a09; border: 0; box-shadow: 0 40px 90px -50px rgba(20,14,8,.55); color: var(--td); }
 html:not([data-sky="night"]) .sec .origin__mark { background: radial-gradient(110% 90% at 100% 0%, rgba(201,153,95,.16), rgba(201,153,95,0) 58%); }
 html:not([data-sky="night"]) .sec .origin .eyebrow { color: #c9995f; }
 
-/* ---------- 6. the footer: deep, as inventwood's black footer ---------- */
 html:not([data-sky="night"]) footer.ftr { background: #0e0c0b; color: var(--td); }
 html:not([data-sky="night"]) footer.ftr .ftr__bot .lang { color: var(--td); }
 
-/* ---------- 7. components inside the deep bands that carried hard-coded light colours ---------- */
-/* video cards: the deep letterbox and loading frame of the original look */
 html:not([data-sky="night"]) .sec--deep .vplay { background: #1d1915; }
 html:not([data-sky="night"]) .sec--deep .vplay::after { background: linear-gradient(0deg, rgba(12,10,8,.82) 0%, rgba(12,10,8,.4) 34%, rgba(12,10,8,0) 62%); }
 html:not([data-sky="night"]) .sec--deep .vplay.is-playing video { background: #000; }
-/* interiors: room tabs and composition chips on the deep ground */
 html:not([data-sky="night"]) .sec--deep .rooms__ba { background: rgba(20,17,15,.78); color: #f1ebe2; }
 html:not([data-sky="night"]) .sec--deep .rooms__now { background: rgba(20,17,15,.8); color: #f1ebe2; }
 html:not([data-sky="night"]) .sec--deep .rooms__chips .preset { background: rgba(241,235,226,.04); border-color: rgba(241,235,226,.24); color: #f1ebe2; }
@@ -156,7 +125,6 @@ html:not([data-sky="night"]) .sec--deep .rooms__chips .preset:hover { background
 html:not([data-sky="night"]) .sec--deep .rooms__chips .preset[aria-pressed="true"] { background: #e3d8c8; color: #14110f; border-color: #e3d8c8; }
 html:not([data-sky="night"]) .sec--deep .rooms__chips .preset[aria-pressed="true"] i { box-shadow: inset 0 0 0 1px rgba(20,17,15,.25); }
 
-/* ---------- 8. the contact page: deep, with the lobby behind; the request form is a light card on it (an expensive contrast) ---------- */
 html:not([data-sky="night"]) .contact--page.r3-deep { position: relative; isolation: isolate; overflow: hidden; }
 html:not([data-sky="night"]) .contact--page.r3-deep > .wrap { position: relative; z-index: 1; }
 html:not([data-sky="night"]) .r3-deep .contact__form {
@@ -171,11 +139,9 @@ html:not([data-sky="night"]) .r3-deep .contact__form .field textarea::placeholde
 html:not([data-sky="night"]) .contact--page.r3-deep .r3-ibg::after { background:
     linear-gradient(180deg, rgba(14,12,10,.7) 0%, rgba(14,12,10,.78) 40%, rgba(14,12,10,.9) 100%); }
 
-/* 11.10 r3e: the bot's category subtitle + text under the catalogue filter (only for the chosen category) */
 .dv6__cnote { margin: -8px 0 clamp(18px, 2vw, 26px); max-width: 62ch; font-size: 14px; line-height: 1.5; color: var(--ml); overflow-wrap: anywhere; }
 .dv6__cnote[hidden] { display: none; }
 .dv6__cnote b { font-weight: 500; color: var(--tl); }
-/* phones: the category chips wrap onto lines with the full names (was five squeezed columns: «Archite…», «Deep M…») */
 @media (max-width: 760px) {
   .dv6__cats { display: flex; flex-wrap: wrap; gap: 0 20px; }
   .dv6__c { flex-direction: row; align-items: baseline; gap: 6px; min-height: 44px; padding: 0; }
@@ -183,6 +149,37 @@ html:not([data-sky="night"]) .contact--page.r3-deep .r3-ibg::after { background:
   .dv6__cnote { margin-top: 2px; }
 }
 
-/* r3e: Technology strip labels: a long bot name wraps (code on the first line) instead of being cut with an ellipsis */
 .tstrip .tstrip__c { flex-wrap: wrap; row-gap: 0; white-space: normal; text-overflow: clip; }
 .tstrip .tstrip__c i { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+
+.rgal { margin-top: clamp(52px, 6.4vw, 96px); }
+.rgal__cap { display: flex; align-items: center; gap: 16px; margin: 0 0 clamp(16px, 2vw, 26px); color: rgba(241,235,226,.72);
+  font-size: 11px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; line-height: 1.2; }
+.rgal__cap::before { content: ""; width: 28px; height: 1px; background: rgba(241,235,226,.4); flex: none; }
+.rgal__row { display: grid; grid-template-columns: 1.5fr .78fr 1.5fr; gap: clamp(10px, 1.4vw, 20px); }
+.rgal__i { position: relative; display: block; overflow: hidden; height: clamp(300px, 33vw, 500px); background: #1a1612; cursor: zoom-in; border-radius: 2px; }
+.rgal__i picture { display: contents; }
+.rgal__i img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 1.1s cubic-bezier(.2,.7,.2,1); }
+.rgal__i--gal-2 img { object-position: 50% 40%; }
+.rgal__i:focus-visible { outline: 2px solid #dcba94; outline-offset: 3px; }
+@media (hover: hover) { .rgal__i:hover img { transform: scale(1.035); } }
+@media (max-width: 760px) {
+  .rgal__row { grid-template-columns: 1fr; }
+  .rgal__i { height: auto; aspect-ratio: 3 / 2; }
+  .rgal__i--gal-2 { aspect-ratio: 4 / 5; }
+}
+@media (prefers-reduced-motion: reduce) { .rgal__i img { transition: none; } .rgal__i:hover img { transform: none; } }
+
+.fs--hb .fs__bg::after { background:
+    linear-gradient(180deg, rgba(12,10,8,.6) 0%, rgba(12,10,8,.2) 15%, rgba(12,10,8,0) 28%),
+    linear-gradient(0deg, rgba(12,10,8,.9) 0%, rgba(12,10,8,.5) 15%, rgba(12,10,8,0) 34%),
+    linear-gradient(90deg, rgba(12,10,8,.66) 0%, rgba(12,10,8,.54) 30%, rgba(12,10,8,.2) 46%, rgba(12,10,8,.02) 62%, rgba(12,10,8,0) 74%); }
+@media (max-width: 760px), (max-aspect-ratio: 4/5) and (max-width: 1100px) {
+  .fs--hb .fs__img { object-position: 50% 0%; }
+  .fs.fs--deep.fs--hb .fs__bg::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, transparent 40%, #000 53%); mask-image: linear-gradient(180deg, transparent 0%, transparent 40%, #000 53%); }
+  .fs.fs--deep.fs--hb .fs__bg::after { z-index: 2; background:
+      linear-gradient(180deg, rgba(12,10,8,.78) 0%, rgba(12,10,8,.4) 11%, rgba(12,10,8,.1) 22%, rgba(12,10,8,0) 30%),
+      linear-gradient(0deg, #0f0d0b 0%, rgba(15,13,11,.96) 24%, rgba(15,13,11,.86) 38%, rgba(15,13,11,.74) 47%, rgba(15,13,11,.5) 55%, rgba(15,13,11,.22) 63%, rgba(15,13,11,.06) 70%, rgba(15,13,11,0) 76%); }
+}

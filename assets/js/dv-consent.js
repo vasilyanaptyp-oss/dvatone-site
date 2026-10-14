@@ -1,7 +1,4 @@
-/* DVATONE cookie consent (12.10): Google Tag Manager / Google Analytics 4 load only after the visitor agrees.
-   Works only when window.DV_ANALYTICS carries an ID (the build writes it from _src/config.py GTM_ID / GA_ID; the same
-   two values can also be typed into the page head later). No ID = no banner and nothing loaded.
-   The choice is kept in localStorage 'dvConsent' ('granted' | 'denied'); any element with data-cookie-settings reopens the banner. */
+
 (function () {
   var w = window, d = document, cfg = w.DV_ANALYTICS || {};
   if (!cfg.gtm && !cfg.ga) return;

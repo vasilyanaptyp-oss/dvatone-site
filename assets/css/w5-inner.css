@@ -1,20 +1,10 @@
-/* Dvatone, wave 5 (Viktor 07.10): inner pages owner (_src/build_inner.py). Loaded on every page after site.css
-   (layout.page(), config.W5_CSS), so every rule here sits under a class only the inner pages render:
-   tstrip, tproc, tcmp (Technology), dvx (Catalogue: the DV collection), dbx__photos, dbx-lamp (Designer Box), faqx (FAQ).
-   No other owner's class is styled here; site.css is not edited. Light sections: --tl / --ml text; dark: --td / --md. */
 
-/* =========================================================
-   Catalogue: the DV collection (W5_SPEC 5.2)
-   Light section right under the colour fan, no visible heading (the label names it), 3 / 2 / 1 columns
-   (from 1100 / from 700 / below). No card frame and no card plate: the photo, then the code, name and description.
-   A code without a photo is a typographic tile on --paper-2, never an empty image.
-   ========================================================= */
 .dvx{padding-top:calc(var(--sec) * .4)}
 .dvx__head{margin-bottom:clamp(28px,3.4vw,52px)}
 .dvx__grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:var(--gut);row-gap:clamp(36px,4vw,64px)}
 .dvx__i{min-width:0}
 .dvx__i[hidden]{display:none}
-.dvx.is-filtered .dvx__grid{display:none}   /* digital search (flag on) without a DV hit, as before */
+.dvx.is-filtered .dvx__grid{display:none}
 .dvx__vis{position:relative;display:block;width:100%;aspect-ratio:4/3;overflow:hidden;background:var(--paper-2);text-align:left;cursor:pointer}
 .dvx__vis img{display:block;width:100%;height:100%;object-fit:cover;transition:transform 1.4s var(--ease)}
 @media (hover:hover){.dvx__vis:hover img{transform:scale(1.03)}}
@@ -33,10 +23,6 @@
   .dvx__code{margin-top:14px}
 }
 
-/* =========================================================
-   Technology B2: real coating samples up close (W5_SPEC 4.2)
-   Full bleed, five tall tiles side by side; phones: a scroll-snap row of 70vw tiles. One caption under the strip.
-   ========================================================= */
 .tstrip{margin:0;padding-bottom:clamp(28px,3vw,44px)}
 .tstrip__row{display:grid;grid-template-columns:repeat(var(--n,5),minmax(0,1fr));gap:2px;height:clamp(260px,30vw,520px)}
 .tstrip__row:focus-visible{outline:2px solid var(--focus-l);outline-offset:-2px}
@@ -50,10 +36,6 @@
   .tstrip__cap{font-size:13px}
 }
 
-/* =========================================================
-   Technology B1: how the mosaic forms (W5_SPEC 4.2)
-   Three stills of the application film (16:9) with a thin copper number, a heading and a line of text. No frames.
-   ========================================================= */
 .tproc__l{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:var(--gut);row-gap:clamp(40px,5vw,64px)}
 .tproc__i{min-width:0}
 .tproc__img{position:relative;aspect-ratio:16/9;overflow:hidden;background:var(--paper-2)}
@@ -77,11 +59,6 @@
   .tproc__src{font-size:13px}
 }
 
-/* =========================================================
-   Technology B3: Dvatone and ordinary paint (W5_SPEC 4.2)
-   A real table on the dark section: Dvatone in --td, ordinary paint in --md, 1 px --line-d row lines only.
-   Phones: every row is a block (criterion as a caps label, then the two values with their column names).
-   ========================================================= */
 .tcmp__t{width:100%;border-collapse:collapse;table-layout:fixed}
 .tcmp__t th,.tcmp__t td{padding:clamp(18px,2vw,28px) clamp(16px,2.4vw,40px) clamp(18px,2vw,28px) 0;text-align:left;vertical-align:top;border-bottom:1px solid var(--line-d)}
 .tcmp__t thead th,.tcmp__t thead td{padding-top:0;padding-bottom:14px;font-size:var(--fs-micro);line-height:1.4;letter-spacing:var(--ls-caps);text-transform:uppercase;font-weight:600}
@@ -105,17 +82,12 @@
   .tcmp__t tbody td::before{content:attr(data-col);content:attr(data-col) / "";display:block;margin-bottom:4px;font-size:var(--fs-micro);line-height:1.4;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--md)}
 }
 
-/* =========================================================
-   Designer Box: the intro photos (W5_SPEC 6.3)
-   A large tile (the open box) beside two square tiles (the colour fan photo, sample boards). Marked photo places
-   (.pslot, layout) and photos fill their tile; tiles that are switched off leave no gap (--1 / --2 / --3).
-   ========================================================= */
 .dbx__photos{display:grid;gap:clamp(8px,1vw,14px);width:100%;align-self:center}
 .dbx__photos .dbx__ph{position:relative;min-width:0;overflow:hidden}
 .dbx__photos .dbx__ph>.dbx__fill{position:absolute;inset:0;width:100%;height:100%}
 .dbx__photos .dbx__ph>img.dbx__fill{object-fit:cover}
-.dbx__photos .dbx__ph--b{background:rgba(237,230,218,.05)}   /* the same flat surface as the marked places beside it */
-.dbx__photos .dbx__ph>img.dbx__fan{object-fit:contain;padding:9%}   /* a cut-out: the whole fan stands on the tile */
+.dbx__photos .dbx__ph--b{background:rgba(237,230,218,.05)}
+.dbx__photos .dbx__ph>img.dbx__fan{object-fit:contain;padding:9%}
 .dbx__photos--3{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}
 .dbx__photos--3 .dbx__ph--a{grid-row:1/span 2}
 .dbx__photos--3 .dbx__ph--b,.dbx__photos--3 .dbx__ph--c{aspect-ratio:1/1}
@@ -129,7 +101,6 @@
   .dbx__photos--3 .dbx__ph--a{grid-column:1/-1;grid-row:auto;aspect-ratio:4/3}
 }
 
-/* ---- Designer Box: the Scangrip Sunmatch 4 lamp under the three steps, in line with step 02 (3:2, at most 760 px) ---- */
 .dbx-lamp{max-width:760px;margin:clamp(40px,5vw,72px) 0 0 calc(100% / 3 + clamp(16px,2vw,32px))}
 .dbx-lamp__ph{position:relative;aspect-ratio:3/2;overflow:hidden}
 .dbx-lamp__ph>*{position:absolute;inset:0;width:100%;height:100%}
@@ -137,9 +108,5 @@
 .dbx-lamp__cap{margin-top:12px;font-size:13px;line-height:1.5;color:var(--ml)}
 @media (max-width:1100px){.dbx-lamp{margin-left:0}}
 
-/* =========================================================
-   FAQ: six groups of Viktor's text (W5_SPEC 7). The site.css accordion is kept; only the side list gets room for
-   the longer group names.
-   ========================================================= */
 .faqx .faqnav a{gap:16px;line-height:1.35}
 .faqx .faqnav a::after{flex:none}

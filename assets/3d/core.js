@@ -1,23 +1,15 @@
-/* Dvatone 3D core (shared by interior.js, pack.js, hero.js)
-   - three.js r180, pinned, loaded from jsDelivr only when a module becomes visible
-     (set window.DV3D_THREE_URL before loading a module to self-host it later)
-   - Stage: poster first, lazy init when near the viewport, pause off-screen and in hidden tabs,
-     devicePixelRatio cap 2 with an adaptive drop when frames get slow, static fallback when
-     WebGL2 is missing, prefers-reduced-motion (no drift, renders on demand)
-   - Granular coating baker: fine multicolour granules into a seamless tile (albedo + data maps)
-   No console output except real errors. */
+
 
 export const THREE_VERSION = '0.180.0';
 const THREE_URL = (typeof window !== 'undefined' && window.DV3D_THREE_URL) ||
-  'https://cdn.jsdelivr.net/npm/three@' + THREE_VERSION + '/build/three.module.min.js';
+  new URL('./vendor/three.module.min.js', import.meta.url).href;
 
 let threeP = null;
 export function loadThree() {
-  if (!threeP) threeP = import(/* @vite-ignore */ THREE_URL);
+  if (!threeP) threeP = import( THREE_URL);
   return threeP;
 }
 
-/* ---------- capability checks ---------- */
 let glOK = null;
 export function hasWebGL2() {
   if (glOK !== null) return glOK;
@@ -36,14 +28,12 @@ const FINE = typeof matchMedia === 'function' ? matchMedia('(hover: hover) and (
 export const isFinePointer = () => FINE.matches;
 export const isSmallScreen = () => Math.min(screen.width, screen.height) < 820;
 
-/* ---------- global registry (debug + deterministic capture for recordings) ---------- */
 const G = (typeof window !== 'undefined') ? (window.DV3D = window.DV3D || {}) : {};
 G.version = THREE_VERSION;
 G.stages = G.stages || new Set();
 G.capture = G.capture || /[?&]capture\b/.test(typeof location !== 'undefined' ? location.search : '');
 G.step = function (dt) { G.stages.forEach(s => s._step(dt == null ? 1 / 30 : dt)); };
 
-/* ---------- CSS (injected once) ---------- */
 const CSS = `
 .dv3d{position:relative;width:100%;height:100%;overflow:hidden;isolation:isolate;contain:layout paint;-webkit-tap-highlight-color:transparent}
 .dv3d>canvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;opacity:0;transition:opacity .9s cubic-bezier(.2,.7,.2,1)}
@@ -62,9 +52,7 @@ function injectCSS() {
   const s = document.createElement('style'); s.id = 'dv3d-css'; s.textContent = CSS; document.head.appendChild(s);
 }
 
-/* ---------- Stage ----------
-   cfg: { poster, label, className, alpha, antialias, build(stage) -> Promise, update(t, dt), render(), resize(w, h),
-          dispose(), continuous: () => bool (true = needs frames even with reduced motion) } */
+
 export function createStage(el, cfg) {
   injectCSS();
   const wrap = document.createElement('div');
@@ -97,14 +85,12 @@ export function createStage(el, cfg) {
     resolveReady(false);
   }
 
-  /* lazy init: start loading a little before the element scrolls in */
   const ioInit = new IntersectionObserver(es => {
     if (es.some(e => e.isIntersecting)) { ioInit.disconnect(); init(); }
   }, { rootMargin: '300px 0px' });
-  /* run only while actually on screen */
   const ioRun = new IntersectionObserver(es => {
     const e = es[es.length - 1];
-    st.visible = e.isIntersecting && e.intersectionRect.width > 0 && e.intersectionRect.height > 0;   /* touching the edge is not visible */
+    st.visible = e.isIntersecting && e.intersectionRect.width > 0 && e.intersectionRect.height > 0;
     sync();
   }, { threshold: [0, 0.001] });
   ioInit.observe(wrap); ioRun.observe(wrap);
@@ -125,7 +111,6 @@ export function createStage(el, cfg) {
     const tb = performance.now();
     try {
       const renderer = new THREE.WebGLRenderer({
-        /* MSAA only where pixels are large; dense screens are already smooth at their pixel ratio */
         antialias: cfg.antialias !== false && (window.devicePixelRatio || 1) < 1.5, alpha: !!cfg.alpha, powerPreference: 'default',
         premultipliedAlpha: true, preserveDrawingBuffer: !!G.capture
       });
@@ -140,7 +125,7 @@ export function createStage(el, cfg) {
       await cfg.build(st);
       if (st.destroyed) return;
       if (renderer.compileAsync && cfg.scene && cfg.camera) {
-        try { await renderer.compileAsync(cfg.scene(), cfg.camera()); } catch (e) { /* compile synchronously on first render */ }
+        try { await renderer.compileAsync(cfg.scene(), cfg.camera()); } catch (e) {  }
       }
       if (st.destroyed) return;
       st.stats.buildMs = Math.round(performance.now() - tb);
@@ -168,7 +153,7 @@ export function createStage(el, cfg) {
   function applySize() {
     if (!st.renderer) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    st.pr = Math.max(0.7, dpr * st.q);              /* cap 2; may drop below 1 only on a genuinely slow GPU */
+    st.pr = Math.max(0.7, dpr * st.q);
     st.renderer.setPixelRatio(st.pr);
     st.renderer.setSize(st.w, st.h, false);
     st.stats.pr = +st.pr.toFixed(2); st.stats.w = st.w; st.stats.h = st.h; st.stats.quality = +st.q.toFixed(2);
@@ -180,8 +165,7 @@ export function createStage(el, cfg) {
     if (G.capture) return;
     if (running() && (wantsLoop() || needFrame)) start(); else if (!running()) stop();
   }
-  /* `ticking`: an invalidate() from inside update/render must not start a second rAF loop (every frame was then
-     drawn twice); tick() itself schedules the next frame once it is done (found by the pack2 agent, 07.10) */
+  
   function start() { if (!raf && !ticking) { last = performance.now(); raf = requestAnimationFrame(tick); } }
   function stop() { if (raf) cancelAnimationFrame(raf); raf = 0; }
   function invalidate() { needFrame = true; if (!G.capture) sync(); }
@@ -197,27 +181,24 @@ export function createStage(el, cfg) {
     raf = 0;
     if (!running()) return;
     const raw = (now - last) / 1000; last = now;
-    const dt = Math.min(raw, 0.1);                 /* animation step never jumps */
+    const dt = Math.min(raw, 0.1);
     needFrame = false;
     ticking = true;
     try { frame(dt); } finally { ticking = false; }
-    /* adaptive resolution: EMA of the real frame interval, checked about once a second after a warm-up */
     if (raw > 0 && raw < 0.5 && wantsLoop() && !G.noAdapt) {
       ema = ema * 0.9 + raw * 1000 * 0.1; warm += raw; sinceCheck += raw;
       st.stats.ms = +ema.toFixed(1); st.stats.fps = Math.round(1000 / ema);
       if (warm > 1.5 && sinceCheck > 0.8) {
         sinceCheck = 0;
         const minQ = 0.7 / Math.min(window.devicePixelRatio || 1, 2);
-        slow = ema > 24 ? slow + 1 : 0;              /* two slow checks in a row, not a single hiccup */
-        fast = ema < 17.6 ? fast + 1 : 0;            /* running at the display rate */
+        slow = ema > 24 ? slow + 1 : 0;
+        fast = ema < 17.6 ? fast + 1 : 0;
         const now = performance.now();
         if (slow >= 2 && st.q > minQ + 0.001) {
-          /* proportional step: pixel count scales with q^2, aim at ~16 ms per frame */
           badQ = st.q; badT = now;
           st.q = Math.max(minQ, st.q * Math.min(0.9, Math.max(0.45, Math.sqrt(15.5 / ema))));
           applySize(); cfg.resize && cfg.resize(st.w, st.h); warm = 0.9; ema = 16.7; slow = 0; fast = 0;
         } else if (fast >= 4 && st.q < 1) {
-          /* recover after a load spike; never straight back to a level that was too slow in the last 30 s */
           let q = Math.min(1, st.q * 1.15);
           if (now - badT < 30000) q = Math.min(q, badQ * 0.92);
           if (q > st.q + 0.01) { st.q = q; applySize(); cfg.resize && cfg.resize(st.w, st.h); warm = 0.6; }
@@ -225,9 +206,9 @@ export function createStage(el, cfg) {
         }
       }
     }
-    if (!raf && (wantsLoop() || needFrame)) raf = requestAnimationFrame(tick);   /* needFrame: invalidated during this frame */
+    if (!raf && (wantsLoop() || needFrame)) raf = requestAnimationFrame(tick);
   }
-  function step(dt) {               /* deterministic capture: DV3D.step(1/30) */
+  function step(dt) {
     if (!st.ready || st.failed) return;
     advanceFade(st, dt);
     st.t += dt; cfg.update && cfg.update(st.t, dt); cfg.render();
@@ -239,7 +220,7 @@ export function createStage(el, cfg) {
     ioInit.disconnect(); ioRun.disconnect(); ro && ro.disconnect();
     document.removeEventListener('visibilitychange', onVis);
     if (RM.removeEventListener) RM.removeEventListener('change', onRM);
-    try { cfg.dispose && cfg.dispose(); } catch (e) { /* ignore */ }
+    try { cfg.dispose && cfg.dispose(); } catch (e) {  }
     if (st.renderer) { st.renderer.dispose(); st.renderer.forceContextLoss(); }
     wrap.remove(); G.stages.delete(st);
   };
@@ -248,8 +229,7 @@ export function createStage(el, cfg) {
   return st;
 }
 
-/* Crossfade a state change: freeze the current frame in a 2D overlay, apply the change, fade the overlay out.
-   (drawImage right after render, in the same task, works without preserveDrawingBuffer) */
+
 export function crossfade(st, renderNow, apply, dur = 0.9) {
   if (st.reduced || !st.ready) { apply(); st.invalidate(); return; }
   let cv = st.wrap.querySelector('.dv3d__fade');
@@ -260,7 +240,7 @@ export function crossfade(st, renderNow, apply, dur = 0.9) {
   cv.getContext('2d').drawImage(c, 0, 0);
   cv.style.transition = 'none'; cv.style.opacity = '1';
   apply(); renderNow();
-  st._fade = { cv, k: 0, dur };          /* advanced by the stage clock (also in deterministic capture) */
+  st._fade = { cv, k: 0, dur };
   st.invalidate(); st.start();
 }
 function advanceFade(st, dt) {
@@ -271,14 +251,12 @@ function advanceFade(st, dt) {
   if (k >= 1) { f.cv.style.opacity = '0'; st._fade = null; }
 }
 
-/* ---------- helpers ---------- */
 export function moduleURL(rel, base) { return new URL(rel, base).href; }
 export const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 export const smooth = t => t * t * (3 - 2 * t);
 export const easeInOut = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-/** Normalise a composition: accepts [{hex, share}] or generator mix items {sys, code, hex, share}.
-    2 to 6 colours (1 is allowed for a plain shade), shares re-scaled to sum to 100. */
+
 export function normColors(list) {
   let arr = Array.isArray(list) ? list.slice(0, 6) : [];
   arr = arr.map(c => {
@@ -292,7 +270,6 @@ export function normColors(list) {
   return arr;
 }
 
-/** Rounded box with smooth normals and box-projected UVs in metres (consistent texel density). */
 export function roundedBox(THREE, w, h, d, r, seg = 3, bulge = 0) {
   r = Math.min(r, w / 2 - 1e-4, h / 2 - 1e-4, d / 2 - 1e-4);
   const s = seg * 2 + 1;
@@ -304,7 +281,7 @@ export function roundedBox(THREE, w, h, d, r, seg = 3, bulge = 0) {
     let nx = x - Math.sign(x) * half, ny = y - Math.sign(y) * half, nz = z - Math.sign(z) * half;
     const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
     let px = bx * Math.sign(x) + nx * r, py = by * Math.sign(y) + ny * r, pz = bz * Math.sign(z) + nz * r;
-    if (bulge) {                       /* soft cushion: lift the faces towards their middle */
+    if (bulge) {
       const u = px / (w / 2), v = py / (h / 2), q = pz / (d / 2);
       const fx = 1 - u * u, fy = 1 - v * v, fz = 1 - q * q;
       const by2 = bulge * fx * fz, bxz = bulge * 0.35 * fy;
@@ -326,7 +303,6 @@ export function roundedBox(THREE, w, h, d, r, seg = 3, bulge = 0) {
   return g;
 }
 
-/* ---------- fullscreen bake helper ---------- */
 export function createBaker(THREE, renderer) {
   const scene = new THREE.Scene();
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -368,7 +344,6 @@ export function createBaker(THREE, renderer) {
   return { target, run, shader, halfOK, maxAniso, dispose() { geo.dispose(); } };
 }
 
-/* ---------- GLSL shared ---------- */
 export const GLSL_HASH = `
 uvec3 pcg3d(uvec3 v){
   v = v * 1664525u + 1013904223u;
@@ -393,10 +368,7 @@ float vnoise(vec2 p, int n, int k, float seed){
 }
 `;
 
-/* Granular coating: a dead-leaves model of sprayed gel granules.
-   Every granule is an irregular flattened fleck; its colour is drawn from the composition by share,
-   so the visible area of each colour equals its share and the mix reads as one even colour at
-   distance (no low-frequency clouds, so it can never look blotchy). Seamless: all lattices wrap. */
+
 const GRANULE_FRAG = `
 precision highp float;
 precision highp int;
@@ -497,8 +469,7 @@ void main(){
 }
 `;
 
-/* rank-1 lattice generator for a period n: coprime with n, best separation of the values of the first two rings
-   of neighbouring cells (searched once per tile size, cached) */
+
 const LAT = {};
 function latticeFor(n) {
   if (LAT[n]) return LAT[n];
@@ -517,19 +488,17 @@ function latticeFor(n) {
   return (LAT[n] = [best[1] / n, best[2] / n]);
 }
 
-/** Bakes a seamless coating tile. Returns { albedo, data, cells, dispose } where
-    albedo = sRGB colour texture, data = R height, G roughness, B metalness (linear). */
+
 export function bakeGranules(THREE, baker, o) {
   const cols = normColors(o.colors);
   const size = o.size || 1024;
   const cells = o.cells || 128;
   const density = clamp(o.density == null ? 0.92 : +o.density, 0.4, 1);
-  const lin = cols.map(c => new THREE.Color('#' + c.hex));          /* sRGB hex -> linear working space */
+  const lin = cols.map(c => new THREE.Color('#' + c.hex));
   const mean = new THREE.Color(0, 0, 0);
   cols.forEach((c, i) => { mean.r += lin[i].r * c.share / 100; mean.g += lin[i].g * c.share / 100; mean.b += lin[i].b * c.share / 100; });
   const cum = []; let acc = 0;
   for (let i = 0; i < 6; i++) { acc += cols[i] ? cols[i].share / 100 : 0; cum.push(i < cols.length - 1 ? acc : 2); }
-  /* coverage target -> fleck presence per layer (5 layers, mean fleck area ~0.55 cell^2) */
   const C = Math.min(density, 0.94);
   const presence = clamp(-Math.log(1 - C) / (5 * 0.55), 0.05, 1);
   const base = lin[0].clone().multiplyScalar(0.92);

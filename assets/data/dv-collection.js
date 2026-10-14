@@ -1,11 +1,4 @@
-/* Named DV collection. 11.10 (round 3, job r3e): names = Viktor's bot web app «Каталог та PRO Сервіс»
-   (letters/bot_catalog_1110.json, https://test.greendeer.com.ua/dv/index.html): "uk" on the Ukrainian pages, "en" on the English
-   pages, always with the code. Descriptions are the earlier bot texts (unchanged). Codes with a scan but not in the bot
-   (DV 006, DV 012: the bot has only DV 006.1, DV 012.1, DV 012.2) stay code-only; they are appended by the build from the scans
-   (common.dv_collection()). Bot codes without a scan here are not added (no images from the bot). No prices are shown.
-   Categories: assets/data/dv-categories.json (the bot's categories, they win over the computed mapping).
-   Photos: "photo" below is the fallback; scans processed by _src/make_dv_photos.py (assets/data/dv-photos.json) win over it.
-   DV 050 comes first (10.10, Viktor A1/A2): the catalogue opens on the delicate first-screen scan. */
+
 window.DV_COLLECTION=[
  {
   "code": "DV 050",
@@ -89,6 +82,24 @@ window.DV_COLLECTION=[
   "photo": null
  },
  {
+  "code": "DV 001.1",
+  "name": {
+   "en": "Crystal Mono",
+   "uk": "Кришталевий моно"
+  },
+  "desc": null,
+  "photo": null
+ },
+ {
+  "code": "DV 001.3",
+  "name": {
+   "en": "Cotton Mist",
+   "uk": "Бавовняний туман"
+  },
+  "desc": null,
+  "photo": null
+ },
+ {
   "code": "DV 002",
   "name": {
    "en": "Parchment White",
@@ -98,10 +109,64 @@ window.DV_COLLECTION=[
   "photo": null
  },
  {
+  "code": "DV 002.1",
+  "name": {
+   "en": "Pearl Mist",
+   "uk": "Перлинний туман"
+  },
+  "desc": null,
+  "photo": null
+ },
+ {
+  "code": "DV 002.2",
+  "name": {
+   "en": "Silk Veil",
+   "uk": "Шовкова вуаль"
+  },
+  "desc": null,
+  "photo": null
+ },
+ {
+  "code": "DV 006.1",
+  "name": {
+   "en": "Cool Concrete",
+   "uk": "Прохолодний Бетон"
+  },
+  "desc": null,
+  "photo": null
+ },
+ {
+  "code": "DV 012.1",
+  "name": {
+   "en": "Powder Quartz",
+   "uk": "Делікатний кварц"
+  },
+  "desc": null,
+  "photo": null
+ },
+ {
+  "code": "DV 012.2",
+  "name": {
+   "en": "Powder Rose",
+   "uk": "Пудрова Троянда"
+  },
+  "desc": null,
+  "photo": null
+ },
+ {
   "code": "DV 015",
   "name": {
    "en": "Urban Mist",
    "uk": "Міський туман"
+  },
+  "desc": null,
+  "photo": null
+ },
+ {
+  "code": "DV 015.1",
+  "name": {
+   "en": "Pearl Granite",
+   "uk": "Перлинний граніт"
   },
   "desc": null,
   "photo": null
@@ -174,6 +239,15 @@ window.DV_COLLECTION=[
   "name": {
    "en": "Soft Limestone",
    "uk": "М'який вапняк"
+  },
+  "desc": null,
+  "photo": null
+ },
+ {
+  "code": "DV 045.1",
+  "name": {
+   "en": "Warm Stone Quartz",
+   "uk": "Теплий Кам'яний Кварц"
   },
   "desc": null,
   "photo": null

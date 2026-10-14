@@ -1,22 +1,4 @@
-/* DVATONE coat (wave 6, 07.10): the composition painted on a 2D canvas with the fleck structure of a real Dvatone scan, for the
-   generator page (generator.js uses it as its default preview engine) and the generator teaser on the home page ([data-gt]).
 
-   The structure is the rank map the room view already uses (assets/3d/interior2/coat/dv018.webp, read only: 1024 x 1024,
-   seamless, one channel; every fleck of the DV 018 scan carries a rank u, uniform over 0..1). Each fleck takes the colour of the
-   composition, sorted dark to light, whose cumulative share contains its rank (the room view's rule, photoroom.js bakeScan), with
-   the room view's faint rim where the neighbour is another colour and a fine mottle inside the fleck. So the shares are the
-   areas, the flecks have the size, shape and grouping of the real material, and nothing is added: no highlight, no bright
-   speck, no sparkle (no metallic finish exists in the generator yet). Granule density hands a part of the accent flecks back to
-   the base colour (sparser accents; at 100 % the shares are exact).
-   Scale (r2b, 10.10 evening): the tile is 20 cm x GRAIN of wall. Medium (Dvatone) 0.39: the flecks measure 0.23 mm (width of
-   the luminance autocorrelation at half height), the median of the 44 DV scans (0.16 to 0.32 mm), so never coarser than the
-   scans; fine (Ambit) 0.24: 0.14 mm, about 60 % of medium. Measured: jobs_1010/r2b_delicate_texture/tools/grain.py. Every
-   fleck keeps a soft edge (its border with the next fleck is a touch darker, as the scans show it); the average colour stays
-   the recipe's (the edges are normalised away). Painting a new composition is one table lookup per pixel (about 10 ms). The wall view shows 60 cm across the frame, the macro view 16 cm.
-
-   DVATONE.coat.render(canvas, state, { draft, onReady }) -> true when the scan structure painted the canvas; false while it is
-   still loading (or could not load): the caller paints its own interim picture and onReady() asks it to paint again.
-   state: { mix: [{ hex, share }], grain: 'M' | 'F' (10.10: medium Dvatone / fine Ambit), density: 0.4..1, scale: 'wall' | 'macro', seed }. */
 (function () {
   'use strict';
   var NS = (window.DVATONE = window.DVATONE || {});
@@ -24,17 +6,11 @@
   var me = document.currentScript && document.currentScript.src || '';
   var ROOT = me ? me.replace(/assets\/js\/dv-coat\.js(?:\?.*)?$/, '') : '';
   var MAP = ROOT + 'assets/3d/interior2/coat/dv018.webp';
-  /* granule fraction (Viktor 10.10, A2): M = medium, the Dvatone collection, at the median granule of the DV scans;
-     F = fine, Ambit, clearly smaller (60 % of medium). S and XL of older links are drawn as M: nothing is ever coarser than the
-     scans. Views (r2b): the wall view shows 60 cm across the frame (a wall seen from about 2 m), the close view 20 cm (about the
-     scale of a whole scan on a screen; round 1: 16 cm). */
+  
   var TILE_M = 0.2, GRAIN = { M: 0.39, F: 0.24, S: 0.39, XL: 0.39 }, VIEW_M = { wall: 0.6, macro: 0.2 };
-  var LV = [], rank = null, failed = false, loading = null, waiters = [];   // LV[0]: the full rank map, LV[1]: half size (a slider being dragged)
+  var LV = [], rank = null, failed = false, loading = null, waiters = [];
 
-  /* The map is decoded and prepared in a worker (dv-coat-worker.js: createImageBitmap + OffscreenCanvas), so the main thread only
-     paints; without workers or OffscreenCanvas the same work runs here (one longer task). Nothing loads until load() is called:
-     generator.js calls it at idle (a pre-rendered picture of the default composition holds the first paint), the home teaser when
-     it comes near the screen. */
+  
   var QN = 32;
   function load() {
     if (loading) return loading;
@@ -53,7 +29,7 @@
           wk.onerror = function () { wk.terminate(); onMain(res); };
           wk.postMessage({ url: new URL(MAP, location.href).href, qn: QN });
           return;
-        } catch (e) { /* a blocked worker: the main-thread path below */ }
+        } catch (e) {  }
       }
       onMain(res);
     });
@@ -82,10 +58,7 @@
     im.src = MAP;
   }
 
-  /* a fine mottle inside the fleck (+-2.5 %) and its soft edge: the border with the next fleck 5 to 10 % darker. Both depend only
-     on the map, so they are worked out once: every pixel gets a key = its fleck's rank (8 bits) and its brightness step (5 bits,
-     32 steps of about 0.5 %, normalised so the tile's mean is the recipe's colour). A composition then paints the tile with one
-     lookup per pixel in a table of 8 192 colours. */
+  
   function level(r, w) {
     var n = w * w, f = new Float32Array(n), m = w - 1, sum = 0, lo = 9, hi = 0, i;
     for (i = 0; i < n; i++) {
@@ -101,7 +74,7 @@
     for (i = 0; i < n; i++) { f[i] *= k1; if (f[i] < lo) lo = f[i]; if (f[i] > hi) hi = f[i]; }
     var span = (hi - lo) || 1, cnt = new Float64Array(QN), acc = new Float64Array(QN);
     for (i = 0; i < n; i++) { var q = Math.min(QN - 1, Math.floor((f[i] - lo) / span * QN)); key[i] = (r[i] << 5) | q; cnt[q]++; acc[q] += f[i]; }
-    for (i = 0; i < QN; i++) steps[i] = cnt[i] ? acc[i] / cnt[i] : lo + (i + 0.5) / QN * span;   // each step paints its own mean brightness
+    for (i = 0; i < QN; i++) steps[i] = cnt[i] ? acc[i] / cnt[i] : lo + (i + 0.5) / QN * span;
     return { size: w, key: key, steps: steps, tile: { key: '', c: null } };
   }
   var rgb = function (h) { return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; };
@@ -109,7 +82,6 @@
   var luma = function (c) { return 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]); };
   var hash = function (n) { var h = Math.sin(n * 91.3458 + 17.17) * 47453.5453; return h - Math.floor(h); };
 
-  /* the albedo tile of one composition (size x size), cached by composition and density, per level */
   function albedo(st, lv) {
     var L = LV[lv], size = L.size, tile = L.tile;
     var mix = (st.mix || []).filter(function (c) { return c && /^[0-9A-Fa-f]{6}$/.test(c.hex); });
@@ -125,7 +97,7 @@
     for (u = 0; u < 256; u++) {
       var v = (u + 0.5) / 256, k = 0;
       while (k < cols.length - 1 && v > cum[k]) k++;
-      if (k !== bi && hash(u + sd) > keep) k = bi;   // a sparser composition: this group of flecks wears the base colour
+      if (k !== bi && hash(u + sd) > keep) k = bi;
       var c0 = cols[k].r;
       for (q = 0; q < QN; q++) {
         var g = L.steps[q], R = Math.min(255, Math.round(c0[0] * g)), G = Math.min(255, Math.round(c0[1] * g)), B = Math.min(255, Math.round(c0[2] * g));
@@ -141,29 +113,26 @@
     return c;
   }
 
-  /* the tile scaled to its size on this canvas (a high-quality downscale once, then a plain repeat: no shimmer, no moire) */
   var scaled = { key: '', c: null };
   function paintCanvas(canvas, st, draft) {
     var W = canvas.width, H = canvas.height, ctx = canvas.getContext('2d');
     var view = st.scale === 'macro' ? 'macro' : 'wall';
     var pxm = W / VIEW_M[view], tp = Math.max(24, Math.round(TILE_M * (GRAIN[st.grain] || 0.6) * pxm));
-    var lv = (draft || tp * 1.6 <= LV[1].size) ? 1 : 0, size = LV[lv].size;   // the half-size map while a slider is dragged and whenever the tile is drawn small anyway (the wall view): a quarter of the work, the same picture
+    var lv = (draft || tp * 1.6 <= LV[1].size) ? 1 : 0, size = LV[lv].size;
     var a = albedo(st, lv), key = lv + '|' + LV[lv].tile.key + '|' + tp;
     if (scaled.key !== key) {
       var s = scaled.c || document.createElement('canvas');
       s.width = tp; s.height = tp;
       var sx = s.getContext('2d');
       sx.imageSmoothingEnabled = true; sx.imageSmoothingQuality = 'high';
-      if (tp < size / 2) {   // two steps for a large reduction: the high-quality filter alone can alias at 4x
+      if (tp < size / 2) {
         var mid = document.createElement('canvas'); mid.width = mid.height = Math.round(tp * 2);
         var mx = mid.getContext('2d'); mx.imageSmoothingEnabled = true; mx.imageSmoothingQuality = 'high';
         mx.drawImage(a, 0, 0, mid.width, mid.height); sx.drawImage(mid, 0, 0, tp, tp);
       } else sx.drawImage(a, 0, 0, tp, tp);
       scaled.c = s; scaled.key = key;
     }
-    /* r2b: no visible repeat. The wall is laid in cells of half a tile, each showing the seamless tile from its own random
-       offset (fixed by the seed), so no cluster of flecks recurs on a grid; the cut between two cells runs through a random
-       fleck field and cannot be seen. */
+    
     var pat = ctx.createPattern(scaled.c, 'repeat'), cell = Math.max(48, Math.round(tp / 2)), sd = (st.seed | 0) + 1;
     var rr = function (n) { var h = Math.sin(n * 127.1 + sd * 311.7) * 43758.5453; return h - Math.floor(h); };
     ctx.fillStyle = pat;
@@ -193,8 +162,7 @@
       paintCanvas(canvas, st || {}, !!opts.draft);
       return true;
     },
-    /* the interim picture while the structure loads (and the fallback if it cannot): the average colour of the composition with a
-       fine, low-contrast grain, never a bright speck */
+    
     interim: function (canvas, st) {
       var ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height, mix = (st && st.mix) || [], t = 0, s = [0, 0, 0];
       mix.forEach(function (c) { var r = rgb(c.hex); for (var k = 0; k < 3; k++) s[k] += lin(r[k]) * c.share; t += c.share; });
@@ -204,18 +172,17 @@
     }
   };
 
-  /* ---------- the home page teaser ([data-gt]): curated palettes, the base colour, wall / macro; the button opens the full
-     generator with this composition (same composition number there) ---------- */
+  
   var gt = document.querySelector('[data-gt]');
   if (!gt) return;
   var DV = window.DV || {}, PRE = DV.presets || [], NAMES = DV.presetNames || [], T = DV.gt || {};
-  var SH0 = [45, 25, 20, 10], PSH = DV.presetShares || [];   // 10.10: each palette keeps the shares measured from its scan
+  var SH0 = [45, 25, 20, 10], PSH = DV.presetShares || [];
   var SH = PSH[0] || SH0;
   var cv = gt.querySelector('[data-gt-canvas]');
   var st = { preset: 0, cols: (PRE[0] || []).map(function (c) { return c.slice(); }), scale: 'wall', grain: 'M', density: 0.9, seed: 11 };
   var $$ = function (s) { return Array.prototype.slice.call(gt.querySelectorAll(s)); };
   var mixOf = function () { return st.cols.map(function (c, k) { return { hex: c[1].toUpperCase(), share: SH[k] || 10 }; }); };
-  function compId(mix) {   // the generator's composition number (generator.js compId): the same recipe, the same number
+  function compId(mix) {
     var s = mix.map(function (c) { return c.hex + c.share; }).join('') + st.grain + Math.round(st.density * 100), h = 0;
     for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
     return (h % 65536).toString(16).toUpperCase();
@@ -260,7 +227,7 @@
     var b = e.target.closest('[data-gt-hex]');
     if (b) {
       var pick = [b.getAttribute('data-gt-code'), b.getAttribute('data-gt-hex')];
-      for (var j = 1; j < st.cols.length; j++) if (st.cols[j][1] === pick[1]) st.cols[j] = st.cols[0];   // a shade already in the mix swaps places with the base
+      for (var j = 1; j < st.cols.length; j++) if (st.cols[j][1] === pick[1]) st.cols[j] = st.cols[0];
       st.cols[0] = pick; render(); return;
     }
     var v = e.target.closest('[data-gt-view]'); if (v) { st.scale = v.getAttribute('data-gt-view'); render(); }

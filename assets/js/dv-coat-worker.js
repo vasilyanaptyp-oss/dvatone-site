@@ -1,7 +1,4 @@
-/* DVATONE coat worker (wave 6): decodes the fleck structure map off the main thread and prepares what dv-coat.js paints with.
-   In: { url, qn }   Out: { ok, w, k0, s0, k1, s1 } (transferred buffers): for the full map (w x w) and the half-size map, one
-   Uint16 key per pixel = the fleck's rank (8 bits) and its brightness step (5 bits: the fine mottle and the soft fleck edge,
-   normalised so the tile's mean is the recipe's colour) and the mean brightness of each step. The same maths as dv-coat.js level(). */
+
 self.onmessage = function (e) {
   var url = e.data && e.data.url, QN = (e.data && e.data.qn) || 32;
   fetch(url).then(function (r) { if (!r.ok) throw new Error('map ' + r.status); return r.blob(); })

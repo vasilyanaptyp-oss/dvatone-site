@@ -9,12 +9,25 @@ AddDefaultCharset UTF-8
 # Own 404 pages (Ukrainian site and English site)
 ErrorDocument 404 /404.html
 
-# HTTPS and one host name. Uncomment and put your real domain, then test.
-# <IfModule mod_rewrite.c>
-#   RewriteEngine On
-#   RewriteCond %{HTTPS} off
-#   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
-# </IfModule>
+# Send everybody to the secure (https) address. Why: the contact forms carry names, phones and e-mails, and without https
+# anyone on the same Wi-Fi or network could read them on the way to the server (privacy law: data must be protected in
+# transit). It needs a working certificate on the host first; if the site shows a certificate error after upload, ask the
+# host to install the free certificate (Let's Encrypt) and only then keep this block.
+# The second condition keeps it working when the host terminates https in front of Apache (a proxy or CDN that adds
+# X-Forwarded-Proto); without it such a host would redirect forever.
+# To keep one host name (with or without www), add another rule here with the real domain.
+
+# The old web generator page no longer exists: the pages generator.html stay in the folder as a soft redirect (for hosts that ignore
+# this file), and here they get a proper permanent redirect (301) to the app page, so search engines and old links move over.
+# These two rules come first and go straight to https, so there is only one hop.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^generator\.html$ https://%{HTTP_HOST}/app.html [L,R=301]
+  RewriteRule ^en/generator\.html$ https://%{HTTP_HOST}/en/app.html [L,R=301]
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
 
 <IfModule mod_mime.c>
   AddType application/manifest+json .webmanifest
@@ -84,8 +97,11 @@ FileETag None
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
-  # HSTS: enable only when HTTPS works on the whole domain
-  # Header always set Strict-Transport-Security "max-age=31536000"
+  # HSTS tells the browser: for the next year talk to this site only over https. Why: after the first secure visit nobody can
+  # trick the browser back to plain http. It is sent only on secure answers (the condition at the end of the line):
+  # a browser ignores it on http anyway, and sending it there would be wrong. It lasts a year (31536000 seconds), so
+  # make sure https works on the whole domain before the first deploy; do not add includeSubDomains or preload without a decision.
+  Header always set Strict-Transport-Security "max-age=31536000" "expr=%{HTTPS} == 'on' || %{HTTP:X-Forwarded-Proto} == 'https'"
 </IfModule>
 
 # The forms handler must never be cached

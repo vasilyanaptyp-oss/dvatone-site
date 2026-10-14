@@ -1,5 +1,4 @@
-/* DVATONE site.js: header, reveal, hero loupe, fan, generator teaser, forms, video, live sky, shared helpers (window.DVATONE).
-   Plain JS, no libraries. Page data comes from window.DV (set inline by the page). */
+
 (function () {
   'use strict';
   var DV = window.DV || {};
@@ -7,29 +6,23 @@
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
-  document.documentElement.classList.add('dv-js');   // also set by the inline head script before the first paint: lets CSS hide reveal blocks and unloaded photos
+  document.documentElement.classList.add('dv-js');
 
-  /* ---------- reveal on scroll: set up before anything else in this file, so an error further down never leaves a block hidden ---------- */
   var rv = $$('[data-reveal]');
   if ('IntersectionObserver' in window && !reduce) {
     var io = new IntersectionObserver(function (es) {
       es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); } });
-    }, { rootMargin: matchMedia('(max-width: 760px)').matches ? '0px 0px 25% 0px' : '0px 0px -8% 0px', threshold: 0.06 });   // phones: start before the block scrolls in, so fast flicks never show faded text
+    }, { rootMargin: matchMedia('(max-width: 760px)').matches ? '0px 0px 25% 0px' : '0px 0px -8% 0px', threshold: 0.06 });
     rv.forEach(function (el) { io.observe(el); });
   } else { rv.forEach(function (el) { el.classList.add('is-in'); }); }
 
-  /* ---------- sections below the first screen are laid out only near the screen (content-visibility, site.css). One with
-     pictures is rendered for good a screen and a half before it is reached, so its lazy pictures start as early as before
-     (the browser's own margin for content-visibility is half a screen). No layout is read here. ---------- */
+  
   if ('IntersectionObserver' in window) {
     var cvIo = new IntersectionObserver(function (es) {
       es.forEach(function (e) { if (e.isIntersecting) { e.target.style.contentVisibility = 'visible'; cvIo.unobserve(e.target); } });
     }, { rootMargin: '150% 0px' });
     $$('main>section:not(:first-child)').forEach(function (s) { if (s.querySelector('img')) cvIo.observe(s); });
   }
-  // once the page has settled (6 s after load), the sections not rendered yet are rendered in idle time, one at a time and
-  // never while the page is being scrolled, so a later scroll through the page does not lay them out on the way. Not on a page
-  // whose first screen is a live picture (a canvas or a video, e.g. the home hero): a section rendered there would drop its frames
   window.addEventListener('load', function () {
     setTimeout(function () {
       if ($('main>section:first-child canvas, main>section:first-child video')) return;
@@ -46,14 +39,12 @@
     }, 6000);
   });
 
-  /* ---------- digital-catalogue strip: a photo appears only once fully loaded (its swatch colour shows meanwhile),
-     so slow phones never see half-painted strips (the catalogue's sample leaves have their own loader, LEAF_JS in build_inner.py) ---------- */
+  
   $$('.sws img').forEach(function (im) {
     var ok = function () { im.classList.add('is-ok'); };
-    if (im.complete && im.naturalWidth) ok(); else im.addEventListener('load', ok);   // a failed photo stays hidden: its colour tile remains, never a broken-image icon
+    if (im.complete && im.naturalWidth) ok(); else im.addEventListener('load', ok);
   });
 
-  /* ---------- shared helpers for generator.js / catalogue.js (window.DVATONE): toast, clipboard, label flash, area parser ---------- */
   var NS = (window.DVATONE = window.DVATONE || {});
   var LANG = DV.lang === 'en' ? 'en' : 'uk';
   var SH = {
@@ -86,12 +77,12 @@
     document.head.appendChild(st);
   })();
   var toastEl = null, toastT = 0, toastFx = false;
-  NS.toast = function (msg, o) {   // o: kind ('warn'), ms, copyText (text to copy by hand), action ({label, run}: one button, e.g. undo)
+  NS.toast = function (msg, o) {
     o = o || {};
     var host = document.querySelector('dialog[open]') || document.body, act = !!o.copyText, fx = o.action && o.action.label && typeof o.action.run === 'function' ? o.action : null;
     if (!toastEl) {
       toastEl = document.createElement('div');
-      var over = false, hold = function () { if (toastFx) clearTimeout(toastT); };   // a toast with an action waits while a mouse is over it or focus is in it
+      var over = false, hold = function () { if (toastFx) clearTimeout(toastT); };
       var resume = function () { if (toastFx && !over && toastEl.classList.contains('is-in') && !toastEl.contains(document.activeElement)) { clearTimeout(toastT); toastT = setTimeout(hideToast, 2400); } };
       toastEl.addEventListener('pointerenter', function (e) { if (e.pointerType !== 'touch') { over = true; hold(); } });
       toastEl.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'touch') { over = false; resume(); } });
@@ -100,9 +91,9 @@
     toastFx = !!fx;
     clearTimeout(toastT); toastEl.className = 'dvt' + (o.kind === 'warn' ? ' dvt--warn' : '') + (act || fx ? ' is-act' : '');
     while (toastEl.firstChild) toastEl.removeChild(toastEl.firstChild);
-    if (act || host !== document.body) { toastEl.setAttribute('role', act ? 'alert' : 'status'); toastEl.removeAttribute('aria-hidden'); }   // inside a modal dialog the page's .sr live region is inert, so the toast itself must announce
-    else if (fx) { toastEl.removeAttribute('role'); toastEl.removeAttribute('aria-hidden'); }   // its button stays reachable; the message itself is announced by the caller's live region
-    else { toastEl.removeAttribute('role'); toastEl.setAttribute('aria-hidden', 'true'); }   // on the page a plain toast is only the visual copy of the .sr live region
+    if (act || host !== document.body) { toastEl.setAttribute('role', act ? 'alert' : 'status'); toastEl.removeAttribute('aria-hidden'); }
+    else if (fx) { toastEl.removeAttribute('role'); toastEl.removeAttribute('aria-hidden'); }
+    else { toastEl.removeAttribute('role'); toastEl.setAttribute('aria-hidden', 'true'); }
     var m = document.createElement('span'); m.className = 'dvt__m'; m.textContent = msg; toastEl.appendChild(m);
     if (fx) {
       var ab = document.createElement('button'); ab.type = 'button'; ab.className = 'dvt__a'; ab.textContent = fx.label;
@@ -124,7 +115,7 @@
     toastT = setTimeout(hideToast, fx ? Math.max(o.ms || 0, 8000) : o.ms || (act ? 14000 : 2800));
   };
   function hideToast() { if (!toastEl) return; clearTimeout(toastT); toastEl.classList.remove('is-in'); }
-  NS.copyText = function (text) {   // resolves true/false: never claims success it cannot confirm
+  NS.copyText = function (text) {
     return new Promise(function (resolve) {
       var legacy = function () {
         var ok = false, prev = document.activeElement;
@@ -140,13 +131,13 @@
       else resolve(legacy());
     });
   };
-  NS.flashLabel = function (btn, text, ms) {   // swap the visible button label for a moment ("Скопійовано")
+  NS.flashLabel = function (btn, text, ms) {
     var s = btn && btn.querySelector('span'); if (!s) return;
     if (btn.getAttribute('data-flash') == null) btn.setAttribute('data-flash', s.textContent);
     s.textContent = text; clearTimeout(btn._ft);
     btn._ft = setTimeout(function () { s.textContent = btn.getAttribute('data-flash'); btn.removeAttribute('data-flash'); }, ms || 1600);
   };
-  NS.parseArea = function (v) {   // strict: "24", "12,5", "1 000", "1 000,5"; no letters, exponents or two separators; up to 10 000 m²
+  NS.parseArea = function (v) {
     var s = String(v == null ? '' : v).trim();
     if (!s) return { n: null, err: '' };
     if (!/^\d+([.,]\d{1,2})?$/.test(s) && !/^\d{1,3}([    ]\d{3})+([.,]\d{1,2})?$/.test(s)) return { n: null, err: 'bad' };
@@ -156,25 +147,20 @@
     return { n: n, err: '' };
   };
 
-  /* ---------- shared runtime helpers (mobile budget): idle scheduling, yielding, data saver, scroll insets ---------- */
-  NS.lowData = function () { var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection; return !!(conn && (conn.saveData || /^(slow-2g|2g|3g)$/.test(conn.effectiveType || ''))); };   // Save-Data or a 2G/3G link: no autoplay, no eager media
+  NS.lowData = function () { var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection; return !!(conn && (conn.saveData || /^(slow-2g|2g|3g)$/.test(conn.effectiveType || ''))); };
   NS.idle = function (fn, timeout) {
     if (window.requestIdleCallback) return window.requestIdleCallback(fn, { timeout: timeout || 1500 });
     return setTimeout(function () { fn({ didTimeout: true, timeRemaining: function () { return 8; } }); }, 60);
   };
-  NS.yieldMain = function () {   // give the main thread back between slices of a long job
+  NS.yieldMain = function () {
     if (window.scheduler && window.scheduler.yield) return window.scheduler.yield();
     return new Promise(function (res) { setTimeout(res, 0); });
   };
-  // runs fn just after the next frame has been drawn, when style and layout are up to date: a first measurement made there
-  // costs nothing, while the same read during start-up (or in the frame's own callbacks) forces a whole-page style and layout pass
   var afterFrame = NS.afterFrame = function (fn) { requestAnimationFrame(function () { setTimeout(fn, 0); }); };
   var hdrH = function () { return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hdr')) || 70; };
-  /* The generator's colour preview ([data-dv-sticky-preview], #dvPrev) is sticky under the header. On phones and tablets it sits
-     above the controls, which scroll under it, so it is part of the top inset. On desktop it is a column beside the controls
-     (the W5 studio): nothing scrolls under it, and counting it would send every focus and anchor to the bottom of the screen. */
+  
   var PIN = '[data-dv-sticky-preview]';
-  var beside = function (el, r) {   // another child of the same parent lies next to it: clear of it sideways, level with it vertically
+  var beside = function (el, r) {
     var p = el.parentElement, c, q;
     if (!p) return false;
     for (c = p.firstElementChild; c; c = c.nextElementSibling) {
@@ -184,8 +170,8 @@
     }
     return false;
   };
-  var overhead = function (el, r) { return r.height > 0 && r.height < window.innerHeight * 0.75 && !beside(el, r); };   // a bar over the controls (a side column, or a preview taller than the screen, is not one)
-  NS.topInset = function () {   // bottom edge of whatever is pinned at the top right now: the header and a sticky generator preview above the controls
+  var overhead = function (el, r) { return r.height > 0 && r.height < window.innerHeight * 0.75 && !beside(el, r); };
+  NS.topInset = function () {
     var inset = hdrH();
     $$(PIN).forEach(function (el) {
       var cs = getComputedStyle(el); if (cs.position !== 'sticky') return;
@@ -193,20 +179,20 @@
     });
     return inset;
   };
-  NS.reveal = function (el, o) {   // scroll an element into the comfortable part of the screen only when it is not already there
+  NS.reveal = function (el, o) {
     if (!el) return; o = o || {};
     var vv = window.visualViewport, top = (vv ? vv.offsetTop : 0) + NS.topInset() + 8, bot = (vv ? vv.offsetTop + vv.height : window.innerHeight) - (o.bottom != null ? o.bottom : 24);
     var r = el.getBoundingClientRect(); if (r.top >= top && r.bottom <= bot) return;
     var room = bot - top, y = r.height >= room ? r.top - top : r.top - top - (room - r.height) / (o.at === 'center' ? 2 : 3);
     window.scrollTo({ top: Math.max(0, window.scrollY + y), behavior: reduce || o.instant ? 'auto' : 'smooth' });
   };
-  (function () {   // JS-owned mobile CSS: scroll padding under the pinned bars, keyboard-open state, loupe-free touch
+  (function () {
     var st = document.createElement('style'); st.setAttribute('data-dv-ux', '');
-    st.textContent = '@media (max-width:1099.98px){html[data-dv-kbd] ' + PIN + '{position:static!important}}';   // one-column generator (below 1100 px): the keyboard needs the room
+    st.textContent = '@media (max-width:1099.98px){html[data-dv-kbd] ' + PIN + '{position:static!important}}';
     document.head.appendChild(st);
     var pad = 0, padRaf = 0;
     var upd = function () {
-      padRaf = 0; var v = hdrH();   // header plus a sticky preview above the controls, whether or not it is stuck right now: a focused control must never end up behind it
+      padRaf = 0; var v = hdrH();
       $$(PIN).forEach(function (el) { var cs = getComputedStyle(el), r = el.getBoundingClientRect(); if (cs.position === 'sticky' && overhead(el, r)) v = Math.max(v, (parseFloat(cs.top) || 0) + r.height); });
       v = Math.round(v + 12);
       if (v !== pad) { pad = v; document.documentElement.style.scrollPaddingTop = v + 'px'; }
@@ -214,13 +200,13 @@
     var soon = function () { if (!padRaf) padRaf = requestAnimationFrame(upd); };
     window.addEventListener('resize', soon); window.addEventListener('load', soon); afterFrame(upd);
     if (window.ResizeObserver) { var ro = new ResizeObserver(soon); $$(PIN).forEach(function (e) { ro.observe(e); }); }
-    var vv = window.visualViewport;   // on-screen keyboard: the visual viewport shrinks well below the layout viewport
+    var vv = window.visualViewport;
     if (vv && window.matchMedia && matchMedia('(pointer:coarse)').matches) {
       var kb = function () { var on = vv.height < window.innerHeight * 0.72 && /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || ''); if (on !== kb.on) { kb.on = on; document.documentElement.toggleAttribute('data-dv-kbd', on); soon(); } };
       vv.addEventListener('resize', kb); document.addEventListener('focusout', function () { setTimeout(kb, 80); });
     }
   })();
-  if (window.matchMedia && matchMedia('(pointer:coarse)').matches) {   // a focused field is never left under the keyboard, the header or the pinned preview
+  if (window.matchMedia && matchMedia('(pointer:coarse)').matches) {
     document.addEventListener('focusin', function (e) {
       var t = e.target; if (!t || !t.matches || !t.matches('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=submit]),textarea,select')) return;
       if (t.closest('dialog')) return;
@@ -228,11 +214,10 @@
     });
   }
 
-  /* ---------- header + mobile nav (modal sheet: inert page behind, Tab trapped, focus returned) ---------- */
   var hdr = $('#hdr'), burger = $('.burger'), mnav = $('#mnav'), menuOpen = false, inerted = [];
   var hdrY = 0, hdrPins = $$(PIN), burgerOff = null, hdrRaf = 0;
-  window.addEventListener('resize', function () { burgerOff = null; });   // the burger comes and goes with the breakpoint: measured again after a resize, not on every scroll
-  var keepHdr = function () {   // the bar stays: desktop layout, keyboard focus inside it, or a generator preview pinned under it (hiding would open a see-through gap above the preview)
+  window.addEventListener('resize', function () { burgerOff = null; });
+  var keepHdr = function () {
     if (burgerOff === null) burgerOff = !burger || getComputedStyle(burger).display === 'none';
     if (burgerOff) return true;
     var a = document.activeElement;
@@ -246,16 +231,14 @@
   function onScrollHdr() {
     hdrRaf = 0;
     var open = !!(mnav && mnav.classList.contains('is-open')), y0 = window.scrollY;
-    // all reads first (scroll height, the pinned preview), then the class writes: never a forced layout between them
-    var y = clamp(y0, 0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight));   // an iOS rubber band past either end is not a change of direction
+    var y = clamp(y0, 0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight));
     var keep = open || y <= 400 || keepHdr();
     hdr.classList.toggle('is-solid', y0 > 40 || open);
-    // phones and tablets: the bar slides away while reading down and comes back on any scroll up
     if (keep) { hdr.classList.remove('is-hidden'); hdrY = y; return; }
     if (y > hdrY + 6) { hdr.classList.add('is-hidden'); hdrY = y; }
     else if (y < hdrY - 6) { hdr.classList.remove('is-hidden'); hdrY = y; }
   }
-  hdr.addEventListener('focusin', function () { hdr.classList.remove('is-hidden'); });   // Shift+Tab back into a hidden bar brings it down
+  hdr.addEventListener('focusin', function () { hdr.classList.remove('is-hidden'); });
   var seen = function (el) { return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length) && getComputedStyle(el).visibility !== 'hidden'; };
   var tabbables = function () {
     return $$('a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])', hdr)
@@ -271,12 +254,12 @@
     if (open) {
       mnav.inert = false; mnav.setAttribute('role', 'dialog'); mnav.setAttribute('aria-modal', 'true'); mnav.setAttribute('aria-label', burger.getAttribute('aria-label') || 'Menu');
       inerted = [];
-      Array.prototype.forEach.call(document.body.children, function (el) {   // everything except the header and the menu: main, footer, sky pill, tray, toasts
+      Array.prototype.forEach.call(document.body.children, function (el) {
         if (el === hdr || el === mnav || /^(SCRIPT|STYLE|LINK|NOSCRIPT)$/.test(el.tagName) || el.inert) return;
         el.inert = true; inerted.push(el);
       });
       var tries = 0;
-      (function go() {   // the sheet fades in (visibility flips with the transition): retry until the first link really takes focus
+      (function go() {
         if (!menuOpen) return;
         var first = $('a[href]', mnav);
         if (first && seen(first)) { first.focus(); if (document.activeElement === first) return; }
@@ -303,26 +286,23 @@
       if (e.shiftKey && (a === f || list.indexOf(a) < 0)) { e.preventDefault(); l.focus(); }
       else if (!e.shiftKey && (a === l || list.indexOf(a) < 0)) { e.preventDefault(); f.focus(); }
     });
-    window.addEventListener('resize', function () { if (menuOpen && getComputedStyle(burger).display === 'none') setMenu(false); });   // the burger leaves with the breakpoint (px or text size)
+    window.addEventListener('resize', function () { if (menuOpen && getComputedStyle(burger).display === 'none') setMenu(false); });
   }
-  var onScrollHdrSoon = function () { if (!hdrRaf) hdrRaf = requestAnimationFrame(onScrollHdr); };   // once per frame, in the frame's own update
+  var onScrollHdrSoon = function () { if (!hdrRaf) hdrRaf = requestAnimationFrame(onScrollHdr); };
   window.addEventListener('scroll', onScrollHdrSoon, { passive: true }); window.addEventListener('resize', onScrollHdrSoon);
-  afterFrame(onScrollHdr);   // the first check runs once the first frame is drawn: no forced layout while the page starts
+  afterFrame(onScrollHdr);
 
-  /* ---------- language switch keeps what is on screen: a shared composition (?mix=…), a search (?q=…), a section (#s4).
-     File names and section ids are the same in both languages; the href is refreshed right before it is used. ---------- */
+  
   $$('.lang a[hreflang]').forEach(function (a) {
     var base = a.getAttribute('href');
-    if (!base || base.charAt(0) === '#') return;   // the current language
+    if (!base || base.charAt(0) === '#') return;
     base = base.split('#')[0].split('?')[0];
     var sync = function () { a.setAttribute('href', base + location.search + location.hash); };
     sync();
     ['pointerenter', 'pointerdown', 'focus', 'click'].forEach(function (t) { a.addEventListener(t, sync); });
   });
 
-  /* ---------- legal pages: the sticky contents list marks the section being read: the one crossing the line just under
-     the header (where a click on the list lands a section, so a short one is never skipped), the next one while the line
-     is in the gap between two, and the last one once the page cannot scroll further ---------- */
+  
   var toc = $('.prose__toc');
   if (toc) {
     var tocA = $$('a[href^="#"]', toc), tocS = tocA.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); }), tocK = -2, tocRaf = 0;
@@ -331,17 +311,16 @@
       var de = document.documentElement, line = (parseFloat(getComputedStyle(de).scrollPaddingTop) || hdrH()) + 24, k = tocS.length - 1;
       for (var i = 0; i < tocS.length; i++) {
         var r = tocS[i] && tocS[i].getBoundingClientRect(); if (!r || r.bottom <= line) continue;
-        k = i === 0 && r.top > line ? -1 : i; break;   // -1: the intro is still on top, nothing is marked yet
+        k = i === 0 && r.top > line ? -1 : i; break;
       }
       if (k > -1 && window.scrollY + window.innerHeight >= de.scrollHeight - 2) k = tocS.length - 1;
       if (k === tocK) return; tocK = k;
       tocA.forEach(function (a, j) { if (j === k) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); });
     };
     var spySoon = function () { if (!tocRaf) tocRaf = requestAnimationFrame(spy); };
-    window.addEventListener('scroll', spySoon, { passive: true }); window.addEventListener('resize', spySoon); afterFrame(spy);   // first mark once the first frame is drawn, not as a forced layout while the page starts
+    window.addEventListener('scroll', spySoon, { passive: true }); window.addEventListener('resize', spySoon); afterFrame(spy);
   }
 
-  /* ---------- count-up figures ---------- */
   $$('[data-count]').forEach(function (el) {
     var end = +el.getAttribute('data-count'), pre = el.getAttribute('data-prefix') || '', done = false;
     if (reduce || !('IntersectionObserver' in window)) return;
@@ -356,12 +335,11 @@
     o.observe(el);
   });
 
-  /* ---------- hero loupe ---------- */
   var hero = $('[data-hero]');
   if (hero) {
     var lens = $('.hero__lens', hero), ring = $('.hero__ring', hero), Z = 1.35, IW = 2000, IH = 1500, OX = 0.64, OY = 0.40;
     var lensSrc = hero.getAttribute('data-img');
-    if (window.matchMedia && matchMedia('(max-width: 760px)').matches) lensSrc = lensSrc.replace(/(dv033)\.webp$/, '$1-m.webp');  // same 4:3 photo, smaller file, same as the <picture> source
+    if (window.matchMedia && matchMedia('(max-width: 760px)').matches) lensSrc = lensSrc.replace(/(dv033)\.webp$/, '$1-m.webp');
     lens.style.setProperty('--img', 'url("' + new URL(lensSrc, location.href).href + '")');
     var mx = 0, my = 0, tx = 0, ty = 0, active = false, fine = window.matchMedia && matchMedia('(hover:hover) and (pointer:fine)').matches, raf = 0, t0 = performance.now();
     var place = function () {
@@ -377,7 +355,7 @@
       var W = hero.clientWidth, H = hero.clientHeight;
       if (!fine && !reduce) {
         var t = (now - t0) / 1000; tx = W * (0.62 + 0.22 * Math.sin(t * 0.42)); ty = H * (0.36 + 0.14 * Math.sin(t * 0.31 + 1));
-        if (W < 700) {   // phones: the ring (r = 90) stays inside the screen and drifts below the copy block, never over the text
+        if (W < 700) {
           var lr = 90, row = $('.hero__row', hero), below = row ? row.getBoundingClientRect().bottom - hero.getBoundingClientRect().top + lr + 12 : 0, top = Math.min(below, H - lr - 8);
           tx = clamp(tx, lr + 6, W - lr - 6);
           if (top > ty - 1) ty = top + (H - lr - 8 - top) * (0.5 + 0.5 * Math.sin(t * 0.31 + 1)); else ty = clamp(ty, lr + 6, H - lr - 6);
@@ -395,9 +373,8 @@
     if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { if (!es[0].isIntersecting) stop(); else if (active || (!fine && !reduce)) start(); }).observe(hero);
   }
 
-  /* ---------- colour fan ---------- */
   var stage = $('[data-tilt]'), fan = $('#fanPhoto'), cs = $('#casePhoto'), hots = $('#fanHots');
-  if (stage && fan) {   // 10.10: the fan alone (the slipcase view and the hot spots are gone; the code still copes with them)
+  if (stage && fan) {
     $$('.cat__tabs button', stage).forEach(function (b) {
       b.addEventListener('click', function () {
         var v = b.getAttribute('data-view');
@@ -416,7 +393,6 @@
     }
   }
 
-  /* ---------- generator teaser (illustrative live mix on a neutral mat) ---------- */
   var cv = $('#genCanvas');
   if (cv && DV.presets) {
     var ctx = cv.getContext('2d'), cur = { preset: 0, cols: DV.presets[0].map(function (c) { return c.slice(); }), macro: false };
@@ -442,14 +418,14 @@
       $('#genId').textContent = '#' + (id % 65536).toString(16).toUpperCase().padStart(4, '0');
       $('#genMix').innerHTML = cur.cols.map(function (c, k) { return '<div><i style="background:#' + c[1] + '"></i><span>' + c[0] + '</span><span>' + SHARE[k] + '%</span></div>'; }).join('');
       $('#genBase').textContent = cur.cols[0][0];
-      var go = $('#generator .gen__cta a[href]');   // the button opens the generator with this composition
+      var go = $('#generator .gen__cta a[href]');
       if (go) go.setAttribute('href', go.getAttribute('href').split('?')[0] + '?mix=' + cur.cols.map(function (c, k) { return c[1].toUpperCase() + ':' + SHARE[k]; }).join(','));
     };
     $$('#genSw .sw').forEach(function (b) {
       b.addEventListener('click', function () {
         $$('#genSw .sw').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
         var pick = [b.getAttribute('data-code'), b.getAttribute('data-hex')];
-        for (var j = 1; j < cur.cols.length; j++) if (cur.cols[j][1] === pick[1]) cur.cols[j] = cur.cols[0];   // a shade already in the mix swaps places with the base: no code shows twice
+        for (var j = 1; j < cur.cols.length; j++) if (cur.cols[j][1] === pick[1]) cur.cols[j] = cur.cols[0];
         cur.cols[0] = pick; paint();
       });
     });
@@ -472,16 +448,12 @@
     else paint();
   }
 
-  /* interiors: the home page's own module script (build_home.py) drives assets/3d/interior2.js; the generator's room view lives in generator.js */
 
-  /* ---------- forms: validation, then delivery (deliver) ----------
-     data-need="name contact consent"  required fields (by input name; "consent" is the checkbox)
-     data-need-any="email phone"        at least one of these must be filled
-     input[data-kind="email|phone|contact|area"] adds a format check (area is optional unless listed in data-need) */
+  
   var ERR = DV.err || {};
-  if (ERR.area) ERR.area = ERR.area.replace(', більшою за нуль', ' більшим за нуль');   // UA grammar
-  if (!ERR.send) ERR.send = SH.send;   // never a bare Telegram link
-  var tgNick = function (v) {   // '@nick', a bare 'nick' or a t.me link: the Telegram handle with its '@', else ''
+  if (ERR.area) ERR.area = ERR.area.replace(', більшою за нуль', ' більшим за нуль');
+  if (!ERR.send) ERR.send = SH.send;
+  var tgNick = function (v) {
     v = String(v || '').trim();
     if (/^@[A-Za-z0-9_]{4,}$/.test(v)) return v;
     var m = /^(?:(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me)\/)?([A-Za-z][A-Za-z0-9_]{3,31})\/?$/i.exec(v);
@@ -495,10 +467,7 @@
     if (kind === 'area') { var ar = NS.parseArea(v); return ar.err === 'big' ? SH.areaBig : (ar.err ? ERR.area : ''); }
     return '';
   };
-  /* ---------- delivery: one endpoint, JSON POST ----------
-     Endpoint = data-endpoint on the form, else window.DV_CONFIG.formEndpoint (assets/js/config.js), else build default.
-     No endpoint or any failure = a polite error, never a fake success. Spam guards: hidden honeypot field (name "website"),
-     time since page load (ts) and, server side, rate limiting (see deploy/). */
+  
   var T0 = Date.now(), CFG = window.DV_CONFIG || {};
   var endpointOf = function (f) { return (f.getAttribute('data-endpoint') || CFG.formEndpoint || DV.formEndpoint || '').trim(); };
   function formName(f) {
@@ -521,7 +490,7 @@
       if (el.type === 'checkbox') { o[el.name] = !!el.checked; return; }
       if (el.type === 'radio' && !el.checked) return;
       var v = String(el.value || '').trim(), k = el.getAttribute('data-kind');
-      o[el.name] = ((k === 'phone' || k === 'contact') && tgNick(v)) || v;   // a bare nick or a t.me link reaches the team as @nick
+      o[el.name] = ((k === 'phone' || k === 'contact') && tgNick(v)) || v;
     });
     return o;
   }
@@ -535,7 +504,7 @@
   }
   function showFail(f, btn, why) {
     var box = failBox(f, btn);
-    box.textContent = String(ERR.send || SH.send).replace(/[\s:.,;]+$/, '') + ': ';   // "… write to us on Telegram: @Dvatone_bot"
+    box.textContent = String(ERR.send || SH.send).replace(/[\s:.,;]+$/, '') + ': ';
     var a = document.createElement('a'); a.href = 'https://t.me/Dvatone_bot'; a.target = '_blank'; a.rel = 'noopener'; a.textContent = '@Dvatone_bot';
     box.appendChild(a); box.hidden = false;
     if (window.console && console.info) console.info('[Dvatone forms] not sent: ' + why);
@@ -559,9 +528,8 @@
       }, function (err) { clearTimeout(timer); return fail(err && err.name === 'AbortError' ? 'timeout' : 'network error'); });
   }
 
-  /* ---------- form a11y: errors have ids and are linked to their fields, the first problem gets focus, success is scrolled into view ---------- */
   var uidN = 0, uid = function (p) { return 'dv-' + p + '-' + (++uidN); };
-  var addDesc = function (el, id, on) {   // add or remove one id in aria-describedby, keeping the others (hints)
+  var addDesc = function (el, id, on) {
     var a = (el.getAttribute('aria-describedby') || '').split(' ').filter(function (x) { return x && x !== id; });
     if (on) a.push(id);
     if (a.length) el.setAttribute('aria-describedby', a.join(' ')); else el.removeAttribute('aria-describedby');
@@ -574,7 +542,7 @@
     return er;
   };
   var focusEl = function (el) { try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); } };
-  function showSent(f, panel) {   // the form collapses and the page gets shorter: bring the confirmation back into view and move focus to it
+  function showSent(f, panel) {
     f.classList.add('is-sent');
     if (!panel) return;
     panel.setAttribute('tabindex', '-1'); focusEl(panel);
@@ -589,7 +557,7 @@
   $$('[data-form]').forEach(function (f) {
     var need = (f.getAttribute('data-need') || '').split(' ').filter(Boolean), any = (f.getAttribute('data-need-any') || '').split(' ').filter(Boolean);
     var sum = document.createElement('p'); sum.className = 'sr'; sum.setAttribute('role', 'status'); sum.setAttribute('aria-live', 'polite'); sum.setAttribute('data-form-status', ''); f.appendChild(sum);
-    $$('.field', f).forEach(function (fld) {   // the error line is announced, and it is no longer part of the field's name
+    $$('.field', f).forEach(function (fld) {
       var el = $('input:not([type=hidden]),textarea,select', fld); if (!el || el.name === 'website') return;
       var er = errOf(fld); if (er) er.setAttribute('role', 'alert');
       var hint = $('.field__hint', fld), cap = fld.matches('label') ? $(':scope > span', fld) : null;
@@ -637,7 +605,7 @@
       e.preventDefault();
       if (f.getAttribute('aria-busy') === 'true') return;
       if (!check()) {
-        var bad = $$('[aria-invalid="true"]', f), first = bad[0];   // DOM order: the first control that needs attention, the consent box included
+        var bad = $$('[aria-invalid="true"]', f), first = bad[0];
         sum.textContent = ''; setTimeout(function () { sum.textContent = SH.errCount.replace('{n}', bad.length); }, 60);
         if (first) { focusEl(first); NS.reveal(first, { at: 'center' }); }
         return;
@@ -645,7 +613,7 @@
       sum.textContent = '';
       deliver(f, formName(f), collect(f), $('button[type="submit"]', f)).then(function () {
         showSent(f, $('.form__ok', f));
-      }, function () { /* error state already shown by deliver() */ });
+      }, function () {  });
     });
     f.addEventListener('input', function (e) { clearBad(e.target); });
     f.addEventListener('change', function (e) { if (e.target.type === 'checkbox' || e.target.tagName === 'SELECT') clearBad(e.target); });
@@ -668,7 +636,6 @@
     nf.addEventListener('input', function () { if (nf.elements.email.getAttribute('aria-invalid') === 'true') nf.elements.email.setAttribute('aria-invalid', 'false'); });
   }
 
-  /* ---------- video: poster only until a tap; on Save-Data or a 2G/3G link nothing even starts by itself ---------- */
   $$('[data-yt]').forEach(function (b) {
     b.addEventListener('click', function () {
       var lite = NS.lowData(), f = document.createElement('iframe');
@@ -676,27 +643,25 @@
       f.title = b.getAttribute('aria-label'); f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen'; f.allowFullscreen = true; f.setAttribute('loading', 'lazy');
       var d = document.createElement('div'); d.className = 'vplay'; d.appendChild(f);
       b.replaceWith(d); try { f.focus({ preventScroll: true }); } catch (e) {}
-      collide = null; tickPillSoon();   // the player replaces the button: the pill's keep-clear list picks it up
+      collide = null; tickPillSoon();
     });
   });
 
-  /* self-hosted video: the file is requested only after the tap; the player takes focus so keyboard users are not dropped on <body> */
   $$('[data-video]').forEach(function (b) {
     b.addEventListener('click', function () {
       var lite = NS.lowData(), v = document.createElement('video');
-      v.src = (matchMedia('(max-width: 760px)').matches && b.getAttribute('data-video-m')) || b.getAttribute('data-video');   // phones get the lighter file when there is one
+      v.src = (matchMedia('(max-width: 760px)').matches && b.getAttribute('data-video-m')) || b.getAttribute('data-video');
       v.poster = b.getAttribute('data-poster') || '';
       v.controls = true; v.playsInline = true; v.preload = lite ? 'metadata' : 'auto'; v.autoplay = !lite;
       v.setAttribute('aria-label', b.getAttribute('aria-label')); v.setAttribute('tabindex', '-1');
       var d = document.createElement('div'); d.className = 'vplay is-playing'; d.appendChild(v);
       b.replaceWith(d); try { v.focus({ preventScroll: true }); } catch (e) {}
-      collide = null; tickPillSoon();   // the player (with its control bar) replaces the button: the pill's keep-clear list picks it up
-      if (!lite) { var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); }   // data saver: the viewer starts it with the native play button
+      collide = null; tickPillSoon();
+      if (!lite) { var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); }
     });
   });
 
-  /* ---------- application before/after: drag anywhere on the picture (mouse, pen, horizontal swipe), arrow keys on the
-     handle; one short hint sweep when it first comes into view. Vertical swipes keep scrolling the page (touch-action: pan-y). ---------- */
+  
   $$('[data-sweep]').forEach(function (sw) {
     var knob = $('.app__knob', sw), cur = 50, drag = null, used = false, hintRaf = 0;
     var set = function (v) {
@@ -706,7 +671,6 @@
     };
     var atX = function (x) { var r = sw.getBoundingClientRect(); return r.width ? (x - r.left) / r.width * 100 : cur; };
     var take = function () { used = true; if (hintRaf) { cancelAnimationFrame(hintRaf); hintRaf = 0; } };
-    // the divider glides to the finger instead of jumping with every pointer event, so sparse or uneven touch events still look smooth
     var tgt = 50, glideRaf = 0;
     var glide = function () {
       glideRaf = 0;
@@ -719,13 +683,13 @@
     sw.addEventListener('pointerdown', function (e) {
       if (e.button > 0) return;
       take();
-      var onKnob = !!(knob && (e.target === knob || knob.contains(e.target)));   // a finger on the round handle drags at once (the handle has touch-action: none)
+      var onKnob = !!(knob && (e.target === knob || knob.contains(e.target)));
       drag = { id: e.pointerId, x: e.clientX, y: e.clientY, on: e.pointerType !== 'touch' || onKnob };
       if (drag.on) { aim(atX(e.clientX)); sw.classList.add('is-drag'); try { sw.setPointerCapture(e.pointerId); } catch (_) {} }
     });
     sw.addEventListener('pointermove', function (e) {
       if (!drag || e.pointerId !== drag.id) return;
-      if (!drag.on) {   // touch: start only on a clearly horizontal move, so a vertical swipe still scrolls the page
+      if (!drag.on) {
         var dx = Math.abs(e.clientX - drag.x), dy = Math.abs(e.clientY - drag.y);
         if (dx < 6 || dx < dy) return;
         drag.on = true; sw.classList.add('is-drag'); try { sw.setPointerCapture(e.pointerId); } catch (_) {}
@@ -734,18 +698,17 @@
     });
     var end = function () { drag = null; sw.classList.remove('is-drag'); };
     sw.addEventListener('pointerup', end); sw.addEventListener('pointercancel', end);
-    sw.addEventListener('lostpointercapture', function (e) { if (e.target === sw) end(); });   // a finger or pen starts captured by the part it lands on (.base, .done, the handle); moving the capture here fires lostpointercapture on that part, which bubbles up and must not end the drag
+    sw.addEventListener('lostpointercapture', function (e) { if (e.target === sw) end(); });
     if (knob) knob.addEventListener('keydown', function (e) {
       var d = { ArrowLeft: -5, ArrowDown: -5, ArrowRight: 5, ArrowUp: 5, PageDown: -20, PageUp: 20, Home: -cur, End: 100 - cur }[e.key];
       if (d === undefined) return;
       e.preventDefault(); take(); tgt = clamp(cur + d, 0, 100); set(tgt);
     });
     set(50);
-    // the coated side loads its picture only near the viewport (desktop 1000 px or phone 720 px wide)
     var done = $('.done', sw);
     if (done && done.getAttribute('data-bg')) {
       var loadBg = function () {
-        var big = sw.clientWidth > 600 && sw.clientWidth * (window.devicePixelRatio || 1) > 800;   // phones always take the 720 px picture
+        var big = sw.clientWidth > 600 && sw.clientWidth * (window.devicePixelRatio || 1) > 800;
         done.style.backgroundImage = 'url(' + (done.getAttribute(big ? 'data-bg' : 'data-bg-m') || done.getAttribute('data-bg')) + ')';
       };
       if ('IntersectionObserver' in window) {
@@ -771,13 +734,8 @@
     io.observe(sw);
   });
 
-  /* =====================================================
-     Live sky: tones follow local time of day and season.
-     Only the page background is driven. Colour previews sit on .gen__mat (opaque neutral grey).
-     ===================================================== */
-  /* The sky model and its root-variable writes live in the inline <head> script (_src/head_sky.js, window.DVSKY): the page
-     paints with the right sky at once and only changed variables are written (each write restyles the whole page).
-     Without it (an old cached page with this file) the sky simply keeps its CSS default. */
+  
+  
   var SKYM = window.DVSKY || null;
   var SKY = { t: null, s: null, play: false, info: null }, skyOpen = false;
   function applySky() {
@@ -798,8 +756,8 @@
     $('#skyPill').setAttribute('aria-label', SL.label + ': ' + hhmm(s.t) + ', ' + SL.phases[s.phase] + ', ' + SL.seasons[s.season]);
     $('#skyTimeVal').textContent = hhmm(s.t); $('#skyPhase').textContent = '· ' + SL.phases[s.phase]; $('#skySeasonVal').textContent = SL.seasons[s.season];
     var tr = $('#skyTime'); if (document.activeElement !== tr) tr.value = Math.round(s.t / 5) * 5 % 1440;
-    tr.setAttribute('aria-valuetext', hhmm(s.t) + ', ' + SL.phases[s.phase]);   // "20:15, сутінки", not the raw minute count
-    var sg = $('#skySeason');   // built once and updated in place: rebuilding it on every tick would drop keyboard focus
+    tr.setAttribute('aria-valuetext', hhmm(s.t) + ', ' + SL.phases[s.phase]);
+    var sg = $('#skySeason');
     if (sg.children.length !== SL.seasons.length) sg.innerHTML = SL.seasons.map(function (n, k) { return '<button type="button" data-s="' + k + '">' + n + '</button>'; }).join('');
     Array.prototype.forEach.call(sg.children, function (b, k) { b.setAttribute('aria-pressed', s.season === k ? 'true' : 'false'); });
     var pb = $('#skyPlay span'); if (pb) pb.textContent = SKY.play ? SL.pause : SL.play;
@@ -816,41 +774,38 @@
     if (open) { skyCtl.classList.remove('is-away'); if (toFirst) { var t = $('#skyTime'); if (t) t.focus(); } } else tickPill();
   }
   var tickRaf = 0, collide = null, pillOff = null;
-  var ZONES = [['form,.btn,.tray', 80], ['.acc,.faqnav,.ftr__top,.ftr__bot', 16], ['.cgrid,.sws,.leaves,.link-arrow,.vplay,.studio__panel', 8]];   // what the pill keeps clear of, and by how many px (a whole FAQ list or generator panel, not row by row, so the pill does not blink in and out while reading)
-  // the pill is not shown on tablets, phones and the generator (CSS): then nothing is measured while scrolling. Checked again after a resize.
+  var ZONES = [['form,.btn,.tray', 80], ['.acc,.faqnav,.ftr__top,.ftr__bot', 16], ['.cgrid,.sws,.leaves,.link-arrow,.vplay,.studio__panel', 8]];
   var pillHidden = function () { if (pillOff === null) pillOff = !skyCtl || getComputedStyle(skyCtl).display === 'none'; return pillOff; };
   window.addEventListener('resize', function () { pillOff = null; });
-  // a block in a part of the page that is not rendered yet (content-visibility) is far from the pill: it is skipped, not measured (measuring would lay it out)
   var unrendered = function (el) { try { return !!el.checkVisibility && !el.checkVisibility({ contentVisibilityAuto: true }); } catch (e) { return false; } };
-  function tickPillSoon() { if (!tickRaf && pillOff !== true) tickRaf = requestAnimationFrame(function () { tickRaf = 0; tickPill(); }); }   // the display check itself is made in tickPill, never in a scroll or start-up call
-  function tickPill() {  // never sit on top of the hero, a colour composition, a form, a button, the generator's controls, the catalogue grid, a sample strip, an arrow link, a video, a FAQ list or the footer
+  function tickPillSoon() { if (!tickRaf && pillOff !== true) tickRaf = requestAnimationFrame(function () { tickRaf = 0; tickPill(); }); }
+  function tickPill() {
     if (!skyCtl || skyOpen || pillHidden()) return;
     var pill = $('#skyPill'), pr = pill.getBoundingClientRect(), hit = false, h = hero ? hero.getBoundingClientRect() : null;
     var tf = /^matrix\((.+)\)$/.exec(getComputedStyle(skyCtl).transform || ''), dy = tf ? parseFloat(tf[1].split(',')[5]) || 0 : 0;
-    var pl = { left: pr.left, right: pr.right, top: pr.top - dy, bottom: pr.bottom - dy };   // where the pill rests: its own "away" slide must not feed back into the decision
+    var pl = { left: pr.left, right: pr.right, top: pr.top - dy, bottom: pr.bottom - dy };
     if (h && h.bottom > window.innerHeight * 0.4) hit = true;
     var near = function (r, m) { return r.width > 0 && r.right > pl.left - m && r.left < pl.right + m && r.bottom > pl.top - m && r.top < pl.bottom + m; };
-    if (!hit) $$('.gen__mat,' + PIN).forEach(function (m) { if (near(m.getBoundingClientRect(), 12)) hit = true; });   // the composition: texture or room view
+    if (!hit) $$('.gen__mat,' + PIN).forEach(function (m) { if (near(m.getBoundingClientRect(), 12)) hit = true; });
     if (!hit) {
-      if (!collide) {   // built once (again on load); nothing from the closed mobile menu, which is laid out but invisible
+      if (!collide) {
         collide = [];
         ZONES.forEach(function (z) { $$(z[0]).forEach(function (el) { if (!el.closest('#mnav')) collide.push([el, z[1]]); }); });
       }
       for (var i = 0; i < collide.length && !hit; i++) {
         var c = collide[i][0];
-        if (c.hidden || unrendered(c) || (c.offsetParent === null && getComputedStyle(c).position !== 'fixed')) continue;   // the tray is listed even while it is empty and hidden
+        if (c.hidden || unrendered(c) || (c.offsetParent === null && getComputedStyle(c).position !== 'fixed')) continue;
         if (near(c.getBoundingClientRect(), collide[i][1]) && getComputedStyle(c).visibility !== 'hidden') hit = true;
       }
     }
-    if (skyCtl.contains(document.activeElement)) hit = false;   // a focused pill is never hidden from the keyboard user
+    if (skyCtl.contains(document.activeElement)) hit = false;
     skyCtl.classList.toggle('is-away', hit);
   }
   if (skyCtl) {
     var skyPop = $('#skyPop'), skyPill = $('#skyPill');
-    skyPop.setAttribute('role', 'group');   // a disclosure, not a modal: Tab leaves it and it closes behind the focus
-    skyPill.addEventListener('click', function (e) { var o = !skyOpen; openSky(o, o && e.detail === 0); });   // detail 0: the click came from the keyboard or assistive tech
+    skyPop.setAttribute('role', 'group');
+    skyPill.addEventListener('click', function (e) { var o = !skyOpen; openSky(o, o && e.detail === 0); });
     $('#skyClose').addEventListener('click', function () { openSky(false); skyPill.focus(); });
-    // 10.10 r2: the visitor's own choice (time, season or the local time) is remembered for every page; the default is a light day sky (head_sky.js)
     var saveSky = function () { try { localStorage.setItem('dvSky', JSON.stringify({ t: SKY.t, s: SKY.s })); } catch (e) { } };
     $('#skyTime').addEventListener('input', function (e) { if (SKY.play) setPlay(false); SKY.t = +e.target.value; applySky(); saveSky(); });
     $('#skySeason').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; SKY.s = +b.getAttribute('data-s'); applySky(); saveSky(); });
@@ -858,7 +813,7 @@
     $('#skyLive').addEventListener('click', function () { setPlay(false); SKY.t = null; SKY.s = null; applySky(); saveSky(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && skyOpen && !menuOpen) { openSky(false); skyPill.focus(); } });
     document.addEventListener('pointerdown', function (e) { if (skyOpen && !skyCtl.contains(e.target)) openSky(false); });
-    skyCtl.addEventListener('keydown', function (e) {   // Tab off either end (the browser may report no related target there): the popover closes behind the focus
+    skyCtl.addEventListener('keydown', function (e) {
       if (e.key !== 'Tab' || !skyOpen) return;
       var l = $$('button,input,a[href]', skyCtl).filter(function (x) { return !x.disabled && seen(x); }), a = document.activeElement;
       if (l.length && ((!e.shiftKey && a === l[l.length - 1]) || (e.shiftKey && a === l[0]))) openSky(false);
@@ -866,12 +821,11 @@
     skyCtl.addEventListener('focusout', function (e) { var n = e.relatedTarget; if (skyOpen && n && !skyCtl.contains(n)) openSky(false); });
     window.addEventListener('scroll', tickPillSoon, { passive: true }); window.addEventListener('resize', tickPillSoon);
     window.addEventListener('load', function () { collide = null; tickPillSoon(); });
-    document.addEventListener('toggle', tickPillSoon, true);   // an opened FAQ answer moves the rows below it without a scroll
+    document.addEventListener('toggle', tickPillSoon, true);
     var trayEl = $('.tray'); if (trayEl && window.MutationObserver) new MutationObserver(tickPillSoon).observe(trayEl, { attributes: true, attributeFilter: ['hidden'] });
   }
-  // QA deep links (?t=21:40 ?season=winter ?sky=dusk): parsed by the head script with the same rules
   if (SKYM && SKYM.q) { SKY.t = SKYM.q.t; SKY.s = SKYM.q.s; }
-  applySky(); afterFrame(tickPill);   // the head script painted this sky already, so nothing is rewritten; the pill is placed once the first frame is drawn
+  applySky(); afterFrame(tickPill);
   setInterval(function () { if (SKY.t == null) applySky(); }, 20000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) applySky(); });
 })();

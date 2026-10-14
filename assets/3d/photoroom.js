@@ -1,37 +1,12 @@
-/* Dvatone 3D Interiors, photo mode: photoreal Cycles renders of the rooms whose feature wall is recoloured live and
-   exactly with the generator's coating.
 
-   Each view (a room at 16:9 or 4:5, and the hero story's end frame) is one Cycles render (path guiding, adaptive
-   sampling, OIDN with albedo and normal, light portals) of the room with the feature wall as a neutral Lambert
-   surface of albedo RHO0, white-balanced on the wall's shade side, plus:
-     - the wall's anti-aliased coverage (mask),
-     - the light the wall throws onto the room per unit albedo (bleed, low resolution),
-     - the homography from the image to the wall plane (metres).
-   Per pixel: wall = tone(coat(uv) * light), rest = photo + slope(tone) * (coatMean - RHO0) * bleed, blended by the
-   wall's anti-aliased coverage (the photo holds the object alone at the wall's edges)
-   coat(uv) = the generator's granule albedo (core.js bakeGranules: exact colours and shares), laid out without
-   repetition or seams (tiling and blending: a triangle grid of random offsets into the seamless tile, blended with a
-   variance-preserving operator) and filtered by its on-screen size (mip-mapped, slightly biased), so at room
-   distance it averages into a fine matte surface and never sparkles or crawls.
-   The wall's light is stored with real precision: low-frequency log luminance in 16 bits (hi and lo bytes: the GPU's
-   bilinear filtering is linear in each, so the 16 bits survive filtering) plus chroma at a quarter resolution in one
-   lossless image (cubic B-spline reconstruction), times a full-resolution 8-bit detail ratio around 1.0 (shadow
-   edges, leaf shadows); the output carries a +-0.5 LSB blue-noise dither, so smooth gradients show no steps. Then the hue-preserving tone
-   curve (identity below 0.55, a long hue-keeping roll-off above that never clips). The photograph itself never moves except a slow push-in.
-
-   mountPhoto(el, { room, colors, grain, density, seed, textureUrl, textureSize, drift, poster, maxHeight, view })
-     -> { setColors, setState, setRoom, setTexture, destroy, stats, renderFrame, start, ready, room }   (DVInterior2 API)
-   photoFrame(host, { view: 'hero-end', colors, grain, drift: false })   the hero story's end frame, same controller
-   photoCamera(view, aspect) -> { pos, look, vfov, shift, crop }        camera that the frame shows at that aspect */
 import { createStage, createBaker, bakeGranules, normColors, clamp, crossfade, loadThree } from './core.js';
 
 const ASSET = new URL('./interior2/photo/', import.meta.url).href;
 const POSTER = new URL('./interior2/', import.meta.url).href;
-const CELL_M = 0.0021;                  /* granule lattice cell at grain 1 (as the live rooms and v1) */
+const CELL_M = 0.0021;
 const COAT = new URL('./interior2/coat/', import.meta.url).href;
-const STRUCTURE = 'dv018';              /* the default fleck structure (from the DV 018 scan); others: setState({ structure }) */
-/* albedo tile from a real fleck structure: each fleck's rank u picks the composition colour (sorted dark to light) whose
-   cumulative share contains it; a faint rim where the neighbour is another colour; a fine mottle inside the flecks */
+const STRUCTURE = 'dv018';
+
 const SCAN_FRAG = `
 precision highp float;
 varying vec2 vUv;
@@ -58,7 +33,6 @@ function loadStructure(T, id) {
     };
     const p = Promise.all([
       fetch(COAT + id + '.json').then(r => { if (!r.ok) throw new Error('coat ' + id); return r.json(); }),
-      /* shared by every stage on the page (each uploads it to its own context): its bitmap is kept, never closed */
       takeBitmap(COAT + id + '.webp').then(bm => bm ? setup(bitmapTexture(T, bm)) :
         new Promise((res, rej) => new T.TextureLoader().load(COAT + id + '.webp', t => res(setup(t)), undefined, rej)))
     ]).then(([meta, tex]) => ({ meta, tex }));
@@ -84,9 +58,7 @@ function bakeScan(T, baker, st, colors) {
   baker.run(mat, rt); mat.dispose();
   return { albedo: rt.texture, cells: st.meta.cells || 190, size, structure: st.meta.id, dispose() { rt.dispose(); } };
 }
-/* rooms of the photo mode, in two groups (Viktor 07.10). id: the room for setRoom(); file: the prefix of its view files
-   (<file>-d desktop 16:9, <file>-p phone 4:5); ready: its views are rendered and published. 'hallway' is an alias of
-   'corridor' (the home page's old tab). */
+
 export const PHOTO_GROUPS = [
   { id: 'residential', name: { uk: 'Житлові', en: 'Residential' } },
   { id: 'public', name: { uk: 'Комерційні / Громадські', en: 'Commercial / Public' } }
@@ -123,19 +95,15 @@ PHOTO_ROOMS.forEach(r => { VIEWS[r.id] = [r.file + '-d', r.file + '-p']; });
 const LANG = /^en/i.test(document.documentElement.lang || '') ? 'en' : 'uk';
 const LABEL = { uk: { 'hero-end': 'Вітальня з покриттям Dvatone на стіні' }, en: { 'hero-end': 'Living room with a Dvatone coating on the wall' } };
 PHOTO_ROOMS.forEach(r => { LABEL.uk[r.id] = r.label.uk; LABEL.en[r.id] = r.label.en; });
-/* ready rooms of the same group as `id` (swipe and prefetch stay inside the group the visitor chose) */
 const groupRooms = id => { const d = roomDef(id); return PHOTO_ROOMS.filter(r => r.ready && (!d || r.group === d.group)).map(r => r.id); };
 const G = window.DV3D || (window.DV3D = {});
-const PUSH = { amount: 0.025, secs: 22 };   /* slow push-in after a view appears */
+const PUSH = { amount: 0.025, secs: 22 };
 
-/* AVIF support, tested once with a 1 x 1 image */
 const AVIF = new Promise(res => {
   const i = new Image(); i.onload = () => res(i.width > 0); i.onerror = () => res(false);
   i.src = 'data:image/avif;base64,AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZk1BMUIAAADybWV0YQAAAAAAAAAoaGRscgAAAAAAAAAAcGljdAAAAAAAAAAAAAAAAGxpYmF2aWYAAAAADnBpdG0AAAAAAAEAAAAeaWxvYwAAAABEAAABAAEAAAABAAABGgAAAB0AAAAoaWluZgAAAAAAAQAAABppbmZlAgAAAAABAABhdjAxQ29sb3IAAAAAamlwcnAAAABLaXBjbwAAABRpc3BlAAAAAAAAAAIAAAACAAAAEHBpeGkAAAAAAwgICAAAAAxhdjFDgQ0MAAAAABNjb2xybmNseAACAAIAAYAAAAAXaXBtYQAAAAAAAAABAAEEAQKDBAAAACVtZGF0EgAKCBgANogQEAwgMg8f8D///8WfhwB8+ErK42A=';
 });
-/* images decoded off the main thread (07.10 night, the performance pass): fetch + createImageBitmap, flipped as three.js
-   flips images and without colour conversion (the maps are data, the photograph is sRGB decoded on the GPU), so the
-   upload needs no decode or conversion. Where createImageBitmap or its options are missing: null (the TextureLoader). */
+
 const BITMAPS = new Map();
 function bitmapOf(url) {
   if (!BITMAPS.has(url)) {
@@ -159,9 +127,7 @@ function viewMeta(id) {
 }
 const viewId = (name, portrait) => (VIEWS[name] || VIEWS.living)[portrait ? 1 : 0];
 
-/* the part of the photo a stage of aspect a shows: full height and the centre cut to width when the stage is
-   narrower than the photo (vertical field of view kept: the hero story's rule for its end frame), otherwise full
-   width and the middle cut to height */
+
 function fitFor(a, ap) {
   return a <= ap ? [(1 - a / ap) / 2, 0, a / ap, 1] : [0, (1 - ap / a) / 2, 1, ap / a];
 }
@@ -170,7 +136,6 @@ export async function photoCamera(view, aspect) {
   const m = await viewMeta(id);
   const ap = m.w / m.h, f = fitFor(aspect, ap);
   const vfov = 2 * Math.atan(Math.tan(m.cam.vfov * Math.PI / 360) * f[3]) * 180 / Math.PI;
-  /* shift: vertical lens shift as a fraction of the shown height (+ = the frame moves up), as hero2's portraitOffset */
   return { id, pos: m.cam.pos, look: m.cam.look, vfov, shift: m.cam.shift_ndc / 2 / f[3], crop: f, level: m.cam.level, size: [m.w, m.h] };
 }
 
@@ -193,11 +158,14 @@ vec2 dvHash2( vec2 p ) { vec3 p3 = fract( p.xyx * vec3( 0.1031, 0.1030, 0.0973 )
    everywhere; explicit gradients keep the three reads at the same mip level */
 vec3 coat( sampler2D t, vec2 uv, float isFlat ) {
   vec2 dx = dFdx( uv ), dy = dFdy( uv );
-  /* granules smaller than about 3 screen pixels would read as salt-and-pepper noise: the filter then averages over about
-     four granules (a real lens and sensor see a fine matte mottle there); bigger granules stay crisp */
-  float px = 1.0 / max( max( length( dx ), length( dy ) ) * uCells, 1e-6 );
-  float g = exp2( uCoatBias + mix( log2( max( 4.0 * px, 1.0 ) ), 0.0, smoothstep( 1.2, 3.0, px ) ) );
+  const float DV_FLOOR = 1.2;
+  float px0 = 1.0 / max( max( length( dx ), length( dy ) ) * uCells, 1e-6 );
+  float sf = min( 1.0, px0 / DV_FLOOR );
+  uv *= sf; dx = dFdx( uv ); dy = dFdy( uv );
+  float amp = mix( 0.42, 1.0, smoothstep( 0.2, 1.0, sf ) );
+  float g = exp2( uCoatBias );
   vec2 gx = dx * g, gy = dy * g;
+  vec3 mu = textureLod( t, vec2( 0.5 ), 16.0 ).rgb;
   vec3 r = textureGrad( t, uv, gx, gy ).rgb;            /* a client's flat texture: plain tiling */
   if ( isFlat > 0.5 ) return r;
   vec2 s = mat2( 1.0, 0.0, -0.57735027, 1.15470054 ) * ( uv * 2.6 );
@@ -208,11 +176,10 @@ vec3 coat( sampler2D t, vec2 uv, float isFlat ) {
   vec2 v1 = lower ? b : b + 1.0;
   vec2 v2 = lower ? b + vec2( 0.0, 1.0 ) : b + vec2( 1.0, 0.0 );
   vec2 v3 = lower ? b + vec2( 1.0, 0.0 ) : b + vec2( 0.0, 1.0 );
-  vec3 mu = textureLod( t, vec2( 0.5 ), 16.0 ).rgb;
   vec3 c1 = textureGrad( t, uv + dvHash2( v1 + 0.37 ), gx, gy ).rgb;
   vec3 c2 = textureGrad( t, uv + dvHash2( v2 + 0.37 ), gx, gy ).rgb;
   vec3 c3 = textureGrad( t, uv + dvHash2( v3 + 0.37 ), gx, gy ).rgb;
-  return max( mu + ( wt.x * ( c1 - mu ) + wt.y * ( c2 - mu ) + wt.z * ( c3 - mu ) ) * inversesqrt( dot( wt, wt ) ), 0.0 );
+  return max( mu + ( wt.x * ( c1 - mu ) + wt.y * ( c2 - mu ) + wt.z * ( c3 - mu ) ) * inversesqrt( dot( wt, wt ) ) * amp, 0.0 );
 }
 /* cubic B-spline reconstruction from 4 bilinear taps (smooth, no ringing) of one half of the light image (w x 2h,
    rows oy .. oy + h), clamped to its own edge; bilinear filtering of the hi and lo bytes is linear, so it is exact */
@@ -250,6 +217,14 @@ vec3 dvTone( vec3 c ) {
   return mix( c, vec3( np ), g );
 }
 vec3 dvSRGB( vec3 c ) { return mix( c * 12.92, 1.055 * pow( c, vec3( 1.0 / 2.4 ) ) - 0.055, step( 0.0031308, c ) ); }
+/* a vibrance on the wall's light (muted tones up to +60 %, saturated ones almost untouched) */
+vec3 dvVib( vec3 wl ) {
+  float wy = dot( wl, vec3( 0.2126, 0.7152, 0.0722 ) );
+  float mx = max( wl.r, max( wl.g, wl.b) );
+  float wsat = ( mx - min( wl.r, min( wl.g, wl.b ) ) ) / max( mx, 1e-4 );
+  return max( mix( vec3( wy ), wl, 1.0 + 0.62 * ( 1.0 - clamp( wsat * 1.6, 0.0, 1.0 ) ) ), 0.0 );
+}
+const float DV_CONTRAST = 0.22; const float DV_SAT = 0.12; const float DV_VIG = 0.10;
 void main() {
   vec2 puv = uFit.xy + vUv * uFit.zw;
   puv = uFocus + ( puv - uFocus ) / uZoom;
@@ -279,13 +254,33 @@ void main() {
   /* the wall: its light times the coating, through the tone curve; the rest: the photograph plus the change of the
      wall's colour bleed, through the slope of the tone curve there; blended by the wall's anti-aliased coverage */
   /*FX_WALL*/
-  vec3 wallC = dvTone( cc * lw );
+  cc = max( meanC + ( cc - meanC ) * 1.25, 0.0 );
+  /* tone first, texture after: the tone curve's long roll-off flattens everything in a sunlit patch, so the wall's mean colour is
+     lit, vibranced and toned, and the granule's relative deviation (cc / mean) is applied to that result: the sunlit coating keeps
+     its multicolour structure instead of turning into a flat peach plane. In the shade (the curve is the identity there) it is the same
+     product as before. */
+  /* 13.10 (hero job): a sunlit wall's light is eased a little (x0.85 in the brightest light) so honey stays honey and does not turn peach; the deviation keeps more of its weight in the sun (.8, was .55) */
+  vec3 mlw = meanC * lw * 1.12; mlw *= mix( 1.0, 0.85, smoothstep( 0.30, 0.95, max( mlw.r, max( mlw.g, mlw.b ) ) ) );
+  vec3 tb = dvTone( dvVib( mlw ) );
+  float hp = smoothstep( 0.55, 0.95, max( tb.r, max( tb.g, tb.b ) ) );   /* the sunlit patch: a calmer granule (a bright plane exaggerates contrast) */
+  vec3 wallC = min( tb * pow( clamp( cc / max( meanC, vec3( 1e-3 ) ), 0.3, 2.5 ), vec3( mix( 1.0, 0.8, hp ) ) ), vec3( 0.985 ) );
   float pk = max( b.r, max( b.g, b.b ) );
   float J = pk < 0.55 ? 1.0 : ( 0.97 - pk ) * ( 0.97 - pk ) / ( 0.42 * 0.42 );
   vec3 rest = max( b + J * ( meanC - uRho0 ) * bl, 0.0 );
   vec3 lin = clamp( mix( rest, wallC, m ), 0.0, 1.0 );
   /*FX_POST*/
   vec3 col = dvSRGB( lin );
+  /* 13.10 (fix_visual, R-024 / R-091 / R-092): the frame grade shared by every room. A gentle S curve (deeper shade, clean light), a little more
+     colour where the picture is muted (the grey bounce light reads taupe), and a soft vignette so the eye settles on the wall. */
+  { float cy = dot( col, vec3( 0.2126, 0.7152, 0.0722 ) );
+    float sc = ( cy - 0.5 ) * ( 1.0 - abs( 2.0 * cy - 1.0 ) );
+    col += DV_CONTRAST * sc * ( col / max( cy, 0.02 ) );
+    float cm = max( col.r, max( col.g, col.b ) ), cn = min( col.r, min( col.g, col.b ) );
+    float cs = ( cm - cn ) / max( cm, 1e-3 );
+    col = max( mix( vec3( dot( col, vec3( 0.2126, 0.7152, 0.0722 ) ) ), col, 1.0 + DV_SAT * ( 1.0 - clamp( cs * 1.8, 0.0, 1.0 ) ) ), 0.0 );
+    vec2 vq = ( vUv - 0.5 ) * vec2( 1.0, 0.82 );
+    col *= 1.0 - DV_VIG * smoothstep( 0.30, 0.80, length( vq ) ); }
+  col = clamp( col, 0.0, 1.0 );
   float dn = texture( tBlue, gl_FragCoord.xy / 64.0 ).r;
   col = mix( col, uBg, uFade );                            /* room change: through the stage colour, never a double exposure */
   gl_FragColor = vec4( col + ( dn - 0.5 ) / 255.0, 1.0 );
@@ -297,15 +292,15 @@ export function mountPhoto(el, opts = {}) {
   const hero = opts.view === 'hero-end';
   const S = {
     room: hero ? 'hero-end' : (roomDef(opts.room) ? roomDef(opts.room).id : 'living'),
-    colors: normColors(opts.colors), grain: clamp(+opts.grain || 0.39, 0.2, 1.8),   /* r2b: down to 0.2, so fine (Ambit, 0.24) is no longer clamped up to medium */
+    colors: normColors(opts.colors), grain: clamp(+opts.grain || 0.39, 0.2, 1.8),
     density: opts.density == null ? 0.92 : clamp(+opts.density, 0.4, 1), seed: opts.seed == null ? 11 : +opts.seed,
     textureUrl: opts.textureUrl || null, textureSize: +opts.textureSize || 0.6,
-    structure: opts.structure === false || opts.structure === null ? null : (opts.structure || STRUCTURE),   /* null or false: synthetic granules */
+    structure: opts.structure === false || opts.structure === null ? null : (opts.structure || STRUCTURE),
     drift: opts.drift == null ? !hero : opts.drift !== false
   };
   const box0 = el.getBoundingClientRect();
   let portrait = box0.width > 0 && box0.height > 0 && box0.width / box0.height < 0.95;
-  const vid = (name, p) => opts.views ? opts.views[p ? 1 : 0] : viewId(name, p);      /* opts.views: other view files (offline video) */
+  const vid = (name, p) => opts.views ? opts.views[p ? 1 : 0] : viewId(name, p);
   const posterOf = (room, p) => POSTER + 'poster-' + (room === 'hero-end' ? 'hero' : (roomDef(room) ? roomDef(room).file : room)) + (p ? '-p' : '') + '.webp';
   let T, R, baker, scene, camera, mat, U, stage = null, view = null, coatA = null, coatB = null, wipe = null, roomTok = 0, coatTok = 0;
   let push = 0, dirty = true, lastT = null;
@@ -342,7 +337,6 @@ export function mountPhoto(el, opts = {}) {
     w.addEventListener('pointercancel', () => { id = -1; }, { passive: true });
   }
 
-  /* one render pixel per CSS pixel or more (core.js's adaptive steps are ignored: the composite is cheap) */
   let setPR0, setSize0, curPR = 0, curW = 0, curH = 0, inner = false;
   function wrapSize() {
     setPR0 = R.setPixelRatio.bind(R); setSize0 = R.setSize.bind(R);
@@ -371,8 +365,7 @@ export function mountPhoto(el, opts = {}) {
       uWipe: { value: 0 }, uWipeRange: { value: new T.Vector2(0, 6) }, uWipeMix: { value: 0 }, uCoatBias: { value: 0.15 }, uCells: { value: 128 },
       uFade: { value: 0 }, uBg: { value: new T.Vector3(0.11, 0.105, 0.1) }
     };
-    /* opts.fx: offline effects (the pre-rendered home video): GLSL at three marked places and their uniforms; the site
-       never passes it, so its shader is the plain one */
+    
     const fx = opts.fx || null;
     if (fx && fx.uniforms) Object.assign(U, fx.uniforms(T));
     const frag = fx ? GLSL.replace('/*FX_DECL*/', fx.decl || '').replace('/*FX_UV*/', fx.uv || '').replace('/*FX_MASK*/', fx.mask || '')
@@ -395,7 +388,6 @@ export function mountPhoto(el, opts = {}) {
     await upload(v);
     if (stage.destroyed) return;
     useView(v);
-    /* after the first frame the next room of the same group loads when the browser is idle (prefetchNext) */
     if (!hero) prefetchNext();
     if (/[?&]debug(&|$)/.test(location.search)) G.photo = { T, R, U, get view() { return view; }, stage };
   }
@@ -408,12 +400,11 @@ export function mountPhoto(el, opts = {}) {
     };
     return takeBitmap(url).then(bm => bm ? setup(bitmapTexture(T, bm)) : new Promise((res, rej) => new T.TextureLoader().load(url, t => {
       setup(t);
-      const im = t.image;                                    /* decode now, off the main thread, not at the upload */
+      const im = t.image;
       if (im && im.decode) im.decode().then(() => res(t), () => res(t)); else res(t);
     }, undefined, rej)));
   }
-  /* a view's maps go to the GPU one per animation frame before it is shown (all at once was a 300 ms long task); a
-     decoded bitmap is freed once its texture is on the GPU */
+  
   const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
   async function upload(v) {
     if (v.uploaded) return;
@@ -427,8 +418,7 @@ export function mountPhoto(el, opts = {}) {
     }
     v.uploaded = true;
   }
-  /* before the stage exists: three.js parsed and the first view's maps, the fleck structure and the dither decoded, all
-     off the main thread, so the stage's own start (300 px before the section) has only the uploads left */
+  
   function prewarm() {
     loadThree().catch(() => {});
     if (typeof createImageBitmap !== 'function') return;
@@ -452,7 +442,6 @@ export function mountPhoto(el, opts = {}) {
     views.set(id, p); p.catch(() => views.delete(id));
     return p;
   }
-  /* fade the frame towards the stage's own colour (read once from the page) and back: a room change in ~380 ms */
   function stageColour() {
     for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
       const m = getComputedStyle(n).backgroundColor.match(/rgba?\(([^)]+)\)/);
@@ -477,7 +466,6 @@ export function mountPhoto(el, opts = {}) {
       requestAnimationFrame(step);
     });
   }
-  /* when the browser is idle after a view is shown: the next room of the same group, and only that one */
   function prefetchNext() {
     const list = groupRooms(S.room), i = list.indexOf(S.room);
     if (i < 0 || list.length < 2) return;
@@ -502,18 +490,16 @@ export function mountPhoto(el, opts = {}) {
   function useCoat(tl, which) {
     const t = tl.albedo; t.anisotropy = Math.min(8, R.capabilities.getMaxAnisotropy()); t.needsUpdate = true;
     U['tCoat' + which].value = t; U['uMetres' + which].value = tl.metres; U['uFlat' + which].value = tl.flat ? 1 : 0;
-    if (which === 'A' || !U.uWipeMix.value) U.uCells.value = tl.cells || 128;      /* flecks across a tile: the coat's filter size */
+    if (which === 'A' || !U.uWipeMix.value) U.uCells.value = tl.cells || 128;
   }
-  /* the granule bake's program compiles in parallel before the first bake (KHR_parallel_shader_compile through
-     compileAsync): compiled synchronously at the first bake it froze the main thread for seconds (ANGLE/D3D11). The
-     warm material stays alive, so every later composition change reuses the program */
+  
   let warmMat = null, warmP = null;
   function warmBake() {
     if (warmP) return warmP;
     warmP = (async () => {
       if (!R.compileAsync) return;
       const run0 = baker.run; let cap = null, tiny = null;
-      baker.run = m => { if (!cap) cap = m; };                /* a dry run only captures the bake material */
+      baker.run = m => { if (!cap) cap = m; };
       try { tiny = bakeGranules(T, baker, { colors: S.colors, density: S.density, seed: S.seed, size: 4, cells: 4, sparkle: 0 }); }
       finally { baker.run = run0; }
       if (tiny) tiny.dispose();
@@ -524,9 +510,9 @@ export function mountPhoto(el, opts = {}) {
       g.setAttribute('uv', new T.Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2));
       const q = new T.Mesh(g, cap); q.frustumCulled = false; sc.add(q);
       const ta = baker.target(4, 4, { srgb: true }), td = baker.target(4, 4, {}), prev = R.getRenderTarget(), ps = [];
-      try { for (const t of [ta, td]) { R.setRenderTarget(t); ps.push(R.compileAsync(sc, cam)); } }   /* the bake's own variants */
+      try { for (const t of [ta, td]) { R.setRenderTarget(t); ps.push(R.compileAsync(sc, cam)); } }
       finally { R.setRenderTarget(prev); }
-      try { await Promise.all(ps); } catch (e) { /* then it compiles at the first bake */ }
+      try { await Promise.all(ps); } catch (e) {  }
       ta.dispose(); td.dispose(); g.dispose();
     })();
     return warmP;
@@ -537,7 +523,7 @@ export function mountPhoto(el, opts = {}) {
       tex.colorSpace = T.SRGBColorSpace; tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.generateMipmaps = true; tex.minFilter = T.LinearMipmapLinearFilter;
       return { albedo: tex, metres: S.textureSize, flat: true, dispose() { tex.dispose(); } };
     }
-    if (S.structure) {                                     /* real fleck structure from the DV scans, recoloured live */
+    if (S.structure) {
       try {
         const st = await loadStructure(T, S.structure);
         if (stage.destroyed) return null;
@@ -573,7 +559,7 @@ export function mountPhoto(el, opts = {}) {
       const e = push * push * (3 - 2 * push);
       U.uZoom.value = 1 + PUSH.amount * e;
       dirty = true;
-    } else if ((stage.reduced || !S.drift) && !opts.fx) U.uZoom.value = 1;      /* an fx caller drives the zoom itself */
+    } else if ((stage.reduced || !S.drift) && !opts.fx) U.uZoom.value = 1;
     if (wipe) {
       wipe.k += (dt || 0) / wipe.dur;
       const k = stage.reduced ? 1 : Math.min(1, wipe.k), e = k * k * (3 - 2 * k);
@@ -625,7 +611,7 @@ export function mountPhoto(el, opts = {}) {
       if (st.grain != null) S.grain = clamp(+st.grain, 0.2, 1.8);
       if (st.density != null) S.density = clamp(+st.density, 0.4, 1);
       if (st.seed != null) S.seed = +st.seed;
-      if (st.structure !== undefined) S.structure = st.structure || null;     /* a DV id with a structure file, or null: synthetic */
+      if (st.structure !== undefined) S.structure = st.structure || null;
       S.textureUrl = null; return refreshCoat();
     },
     setTexture(url, metres) { S.textureUrl = url || null; if (metres) S.textureSize = +metres; return refreshCoat(); },
@@ -643,10 +629,10 @@ export function mountPhoto(el, opts = {}) {
       if (stage.destroyed || tok !== roomTok) return;
       if (orientation) { useView(v); stage.invalidate(); return; }
       if (stage.reduced) { useView(v); frameNow(); prefetchNext(); return; }
-      await fade(1, 170);                                        /* out to the stage colour */
+      await fade(1, 170);
       if (stage.destroyed) return;
-      if (tok === roomTok) useView(v);                           /* a newer setRoom takes over from here */
-      await fade(0, 210);                                        /* the new room in */
+      if (tok === roomTok) useView(v);
+      await fade(0, 210);
       prefetchNext();
     },
     get room() { return S.room; },
@@ -655,8 +641,7 @@ export function mountPhoto(el, opts = {}) {
     destroy() { if (stage) stage.destroy(); }
   };
   el.dv3d = ctl;
-  /* start-up (07.10 night, the performance pass): at idle once the section is about two screens away, with the decoding
-     done ahead (prewarm), instead of at mount; in view or near it at mount, and the hero's end frame: at once, as before */
+  
   const r0 = el.getBoundingClientRect(), vh = window.innerHeight || 800;
   if (hero || typeof IntersectionObserver !== 'function' || (r0.bottom > -2 * vh && r0.top < 3 * vh)) { prewarm(); start(); }
   else {
@@ -677,8 +662,6 @@ export function mountPhoto(el, opts = {}) {
   }
 }
 
-/* the hero story's end frame: the living room photograph, framed exactly like the story's final camera */
 export function photoFrame(host, o = {}) {
-  /* the hero story ends on DV 033: its own fleck structure (from the DV 033 photo) unless the caller sets another */
   return mountPhoto(host, Object.assign({ drift: false, swipe: false, structure: 'dv033' }, o, { view: o.view || 'hero-end' }));
 }
