@@ -41,3 +41,7 @@
   .tzm__frame { max-height: calc(100vh - var(--hdr) - 260px); max-height: calc(100svh - var(--hdr) - 260px); }
 }
 @media (min-width: 1600px) { .fs--dv .fs__txt { max-width: 860px; } }
+@media (max-width: 760px) {
+  html:not([data-sky="night"]) .contact--page.r3-deep .r3-ibg img { bottom: auto; height: 100vh; height: 100svh; max-height: 100%;
+    -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent); mask-image: linear-gradient(180deg, #000 60%, transparent); }
+}
