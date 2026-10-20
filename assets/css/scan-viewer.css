@@ -17,9 +17,11 @@ html.scv-open{overflow:hidden}
 .scv__b svg,.scv__nav svg{flex:none;width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
 .scv__x{padding:0;justify-content:center}
 .scv__stage{position:relative;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;
-  padding:clamp(8px,2vw,28px) clamp(8px,6vw,96px);touch-action:pan-y}
-.scv__img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;cursor:default;user-select:none;-webkit-user-drag:none;
-  box-shadow:0 18px 60px rgba(0,0,0,.35)}
+  padding:clamp(8px,2vw,28px) clamp(8px,6vw,96px);touch-action:none}
+.scv__img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;cursor:zoom-in;user-select:none;-webkit-user-drag:none;
+  box-shadow:0 18px 60px rgba(0,0,0,.35);transform-origin:50% 50%;will-change:transform;-webkit-touch-callout:none}
+.scv.is-pz .scv__img{cursor:grab;box-shadow:none}.scv__img--ease{transition:transform .24s cubic-bezier(.2,.7,.2,1)}
+.scv.is-pz .scv__nav{opacity:0;pointer-events:none}
 .scv.is-zoom .scv__stage{display:block;overflow:auto;padding:0;touch-action:auto;cursor:grab}
 .scv.is-zoom .scv__img{max-width:none;max-height:none;cursor:zoom-out;box-shadow:none}
 .scv__nav{position:absolute;top:50%;z-index:3;display:grid;place-items:center;width:48px;height:48px;margin-top:6px;border:0;border-radius:50%;

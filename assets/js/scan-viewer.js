@@ -1,6 +1,7 @@
 
 (function () {
   'use strict';
+  
   var NS = (window.DVATONE = window.DVATONE || {});
   if (NS.scans) return;
   var en = (document.documentElement.lang || '').slice(0, 2) === 'en';
@@ -12,6 +13,7 @@
                  viewP: 'Перегляд фото', hintP: '' };
   var svg = function (d) { return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + d + '"/></svg>'; };
   var dlg = null, img, capB, capS, capN, zoomB, fsB, stage, set = [], idx = 0, zoom = false, opener = null, ownFs = false;
+  var pz = { s: 1, x: 0, y: 0 }, MAXZ = 5;
   var canFs = !!(document.documentElement.requestFullscreen && document.fullscreenEnabled !== false);
 
   function visible(el) { return !el.closest('[hidden]') && el.getClientRects().length > 0; }
@@ -23,7 +25,7 @@
       var key = group === 'photo' ? (el.getAttribute('href') || code) : code;
       if (seen[key]) return; seen[key] = 1;
       out.push({ code: code, key: key, name: el.getAttribute('data-scan-name') || '', alt: el.getAttribute('data-scan-alt') || '', full: el.getAttribute('href'), m: el.getAttribute('data-scan-m') || el.getAttribute('href'),
-                 w: +el.getAttribute('data-w') || 0, h: +el.getAttribute('data-h') || 0, photo: group === 'photo' });
+                 w: +el.getAttribute('data-w') || 0, h: +el.getAttribute('data-h') || 0, mw: +el.getAttribute('data-scan-mw') || 0, photo: group === 'photo' });
     });
     return out;
   }
@@ -47,7 +49,7 @@
       if (t.closest('[data-scv-x]')) { dlg.close(); return; }
       var st = t.closest('[data-scv-step]'); if (st) { step(+st.getAttribute('data-scv-step')); return; }
             if (t.closest('[data-scv-fs]')) { toggleFs(); return; }
-      if ((t === dlg || t === stage) && !moved) dlg.close();
+      if ((t === dlg || t === stage) && !overImg(e) && !moved && pz.s <= 1.01) dlg.close();
     });
     dlg.addEventListener('keydown', function (e) {
       if (e.key === 'Tab') {
@@ -58,11 +60,13 @@
         else if (!e.shiftKey && (i < 0 || i === l.length - 1)) { e.preventDefault(); l[0].focus(); }
         return;
       }
-      if (e.key === 'ArrowLeft' && !zoom) { e.preventDefault(); step(-1); }
-      else if (e.key === 'ArrowRight' && !zoom) { e.preventDefault(); step(1); }
+      if (e.key === 'ArrowLeft' && !zoom && pz.s <= 1.01) { e.preventDefault(); step(-1); }
+      else if (e.key === 'ArrowRight' && !zoom && pz.s <= 1.01) { e.preventDefault(); step(1); }
+      else if ((e.key === '+' || e.key === '=') ) { e.preventDefault(); full(); var r0 = stage.getBoundingClientRect(); zoomTo(pz.s * 1.5, r0.left + r0.width / 2, r0.top + r0.height / 2, r0.left + r0.width / 2, r0.top + r0.height / 2, { s: pz.s, x: pz.x, y: pz.y }); }
+      else if (e.key === '-') { e.preventDefault(); var r1 = stage.getBoundingClientRect(); zoomTo(pz.s / 1.5, r1.left + r1.width / 2, r1.top + r1.height / 2, r1.left + r1.width / 2, r1.top + r1.height / 2, { s: pz.s, x: pz.x, y: pz.y }); if (pz.s < 1.03) resetPz(true); }
     });
     dlg.addEventListener('close', function () {
-      document.documentElement.classList.remove('scv-open'); setZoom(false);
+      document.documentElement.classList.remove('scv-open'); setZoom(false); resetPz(false);
       if (ownFs && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
       ownFs = false;
       if (opener && opener.focus) { try { opener.focus({ preventScroll: true }); } catch (e) { opener.focus(); } }
@@ -72,29 +76,93 @@
       fsB.querySelector('span').textContent = on ? T.fsOff : T.fs; fsB.setAttribute('aria-pressed', on ? 'true' : 'false');
       if (!on) ownFs = false;
     });
-    var sx = 0, sy = 0, sl = 0, stp = 0, down = false, moved = false;
-    stage.addEventListener('pointerdown', function (e) { down = true; moved = false; sx = e.clientX; sy = e.clientY; sl = stage.scrollLeft; stp = stage.scrollTop; if (zoom && e.pointerType === 'mouse') { stage.setPointerCapture(e.pointerId); e.preventDefault(); } });
+    var pts = {}, n = 0, sx = 0, sy = 0, moved = false, pinch = null, pan = null, lastTap = 0, lastX = 0, lastY = 0, wasPinch = false, lastType = 'mouse';
+    function count() { n = 0; for (var k in pts) n++; return n; }
+    function pair() { var a = [], k; for (k in pts) a.push(pts[k]); return a; }
+    stage.addEventListener('pointerdown', function (e) {
+      if (e.target.closest('button')) return;
+      lastType = e.pointerType;
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+      try { stage.setPointerCapture(e.pointerId); } catch (x) { }
+      count();
+      if (n === 1) { sx = e.clientX; sy = e.clientY; moved = false; wasPinch = false; pan = pz.s > 1.01 ? { x: pz.x, y: pz.y } : null; }
+      if (n === 2) { var q = pair(); pinch = { d: dist(q[0], q[1]), s: pz.s, mx: (q[0].x + q[1].x) / 2, my: (q[0].y + q[1].y) / 2, x: pz.x, y: pz.y }; pan = null; wasPinch = true; full(); }
+      if (e.pointerType === 'mouse' && pz.s > 1.01) e.preventDefault();
+    });
     stage.addEventListener('pointermove', function (e) {
-      if (!down) return; var dx = e.clientX - sx, dy = e.clientY - sy;
-      if (Math.abs(dx) + Math.abs(dy) > 6) moved = true;
-      if (zoom && e.pointerType === 'mouse') { stage.scrollLeft = sl - dx; stage.scrollTop = stp - dy; }
+      if (!pts[e.pointerId]) return;
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+      if (Math.abs(e.clientX - sx) + Math.abs(e.clientY - sy) > 6) moved = true;
+      if (pinch && count() >= 2) {
+        var q = pair(), d = dist(q[0], q[1]), mx = (q[0].x + q[1].x) / 2, my = (q[0].y + q[1].y) / 2;
+        zoomTo(pinch.s * d / Math.max(1, pinch.d), pinch.mx, pinch.my, mx, my, pinch);
+      } else if (pan && n === 1) {
+        setPz(pz.s, pan.x + (e.clientX - sx), pan.y + (e.clientY - sy));
+      }
     });
-    stage.addEventListener('pointerup', function (e) {
-      if (!down) return; down = false;
+    function up(e) {
+      if (!pts[e.pointerId]) return;
+      delete pts[e.pointerId]; count();
+      if (n < 2) pinch = null;
+      if (n === 1) { var q = pair()[0]; sx = q.x; sy = q.y; pan = pz.s > 1.01 ? { x: pz.x, y: pz.y } : null; }
+      if (n > 0) return;
+      if (pz.s < 1.03) resetPz(true);
       var dx = e.clientX - sx, dy = e.clientY - sy;
-      if (!zoom && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4) step(dx < 0 ? 1 : -1);
+      if (!wasPinch && pz.s <= 1.01 && e.type === 'pointerup' && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4) step(dx < 0 ? 1 : -1);
+      else if (!wasPinch && !moved && e.type === 'pointerup' && e.pointerType !== 'mouse' && overImg(e)) {
+        var now = Date.now();
+        if (now - lastTap < 320 && Math.abs(e.clientX - lastX) < 30 && Math.abs(e.clientY - lastY) < 30) { toggleZoomAt(e.clientX, e.clientY); lastTap = 0; }
+        else { lastTap = now; lastX = e.clientX; lastY = e.clientY; }
+      }
       setTimeout(function () { moved = false; }, 0);
-    });
-    stage.addEventListener('pointercancel', function () { down = false; });
+    }
+    stage.addEventListener('pointerup', up);
+    stage.addEventListener('pointercancel', up);
+    stage.addEventListener('dblclick', function (e) { if (lastType !== 'mouse' || !overImg(e)) return; e.preventDefault(); toggleZoomAt(e.clientX, e.clientY); });
+    stage.addEventListener('wheel', function (e) {
+      if (!e.ctrlKey) return;
+      e.preventDefault(); full();
+      var f = Math.exp(-e.deltaY * 0.01);
+      zoomTo(pz.s * f, e.clientX, e.clientY, e.clientX, e.clientY, { s: pz.s, x: pz.x, y: pz.y });
+      if (pz.s < 1.03) resetPz(true);
+    }, { passive: false });
+    ['gesturestart', 'gesturechange'].forEach(function (ev) { stage.addEventListener(ev, function (e) { e.preventDefault(); }); });
+  }
+  function dist(a, b) { var x = a.x - b.x, y = a.y - b.y; return Math.sqrt(x * x + y * y); }
+  function overImg(e) { var r = img.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; }
+  function full() {
+    var it = set[idx]; if (it && it.full && img.currentSrc && img.currentSrc.indexOf(it.full) < 0) { img.srcset = ''; img.src = it.full; }
+  }
+  function centre() { var r = img.getBoundingClientRect(); return { x: r.left + r.width / 2 - pz.x, y: r.top + r.height / 2 - pz.y }; }
+  function zoomTo(s, ax, ay, bx, by, from) {
+    s = Math.max(1, Math.min(MAXZ, s));
+    var c = centre(), px = (ax - c.x - from.x) / from.s, py = (ay - c.y - from.y) / from.s;
+    setPz(s, bx - c.x - s * px, by - c.y - s * py);
+  }
+  function setPz(s, x, y) {
+    var w = img.offsetWidth, h = img.offsetHeight, mx = (w * s - w) / 2, my = (h * s - h) / 2;
+    pz.s = s; pz.x = Math.max(-mx, Math.min(mx, x)); pz.y = Math.max(-my, Math.min(my, y));
+    img.style.transform = s > 1.001 ? 'translate3d(' + pz.x.toFixed(1) + 'px,' + pz.y.toFixed(1) + 'px,0) scale(' + s.toFixed(3) + ')' : '';
+    dlg.classList.toggle('is-pz', s > 1.001);
+  }
+  function resetPz(anim) {
+    if (!img) return;
+    if (anim) { img.classList.add('scv__img--ease'); setTimeout(function () { img.classList.remove('scv__img--ease'); }, 260); }
+    setPz(1, 0, 0);
+  }
+  function toggleZoomAt(x, y) {
+    img.classList.add('scv__img--ease'); setTimeout(function () { img.classList.remove('scv__img--ease'); }, 260);
+    if (pz.s > 1.01) { setPz(1, 0, 0); return; }
+    full(); zoomTo(2.5, x, y, x, y, { s: 1, x: 0, y: 0 });
   }
   function fmt(s, o) { return String(s).replace(/\{(\w+)\}/g, function (m, k) { return o[k] != null ? o[k] : m; }); }
   function show(i) {
     if (!set.length) return;
     idx = (i + set.length) % set.length;
     var it = set[idx];
-    setZoom(false);
+    setZoom(false); resetPz(false);
     img.removeAttribute('src');
-    img.srcset = it.m && it.m !== it.full ? it.m + ' 1100w, ' + it.full + ' ' + (it.w || 2000) + 'w' : '';
+    img.srcset = it.m && it.m !== it.full ? it.m + ' ' + (it.mw || 1100) + 'w, ' + it.full + ' ' + (it.w || 2000) + 'w' : '';
     img.sizes = '100vw';
     img.src = it.full;
     if (it.w && it.h) { img.width = it.w; img.height = it.h; }

@@ -4,24 +4,21 @@
   if (!cfg.gtm && !cfg.ga) return;
   w.dataLayer = w.dataLayer || [];
   w.gtag = w.gtag || function () { w.dataLayer.push(arguments); };
-  w.gtag('consent', 'default', { analytics_storage: 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
-  var loaded = false;
-  function load() {
-    if (loaded) return;
-    loaded = true;
+  var gaLoaded = false;
+  function grant() {
     w.gtag('consent', 'update', { analytics_storage: 'granted' });
-    var s = d.createElement('script');
-    s.async = true;
-    if (cfg.gtm) {
-      w.dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
-      s.src = 'https://www.googletagmanager.com/gtm.js?id=' + encodeURIComponent(cfg.gtm);
-    } else {
+    w.dataLayer.push({ event: 'dv_consent_granted' });
+    if (cfg.ga && !gaLoaded) {
+      gaLoaded = true;
       w.gtag('js', new Date());
       w.gtag('config', cfg.ga);
+      var s = d.createElement('script');
+      s.async = true;
       s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(cfg.ga);
+      d.head.appendChild(s);
     }
-    d.head.appendChild(s);
   }
+  function deny() { w.gtag('consent', 'update', { analytics_storage: 'denied' }); }
   function get() { try { return localStorage.getItem('dvConsent'); } catch (e) { return null; } }
   function put(v) { try { localStorage.setItem('dvConsent', v); } catch (e) { } }
   var en = (d.documentElement.lang || '').toLowerCase().indexOf('en') === 0;
@@ -54,12 +51,12 @@
       if (!v) return;
       put(v);
       b.parentNode.removeChild(b);
-      if (v === 'granted') load();
+      if (v === 'granted') grant(); else deny();
     });
   }
   function start() {
     var v = get();
-    if (v === 'granted') load();
+    if (v === 'granted') grant();
     else if (v !== 'denied') banner();
   }
   if (d.readyState === 'loading') d.addEventListener('DOMContentLoaded', start); else start();

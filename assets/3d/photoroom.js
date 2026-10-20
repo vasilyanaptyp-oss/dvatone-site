@@ -158,11 +158,13 @@ vec2 dvHash2( vec2 p ) { vec3 p3 = fract( p.xyx * vec3( 0.1031, 0.1030, 0.0973 )
    everywhere; explicit gradients keep the three reads at the same mip level */
 vec3 coat( sampler2D t, vec2 uv, float isFlat ) {
   vec2 dx = dFdx( uv ), dy = dFdy( uv );
-  const float DV_FLOOR = 1.2;
+  const float DV_FLOOR = 0.8;
   float px0 = 1.0 / max( max( length( dx ), length( dy ) ) * uCells, 1e-6 );
   float sf = min( 1.0, px0 / DV_FLOOR );
   uv *= sf; dx = dFdx( uv ); dy = dFdy( uv );
-  float amp = mix( 0.42, 1.0, smoothstep( 0.2, 1.0, sf ) );
+  float ee = smoothstep( 0.2, 1.0, sf );
+  float amp = mix( 0.5, 1.0, ee );
+  float kLow = mix( 0.25, 1.0, ee );
   float g = exp2( uCoatBias );
   vec2 gx = dx * g, gy = dy * g;
   vec3 mu = textureLod( t, vec2( 0.5 ), 16.0 ).rgb;
@@ -176,10 +178,18 @@ vec3 coat( sampler2D t, vec2 uv, float isFlat ) {
   vec2 v1 = lower ? b : b + 1.0;
   vec2 v2 = lower ? b + vec2( 0.0, 1.0 ) : b + vec2( 1.0, 0.0 );
   vec2 v3 = lower ? b + vec2( 1.0, 0.0 ) : b + vec2( 0.0, 1.0 );
-  vec3 c1 = textureGrad( t, uv + dvHash2( v1 + 0.37 ), gx, gy ).rgb;
-  vec3 c2 = textureGrad( t, uv + dvHash2( v2 + 0.37 ), gx, gy ).rgb;
-  vec3 c3 = textureGrad( t, uv + dvHash2( v3 + 0.37 ), gx, gy ).rgb;
-  return max( mu + ( wt.x * ( c1 - mu ) + wt.y * ( c2 - mu ) + wt.z * ( c3 - mu ) ) * inversesqrt( dot( wt, wt ) ) * amp, 0.0 );
+  vec2 o1 = uv + dvHash2( v1 + 0.37 ), o2 = uv + dvHash2( v2 + 0.37 ), o3 = uv + dvHash2( v3 + 0.37 );
+  vec3 c1 = textureGrad( t, o1, gx, gy ).rgb;
+  vec3 c2 = textureGrad( t, o2, gx, gy ).rgb;
+  vec3 c3 = textureGrad( t, o3, gx, gy ).rgb;
+  float nrm = inversesqrt( dot( wt, wt ) );
+  vec3 dev = ( wt.x * ( c1 - mu ) + wt.y * ( c2 - mu ) + wt.z * ( c3 - mu ) ) * nrm;
+  if ( kLow < 0.999 ) {                                   /* the clusters (low band) of an enlarged coating, eased */
+    vec2 hx = gx * 4.0, hy = gy * 4.0;
+    vec3 l1 = textureGrad( t, o1, hx, hy ).rgb, l2 = textureGrad( t, o2, hx, hy ).rgb, l3 = textureGrad( t, o3, hx, hy ).rgb;
+    dev -= ( wt.x * ( l1 - mu ) + wt.y * ( l2 - mu ) + wt.z * ( l3 - mu ) ) * nrm * ( 1.0 - kLow );
+  }
+  return max( mu + dev * amp, 0.0 );
 }
 /* cubic B-spline reconstruction from 4 bilinear taps (smooth, no ringing) of one half of the light image (w x 2h,
    rows oy .. oy + h), clamped to its own edge; bilinear filtering of the hi and lo bytes is linear, so it is exact */
@@ -254,7 +264,7 @@ void main() {
   /* the wall: its light times the coating, through the tone curve; the rest: the photograph plus the change of the
      wall's colour bleed, through the slope of the tone curve there; blended by the wall's anti-aliased coverage */
   /*FX_WALL*/
-  cc = max( meanC + ( cc - meanC ) * 1.25, 0.0 );
+  cc = max( meanC + ( cc - meanC ) * 1.0, 0.0 );
   /* tone first, texture after: the tone curve's long roll-off flattens everything in a sunlit patch, so the wall's mean colour is
      lit, vibranced and toned, and the granule's relative deviation (cc / mean) is applied to that result: the sunlit coating keeps
      its multicolour structure instead of turning into a flat peach plane. In the shade (the curve is the identity there) it is the same
