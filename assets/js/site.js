@@ -33,7 +33,22 @@
       (function (n) { requestAnimationFrame(function () { requestAnimationFrame(function () { n.style.transition = ''; }); }); })(el);
     }
   };
-  if (location.hash.length > 1) { renderAll(); settle(location.hash.slice(1)); }
+  var hash0 = window.__dvHash || location.hash;
+  if (hash0.length > 1) {
+    renderAll(); settle(hash0.slice(1));
+    var moved0 = false;
+    ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(function (ev) { window.addEventListener(ev, function () { moved0 = true; }, { once: true, passive: true }); });
+    var t0 = null; try { t0 = document.getElementById(decodeURIComponent(hash0.slice(1))); } catch (x) {}
+    var land = function (first) {
+      if (moved0 || !t0) return;
+      var want = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;
+      if (first === true || Math.abs(t0.getBoundingClientRect().top - want) > 40) t0.scrollIntoView({ behavior: 'instant', block: 'start' });
+    };
+    land(true);
+    if (window.__dvHash) { try { history.replaceState(history.state, '', location.pathname + location.search + hash0); } catch (x) {} window.__dvHash = ''; }
+    requestAnimationFrame(function () { land(); });
+    window.addEventListener('load', function () { land(); }, { once: true });
+  }
   document.addEventListener('click', function (e) {
     var a = e.target.closest && e.target.closest('a[href]'); if (!a) return;
     var h = a.getAttribute('href') || '', i = h.indexOf('#');
@@ -211,7 +226,7 @@
     var pad = 0, padRaf = 0;
     var upd = function () {
       padRaf = 0; var v = hdrH();
-      $$(PIN).forEach(function (el) { var cs = getComputedStyle(el), r = el.getBoundingClientRect(); if (cs.position === 'sticky' && overhead(el, r)) v = Math.max(v, (parseFloat(cs.top) || 0) + r.height); });
+      $$(PIN).forEach(function (el) { if (el.closest('[data-tzm]')) return; var cs = getComputedStyle(el), r = el.getBoundingClientRect(); if (cs.position === 'sticky' && overhead(el, r)) v = Math.max(v, (parseFloat(cs.top) || 0) + r.height); });
       v = Math.round(v + 12);
       if (v !== pad) { pad = v; document.documentElement.style.scrollPaddingTop = v + 'px'; }
     };

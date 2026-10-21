@@ -81,6 +81,18 @@
   var lin = function (v) { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
   var luma = function (c) { return 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]); };
   var hash = function (n) { var h = Math.sin(n * 91.3458 + 17.17) * 47453.5453; return h - Math.floor(h); };
+  
+  var srgb8 = function (v) { v = Math.max(0, Math.min(1, v)); return Math.round(255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)); };
+  function quiet(cols) {
+    var tot = cols.reduce(function (a, c) { return a + c.share; }, 0) || 1, m = 0, v = 0;
+    cols.forEach(function (c) { m += c.l * c.share / tot; });
+    cols.forEach(function (c) { v += (c.l - m) * (c.l - m) * c.share / tot; });
+    var k = Math.max(1, Math.min(2.2, 0.22 / Math.max(Math.sqrt(v) / Math.max(m, 1e-3), 1e-3)));
+    if (k < 1.001) return;
+    var mr = [0, 0, 0];
+    cols.forEach(function (c) { for (var j = 0; j < 3; j++) mr[j] += lin(c.r[j]) * c.share / tot; });
+    cols.forEach(function (c) { c.r = c.r.map(function (x, j) { return srgb8(mr[j] + (lin(x) - mr[j]) * k); }); c.l = luma(c.r); });
+  }
 
   function albedo(st, lv) {
     var L = LV[lv], size = L.size, tile = L.tile;
@@ -90,6 +102,7 @@
     var key = mix.map(function (c) { return c.hex + ':' + c.share; }).join(',') + '|' + dens.toFixed(2) + '|' + (st.seed | 0);
     if (tile.key === key && tile.c) return tile.c;
     var cols = mix.map(function (c, i) { var r = rgb(c.hex.toUpperCase()); return { r: r, l: luma(r), share: Math.max(0, +c.share || 0), base: i === 0 }; });
+    quiet(cols);
     cols.sort(function (a, b) { return a.l - b.l; });
     var tot = cols.reduce(function (a, c) { return a + c.share; }, 0) || 1, cum = [], acc = 0, bi = 0;
     cols.forEach(function (c, i) { acc += c.share / tot; cum.push(acc); if (c.base) bi = i; });

@@ -4,6 +4,18 @@ import { createStage, createBaker, bakeGranules, normColors, clamp, crossfade, l
 const ASSET = new URL('./interior2/photo/', import.meta.url).href;
 const POSTER = new URL('./interior2/', import.meta.url).href;
 const CELL_M = 0.0021;
+
+const AMP_K = 0.36, AMP_MIN = 0.5, AMP_MAX = 2.8;
+function ampFor(colors) {
+  const lin = x => (x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4));
+  const ys = (colors || []).map(c => {
+    const h = c.hex, ch = k => lin(parseInt(h.substr(k, 2), 16) / 255);
+    return { y: 0.2126 * ch(0) + 0.7152 * ch(2) + 0.0722 * ch(4), w: (c.share || 0) / 100 };
+  });
+  const m = ys.reduce((a, o) => a + o.y * o.w, 0);
+  const v = ys.reduce((a, o) => a + o.w * (o.y - m) * (o.y - m), 0);
+  return clamp(AMP_K / Math.max(Math.sqrt(v) / Math.max(m, 1e-3), 1e-3), AMP_MIN, AMP_MAX);
+}
 const COAT = new URL('./interior2/coat/', import.meta.url).href;
 const STRUCTURE = 'dv018';
 
@@ -147,7 +159,7 @@ uniform sampler2D tBlue; uniform vec2 uLightPx; uniform vec3 uLightK; uniform ve
 uniform sampler2D tCoatA; uniform sampler2D tCoatB;
 uniform vec4 uFit; uniform vec2 uFocus; uniform float uZoom; uniform vec2 uPhotoPx; uniform float uMinify;
 uniform mat3 uH; uniform float uRho0; uniform float uBleedScale;
-uniform float uMetresA; uniform float uMetresB; uniform float uFlatA; uniform float uFlatB;
+uniform float uMetresA; uniform float uMetresB; uniform float uFlatA; uniform float uFlatB; uniform float uAmpA; uniform float uAmpB;
 uniform float uWipe; uniform vec2 uWipeRange; uniform float uWipeMix; uniform float uCoatBias; uniform float uCells;
 uniform float uFade; uniform vec3 uBg;
 /*FX_DECL*/
@@ -156,14 +168,14 @@ vec2 dvHash2( vec2 p ) { vec3 p3 = fract( p.xyx * vec3( 0.1031, 0.1030, 0.0973 )
    tile at its own random offset and the three reads are blended around the tile's mean with a variance-preserving
    operator, so there is no seam and no repetition, and the granules' contrast and colour statistics are the same
    everywhere; explicit gradients keep the three reads at the same mip level */
-vec3 coat( sampler2D t, vec2 uv, float isFlat ) {
+vec3 coat( sampler2D t, vec2 uv, float isFlat, float ampMin ) {
   vec2 dx = dFdx( uv ), dy = dFdy( uv );
   const float DV_FLOOR = 0.8;
   float px0 = 1.0 / max( max( length( dx ), length( dy ) ) * uCells, 1e-6 );
   float sf = min( 1.0, px0 / DV_FLOOR );
   uv *= sf; dx = dFdx( uv ); dy = dFdy( uv );
   float ee = smoothstep( 0.2, 1.0, sf );
-  float amp = mix( 0.5, 1.0, ee );
+  float amp = mix( ampMin, 1.0, ee );                     /* 21.10: ampMin follows the composition (ampFor) */
   float kLow = mix( 0.25, 1.0, ee );
   float g = exp2( uCoatBias );
   vec2 gx = dx * g, gy = dy * g;
@@ -251,11 +263,11 @@ void main() {
   /* the coating on the wall plane (metres), current composition A and the next one B wiping in */
   vec3 hw = uH * vec3( puv * 2.0 - 1.0, 1.0 );
   vec2 w = hw.xy / hw.z;
-  vec3 ca = coat( tCoatA, w / uMetresA, uFlatA );
+  vec3 ca = coat( tCoatA, w / uMetresA, uFlatA, uAmpA );
   vec3 meanC = textureLod( tCoatA, vec2( 0.5 ), 16.0 ).rgb;
   vec3 cc = ca;
   if ( uWipeMix > 0.0 ) {
-    vec3 cb = coat( tCoatB, w / uMetresB, uFlatB );
+    vec3 cb = coat( tCoatB, w / uMetresB, uFlatB, uAmpB );
     float n = sin( w.y * 2.3 + 1.3 ) * 0.05 + sin( w.y * 6.1 + 0.2 ) * 0.02;
     float k = smoothstep( 0.0, 0.3, uWipe - ( ( w.x - uWipeRange.x ) + n ) );
     cc = mix( ca, cb, k );
@@ -371,7 +383,7 @@ export function mountPhoto(el, opts = {}) {
       tBlue: { value: one }, uLightPx: { value: new T.Vector2(1, 1) }, uLightK: { value: new T.Vector3(0, 0, 0) }, uChroma: { value: new T.Vector2(0, 1) },
       uFit: { value: new T.Vector4(0, 0, 1, 1) }, uFocus: { value: new T.Vector2(0.5, 0.5) }, uZoom: { value: 1 }, uPhotoPx: { value: new T.Vector2(1920, 1080) },
       uMinify: { value: 1 }, uH: { value: new T.Matrix3() }, uRho0: { value: 0.42 }, uBleedScale: { value: 0 },
-      uMetresA: { value: 0.27 }, uMetresB: { value: 0.27 }, uFlatA: { value: 0 }, uFlatB: { value: 0 },
+      uMetresA: { value: 0.27 }, uMetresB: { value: 0.27 }, uFlatA: { value: 0 }, uFlatB: { value: 0 }, uAmpA: { value: AMP_MIN }, uAmpB: { value: AMP_MIN },
       uWipe: { value: 0 }, uWipeRange: { value: new T.Vector2(0, 6) }, uWipeMix: { value: 0 }, uCoatBias: { value: 0.15 }, uCells: { value: 128 },
       uFade: { value: 0 }, uBg: { value: new T.Vector3(0.11, 0.105, 0.1) }
     };
@@ -500,6 +512,7 @@ export function mountPhoto(el, opts = {}) {
   function useCoat(tl, which) {
     const t = tl.albedo; t.anisotropy = Math.min(8, R.capabilities.getMaxAnisotropy()); t.needsUpdate = true;
     U['tCoat' + which].value = t; U['uMetres' + which].value = tl.metres; U['uFlat' + which].value = tl.flat ? 1 : 0;
+    U['uAmp' + which].value = tl.amp || AMP_MIN;
     if (which === 'A' || !U.uWipeMix.value) U.uCells.value = tl.cells || 128;
   }
   
@@ -538,14 +551,14 @@ export function mountPhoto(el, opts = {}) {
         const st = await loadStructure(T, S.structure);
         if (stage.destroyed) return null;
         const b = bakeScan(T, baker, st, S.colors);
-        b.metres = st.meta.tileMetres * S.grain;
+        b.metres = st.meta.tileMetres * S.grain; b.amp = ampFor(S.colors);
         return b;
       } catch (e) { console.warn('[dvatone 3d] fleck structure not loaded, synthetic granules instead:', S.structure); }
     }
     await warmBake();
     if (stage.destroyed) return null;
     const b = bakeGranules(T, baker, { colors: S.colors, density: S.density, seed: S.seed, size: 1024, cells: 128, sparkle: 0 });
-    b.metres = b.cells * CELL_M * S.grain;
+    b.metres = b.cells * CELL_M * S.grain; b.amp = ampFor(S.colors);
     return b;
   }
 
