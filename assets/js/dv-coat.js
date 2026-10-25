@@ -8,6 +8,15 @@
   var MAP = ROOT + 'assets/3d/interior2/coat/dv018.webp';
   
   var TILE_M = 0.2, GRAIN = { M: 0.39, F: 0.24, S: 0.39, XL: 0.39 }, VIEW_M = { wall: 0.6, macro: 0.2 };
+  
+  var WALL_CSS_MM = 1.3;
+  function pxPerMetre(canvas, view, W) {
+    if (view === 'wall' && canvas.getBoundingClientRect) {
+      var cw = canvas.getBoundingClientRect().width;
+      if (cw > 0) return WALL_CSS_MM * 1000 * (W / cw) / (+NS.coatSiteScale > 0 ? +NS.coatSiteScale : 1);
+    }
+    return W / VIEW_M[view];
+  }
   var LV = [], rank = null, failed = false, loading = null, waiters = [];
 
   
@@ -87,8 +96,11 @@
     var tot = cols.reduce(function (a, c) { return a + c.share; }, 0) || 1, m = 0, v = 0;
     cols.forEach(function (c) { m += c.l * c.share / tot; });
     cols.forEach(function (c) { v += (c.l - m) * (c.l - m) * c.share / tot; });
-    var k = Math.max(1, Math.min(2.2, 0.22 / Math.max(Math.sqrt(v) / Math.max(m, 1e-3), 1e-3)));
-    if (k < 1.001) return;
+    var sp = Math.sqrt(v) / Math.max(m, 1e-3);
+    var k = Math.max(1, Math.min(2.2, 0.22 / Math.max(sp, 1e-3)));
+    
+    if (sp > 0.36) k = Math.max(0.42, 0.36 / sp);
+    if (Math.abs(k - 1) < 0.001) return;
     var mr = [0, 0, 0];
     cols.forEach(function (c) { for (var j = 0; j < 3; j++) mr[j] += lin(c.r[j]) * c.share / tot; });
     cols.forEach(function (c) { c.r = c.r.map(function (x, j) { return srgb8(mr[j] + (lin(x) - mr[j]) * k); }); c.l = luma(c.r); });
@@ -130,7 +142,7 @@
   function paintCanvas(canvas, st, draft) {
     var W = canvas.width, H = canvas.height, ctx = canvas.getContext('2d');
     var view = st.scale === 'macro' ? 'macro' : 'wall';
-    var pxm = W / VIEW_M[view], tp = Math.max(24, Math.round(TILE_M * (GRAIN[st.grain] || 0.6) * pxm));
+    var pxm = pxPerMetre(canvas, view, W), tp = Math.max(24, Math.round(TILE_M * (GRAIN[st.grain] || 0.6) * pxm));
     var lv = (draft || tp * 1.6 <= LV[1].size) ? 1 : 0, size = LV[lv].size;
     var a = albedo(st, lv), key = lv + '|' + LV[lv].tile.key + '|' + tp;
     if (scaled.key !== key) {

@@ -6,7 +6,10 @@ window.DV_COLLECTION=[
    "en": "Roasted Coffee",
    "uk": "Обсмажена кава"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Глибокий кавовий тон із вираженою природною енергією.",
+   "en": "A deep coffee tone full of natural energy."
+  },
   "photo": null
  },
  {
@@ -30,18 +33,6 @@ window.DV_COLLECTION=[
   "desc": {
    "uk": "Холодний світло-сірий з металевим характером, нагадує колір ранкового інею або чистого алюмінію.",
    "en": "A cool light grey with a metallic character, reminiscent of morning frost or clean aluminium."
-  },
-  "photo": null
- },
- {
-  "code": "DV 011",
-  "name": {
-   "en": "Ivory Cloud",
-   "uk": "Хмарна слонова кістка"
-  },
-  "desc": {
-   "uk": "Світлий відтінок з ефектом м’якої акварельної хмарності, створює легкість повітря.",
-   "en": "A light shade with a soft, watercolour-like cloudiness that gives an airy lightness."
   },
   "photo": null
  },
@@ -87,7 +78,10 @@ window.DV_COLLECTION=[
    "en": "Crystal Mono",
    "uk": "Кришталевий моно"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Крижаний білий монохром. Найчистіша база для створення абсолютного об’єму.",
+   "en": "An icy white monochrome. The purest base for creating a sense of pure volume."
+  },
   "photo": null
  },
  {
@@ -96,7 +90,10 @@ window.DV_COLLECTION=[
    "en": "Cotton Mist",
    "uk": "Бавовняний туман"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Текстура найтоншого морського піску. Ефект м’якого, повітряного покриття з теплим підтоном.",
+   "en": "The texture of the finest sea sand. A soft, airy finish with a warm undertone."
+  },
   "photo": null
  },
  {
@@ -105,7 +102,10 @@ window.DV_COLLECTION=[
    "en": "Parchment White",
    "uk": "Пергаментний білий"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Аристократичний білий із легким кремовим підтоном.",
+   "en": "An aristocratic white with a light creamy undertone."
+  },
   "photo": null
  },
  {
@@ -114,7 +114,10 @@ window.DV_COLLECTION=[
    "en": "Pearl Mist",
    "uk": "Перлинний туман"
   },
-  "desc": null,
+  "desc": {
+   "uk": "М’який білий з ледь помітним теплим сяйвом.",
+   "en": "A soft white with a barely visible warm glow."
+  },
   "photo": null
  },
  {
@@ -123,7 +126,10 @@ window.DV_COLLECTION=[
    "en": "Silk Veil",
    "uk": "Шовкова вуаль"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Ніжний білий з ефектом розсіяного світла.",
+   "en": "A delicate white with the effect of diffused light."
+  },
   "photo": null
  },
  {
@@ -132,7 +138,10 @@ window.DV_COLLECTION=[
    "en": "Cool Concrete",
    "uk": "Прохолодний Бетон"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Витончена композиція у світло-сірому холодному відтінку.",
+   "en": "A refined composition in a cool light grey."
+  },
   "photo": null
  },
  {
@@ -141,7 +150,10 @@ window.DV_COLLECTION=[
    "en": "Powder Quartz",
    "uk": "Делікатний кварц"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Делікатний кварцовий відтінок з ледь помітним пудровим нюансом.",
+   "en": "A delicate quartz shade with a barely visible powdery nuance."
+  },
   "photo": null
  },
  {
@@ -150,7 +162,10 @@ window.DV_COLLECTION=[
    "en": "Powder Rose",
    "uk": "Пудрова Троянда"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Декоративна композиція з ніжним рожевим підтоном та глибоко матовою текстурою.",
+   "en": "A decorative composition with a gentle pink undertone and a deeply matt texture."
+  },
   "photo": null
  },
  {
@@ -159,7 +174,10 @@ window.DV_COLLECTION=[
    "en": "Urban Mist",
    "uk": "Міський туман"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Прохолодний світло-сірий, що прибирає межі стін.",
+   "en": "A cool light grey that dissolves the edges of the walls."
+  },
   "photo": null
  },
  {
@@ -168,7 +186,10 @@ window.DV_COLLECTION=[
    "en": "Pearl Granite",
    "uk": "Перлинний граніт"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Композиція з ефектом натурального каменю з м’яким перламутровим відливом.",
+   "en": "A composition with the look of natural stone and a soft pearly sheen."
+  },
   "photo": null
  },
  {
@@ -177,7 +198,10 @@ window.DV_COLLECTION=[
    "en": "Terra Slate",
    "uk": "Землистий сланець"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Глибокий відтінок з монументальною кам’яною текстурою.",
+   "en": "A deep shade with a monumental stone texture."
+  },
   "photo": null
  },
  {
@@ -186,7 +210,10 @@ window.DV_COLLECTION=[
    "en": "Moss Garden",
    "uk": "Моховий сад"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Природний зелений відтінок еко-мінімалізму.",
+   "en": "A natural green in the spirit of eco-minimalism."
+  },
   "photo": null
  },
  {
@@ -195,7 +222,10 @@ window.DV_COLLECTION=[
    "en": "Dark Truffle",
    "uk": "Темний трюфель"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Глибокий шоколадно-графітовий відтінок. Додає простору камерності та люксового характеру.",
+   "en": "A deep chocolate-graphite shade. It gives a space intimacy and a luxurious character."
+  },
   "photo": null
  },
  {
@@ -204,7 +234,10 @@ window.DV_COLLECTION=[
    "en": "Arctic Ash",
    "uk": "Арктичний попіл"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Чистий світло-сірий відтінок з нейтральною температурою.",
+   "en": "A clean light grey with a neutral temperature."
+  },
   "photo": null
  },
  {
@@ -213,7 +246,10 @@ window.DV_COLLECTION=[
    "en": "Pale Silk",
    "uk": "Блідий шовк"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Ультра-світлий попелястий відтінок. Наповнює інтер’єр м’яким розсіяним світлом.",
+   "en": "An ultra-light ashen shade. It fills the interior with soft, diffused light."
+  },
   "photo": null
  },
  {
@@ -222,7 +258,10 @@ window.DV_COLLECTION=[
    "en": "Moonlight Dust",
    "uk": "Місячний пил"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Ефемерний світло-сірий відтінок з ефектом м’якого місячного сяйва.",
+   "en": "An ethereal light grey with the glow of soft moonlight."
+  },
   "photo": null
  },
  {
@@ -231,7 +270,10 @@ window.DV_COLLECTION=[
    "en": "Champagne Stone",
    "uk": "Камінь Шампань"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Мультиколірна композиція в ніжному кремовому відтінку з ледь помітним рожевим підтоном.",
+   "en": "A multicolour composition in a gentle cream shade with a barely visible pink undertone."
+  },
   "photo": null
  },
  {
@@ -240,7 +282,10 @@ window.DV_COLLECTION=[
    "en": "Soft Limestone",
    "uk": "М’який вапняк"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Світлий архітектурний відтінок з текстурою вивітрюваного каменю.",
+   "en": "A light architectural shade with the texture of weathered stone."
+  },
   "photo": null
  },
  {
@@ -249,7 +294,10 @@ window.DV_COLLECTION=[
    "en": "Warm Stone Quartz",
    "uk": "Теплий Кам’яний Кварц"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Нейтральний, теплий відтінок, що поєднує сірі та бежеві тони (тауп).",
+   "en": "A warm neutral that blends grey and beige tones (taupe)."
+  },
   "photo": null
  },
  {
@@ -258,7 +306,10 @@ window.DV_COLLECTION=[
    "en": "Night Anthracite",
    "uk": "Нічний Антрацит"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Глибокий, насичений темно-сірий відтінок, що імітує фактуру вугільного каменю.",
+   "en": "A deep, rich dark grey that echoes the texture of charcoal stone."
+  },
   "photo": null
  },
  {
@@ -267,7 +318,10 @@ window.DV_COLLECTION=[
    "en": "Ash Quartz",
    "uk": "Попелястий Кварц"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Нейтральний світло-сірий відтінок з дрібнозернистою, глибоко матовою текстурою.",
+   "en": "A neutral light grey with a fine-grained, deeply matt texture."
+  },
   "photo": null
  },
  {
@@ -276,7 +330,10 @@ window.DV_COLLECTION=[
    "en": "Cool Basalt",
    "uk": "Прохолодний базальт"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Середньо-сірий колір з глибоким матовим фінішем.",
+   "en": "A mid grey with a deep matt finish."
+  },
   "photo": null
  },
  {
@@ -285,7 +342,10 @@ window.DV_COLLECTION=[
    "en": "Deep Graphite",
    "uk": "Глибокий графіт"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Насичений сірий колір із дрібною графітовою фракцією. Має оксамитовий фініш.",
+   "en": "A rich grey with a fine graphite fraction. It has a velvety finish."
+  },
   "photo": null
  },
  {
@@ -294,7 +354,10 @@ window.DV_COLLECTION=[
    "en": "Soft Chrome",
    "uk": "М’який хром"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Світлий сталевий відтінок з технологічним характером.",
+   "en": "A light steel shade with a high-tech character."
+  },
   "photo": null
  },
  {
@@ -303,7 +366,10 @@ window.DV_COLLECTION=[
    "en": "Mineral Parchment",
    "uk": "Мінеральний пергамент"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Ледь кремовий відтінок з характерною дрібнозернистою структурою.",
+   "en": "A faintly creamy shade with a distinctive fine-grained structure."
+  },
   "photo": null
  },
  {
@@ -312,7 +378,10 @@ window.DV_COLLECTION=[
    "en": "Urban Stone",
    "uk": "Міський камінь"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Впевнений середньо-сірий відтінок з нейтральною температурою.",
+   "en": "A confident mid grey with a neutral temperature."
+  },
   "photo": null
  },
  {
@@ -321,7 +390,10 @@ window.DV_COLLECTION=[
    "en": "Basalt Mist",
    "uk": "Базальтовий туман"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Середньо-сірий відтінок з холодним підтоном та виразною текстурою.",
+   "en": "A mid grey with a cool undertone and a distinct texture."
+  },
   "photo": null
  },
  {
@@ -330,7 +402,10 @@ window.DV_COLLECTION=[
    "en": "Desert Rose",
    "uk": "Троянда пустелі"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Складний бежевий з ледь помітним теплим підтоном.",
+   "en": "A complex beige with a barely visible warm undertone."
+  },
   "photo": null
  },
  {
@@ -339,7 +414,10 @@ window.DV_COLLECTION=[
    "en": "Pine Shadow",
    "uk": "Тінь сосни"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Приглушений темно-зелений з еко-характером. Відтворює глибину хвойного лісу.",
+   "en": "A muted dark green with an eco character. It recalls the depth of a pine forest."
+  },
   "photo": null
  },
  {
@@ -348,7 +426,10 @@ window.DV_COLLECTION=[
    "en": "Stone Velvet",
    "uk": "Кам’яний оксамит"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Витончений нейтральний середньо-сірий відтінок з характерною оксамитовою текстурою.",
+   "en": "A refined neutral mid grey with a distinctive velvety texture."
+  },
   "photo": null
  },
  {
@@ -357,7 +438,10 @@ window.DV_COLLECTION=[
    "en": "Industrial Basalt",
    "uk": "Індустріальний базальт"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Насичений глибокий середньо-сірий відтінок з вираженою текстурою.",
+   "en": "A rich, deep mid grey with a pronounced texture."
+  },
   "photo": null
  },
  {
@@ -366,7 +450,10 @@ window.DV_COLLECTION=[
    "en": "Beige Limestone",
    "uk": "Бежевий вапняк"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Теплий, затишний відтінок з мультиколірною структурою.",
+   "en": "A warm, cosy shade with a multicolour structure."
+  },
   "photo": null
  },
  {
@@ -375,7 +462,10 @@ window.DV_COLLECTION=[
    "en": "Sand Dune",
    "uk": "Піщана дюна"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Теплий, сонячний відтінок із мультиколірною структурою.",
+   "en": "A warm, sunny shade with a multicolour structure."
+  },
   "photo": null
  },
  {
@@ -384,7 +474,10 @@ window.DV_COLLECTION=[
    "en": "Dark Monolith",
    "uk": "Темний моноліт"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Насичений вугільний колір із текстурою каменю. Ефект безшовної кам’яної брили.",
+   "en": "A rich charcoal colour with the texture of stone. The effect of a seamless block of stone."
+  },
   "photo": null
  },
  {
@@ -393,7 +486,10 @@ window.DV_COLLECTION=[
    "en": "Deep Slate",
    "uk": "Глибокий сланець"
   },
-  "desc": null,
+  "desc": {
+   "uk": "Глибокий сірий відтінок з холодним підтоном. Монументальна естетика натурального базальту.",
+   "en": "A deep grey with a cool undertone. The monumental look of natural basalt."
+  },
   "photo": null
  }
 ];

@@ -91,16 +91,7 @@
   var tileOf = function (code) { return grid6 ? $('[data-dv-open="' + code + '"]', grid6) : null; };
   var smallOf = function (d) { return d.photo_s || d.photo_m || d.photo || ''; };
   function metaLine(d) {
-    var bits = [];
-    if (d.cat && CATN[d.cat]) bits.push('<b>' + esc(CATN[d.cat]) + '</b>');
-    if (d.photoView) bits.push(esc(C.studio || ''));
-    else if (d.xm) {
-      if (d.scan && d.mm) {
-        var cm = (Math.round(d.mm) / 10).toFixed(1).replace(/\.0$/, ''); if (lang === 'uk') cm = cm.replace('.', ',');
-        bits.push(esc(fmt(C.scanDetail || '{mm} cm', { mm: cm })).replace(/&amp;nbsp;/g, '&nbsp;'));
-      } else bits.push(esc(C.photoDetail || ''));
-    }
-    return bits.join(' · ');
+    return d.cat && CATN[d.cat] ? esc(CATN[d.cat]) : '';
   }
   var arrowSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
   function viewsHTML(d, k, attr) {
@@ -135,50 +126,60 @@
   }
 
   
+  var ready = {}, pending = {};
+  function srcOf(d) { var w = (fig0() || {}).clientWidth || 600, dpr = window.devicePixelRatio || 1; return url(w * dpr > (d.wxm || 800) * 1.05 && d.x ? d.x : (d.xm || d.x || d.photo_m || d.photo || '')); }
+  function fig0() { return view ? $('[data-dvv-fig]', view) : null; }
+  function warm(d) {
+    var u = d && srcOf(d); if (!u) return Promise.resolve('');
+    if (ready[u]) return Promise.resolve(u);
+    if (pending[u]) return pending[u];
+    var im = new Image(); im.decoding = 'async'; im.src = u;
+    pending[u] = (im.decode ? im.decode() : new Promise(function (r, j) { im.onload = r; im.onerror = j; })).then(function () { ready[u] = 1; delete pending[u]; return u; }, function () { delete pending[u]; return ''; });
+    return pending[u];
+  }
   function showInView(d, k) {
     if (!view || !d) return;
     k = k | 0;
     var key = d.code + ':' + k; if (shown === key || (shown === d.code && !k)) return;
     shown = key;
     var base = d; d = viewOf(base, k);
-    var fig = $('[data-dvv-fig]', view), info = $('[data-dvv-info]', view);
+    var fig = fig0(), info = $('[data-dvv-info]', view);
     var vw = $('[data-dvv-views]', view), vh = viewsHTML(base, k, 'data-dvv-views');
     if (vw) { if (vh) vw.outerHTML = vh; else vw.remove(); } else if (vh && fig) fig.insertAdjacentHTML('afterend', vh);
     if (fig) {
-      fig.style.setProperty('--mm', d.mm || 65);
-      fig.style.backgroundImage = smallOf(d) ? 'url("' + url(smallOf(d)) + '")' : 'none';
-      var old = $$('.dv6__img', fig), holder = document.createElement('div');
-      holder.innerHTML = macroImg(d, 'dv6__img', '(min-width: 1100px) 40vw, 100vw');
-      var nu = holder.firstChild; fig.insertBefore(nu, $('[data-dvv-scale]', fig));
-      var im = nu.tagName === 'IMG' ? nu : $('img', nu);
-      var on = function () {
-        if (shown !== key) { if (nu.parentNode) nu.parentNode.removeChild(nu); return; }
-        nu.classList.add('is-on');
-        old.forEach(function (o) { o.classList.remove('is-on'); setTimeout(function () { if (o.parentNode) o.parentNode.removeChild(o); }, reduce ? 0 : 450); });
+      fig.style.backgroundImage = 'none';
+      var put = function (u) {
+        if (shown !== key) return;
+        var cur = $('img', fig);
+        if (!u || !cur) {
+          if (!u) { fig.innerHTML = macroImg(d, 'dv6__img is-on', '(min-width: 1100px) 40vw, 100vw'); }
+          return;
+        }
+        var pic = cur.closest('picture');
+        if (pic) { pic.parentNode.replaceChild(cur, pic); cur.classList.add('dv6__img', 'is-on'); }
+        cur.removeAttribute('srcset'); cur.removeAttribute('sizes');
+        cur.src = u;
+        var name = nameOf(d); cur.alt = d.alt || fmt(C.macroAlt || '{code}', { code: d.code + (name ? ' ' + name : '') });
       };
-      if (!im) on();
-      else if (im.complete && im.naturalWidth) on();
-      else { im.addEventListener('load', on); im.addEventListener('error', function () { if (nu.parentNode) nu.parentNode.removeChild(nu); }); }
-      var sc = $('[data-dvv-scale]', fig); if (sc) sc.hidden = !(d.scan && d.mm && d.xm);
+      var u0 = srcOf(d);
+      if (!u0) put('');
+      else if (ready[u0]) put(u0);
+      else warm(d).then(put);
     }
     if (info) {
       var name = nameOf(d), desc = loc(d.desc);
       $('[data-dvv-code]', info).textContent = d.code;
       var nm = $('[data-dvv-name]', info); nm.textContent = name; nm.hidden = !name;
       var ds = $('[data-dvv-desc]', info); ds.textContent = desc; ds.hidden = !desc;
-      $('[data-dvv-meta]', info).innerHTML = metaLine(d);
+      var mt = $('[data-dvv-meta]', info); if (mt) mt.innerHTML = metaLine(d);
       var acts = $('.dv6__acts', info);
-      if (acts) {
-        $$('[data-dvv-gen], .dv6__gnote', acts).forEach(function (n) { n.remove(); });
-        acts.insertAdjacentHTML('afterbegin', genHTML(d));
-        var cp = $('[data-dvv-copy]', acts); if (cp) cp.setAttribute('data-copy', d.code);
-      }
+      if (acts) { $$('[data-dvv-gen], .dv6__gnote', acts).forEach(function (n) { n.remove(); }); acts.insertAdjacentHTML('afterbegin', genHTML(d)); }
     }
   }
   function pin(code, o) {
     var d = dvEntry(code); if (!d) return;
     pinned = d.code;
-    $$('[data-dv-open]', grid6 || document).forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-dv-open') === d.code ? 'true' : 'false'); });
+    $$('[data-dv-open]', grid6 || document).forEach(function (b) { if (b.getAttribute('data-dv-open') === d.code) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current'); });
     showInView(d, viewK[d.code] || 0);
     if (o && o.hash) { try { history.replaceState(history.state, '', location.pathname + location.search + '#dv-' + d.code.split(' ').pop()); } catch (e) {} }
   }
@@ -197,14 +198,14 @@
     var base = dvEntry(code) || { code: code }, d = viewOf(base, k | 0), name = nameOf(d), desc = loc(d.desc), list = visibleCodes(), i = list.indexOf(d.code);
     dlgCode = d.code;
     var vis = '<div class="dv6__fig dv6__fig--dlg" style="--mm:' + (d.mm || 65) + ';background-image:' + (smallOf(d) ? 'url(&quot;' + esc(url(smallOf(d))) + '&quot;)' : 'none') + '">' +
-      macroImg(d, 'dv6__img is-on', '100vw') + '<span class="dv6__scale" aria-hidden="true"' + (d.scan && d.mm && d.xm ? '' : ' hidden') + '><i></i><span>1 ' + esc(C.cm || 'cm') + '</span></span></div>' + viewsHTML(base, k | 0, 'data-dlg-views');
+      macroImg(d, 'dv6__img is-on', '100vw') + '</div>' + viewsHTML(base, k | 0, 'data-dlg-views');
     var nav = list.length > 1 && i > -1 ? '<div class="dv6__nav"><button type="button" class="dv6__navb" data-dv-step="-1" aria-label="' + esc(C.prev || '') + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>' +
       '<span class="dv6__navn">' + esc(fmt(C.of || '{n} / {total}', { n: i + 1, total: list.length })) + '</span>' +
       '<button type="button" class="dv6__navb" data-dv-step="1" aria-label="' + esc(C.next || '') + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div>' : '';
     var body = '<p class="cxd__sys">' + esc(C.dvColl || LS.dvColl) + '</p><h2 class="cxd__code dv6__dcode">' + esc(d.code) + '</h2>' +
       (name ? '<p class="dv6__dname">' + esc(name) + '</p>' : '') + (desc ? '<p class="cxd__desc">' + esc(desc) + '</p>' : '') +
       '<p class="dv6__meta">' + metaLine(d) + '</p>' + (d.gen ? '<div class="dv6__dgen">' + genHTML(d) + '</div>' : '') +
-      '<div class="cxd__acts">' + nav + '<button type="button" class="btn btn--line-l btn--sm" data-copy="' + esc(d.code) + '"><span>' + esc(C.copyCode || LS.copyCode) + '</span></button></div>';
+      '<div class="cxd__acts">' + nav + '</div>';
     if (!fillDialog(vis, body)) return;
     dlg.classList.add('cxd--dv');
     var im = $('[data-cxd-vis] img', dlg);
@@ -236,7 +237,8 @@
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-dv-open]'); if (!b) return;
     var k = b.getAttribute('data-dv-open');
-    if (view && wide()) { pin(k, { hash: true }); return; }
+    if (view && wide()) pin(k, { hash: true });
+    if (b.hasAttribute('data-scan')) return;
     openDvDialog(k);
   });
   if (dv6) {
@@ -252,7 +254,8 @@
     if (grid6 && view) {
       var preview = function (b) {
         clearTimeout(leaveT); clearTimeout(hoverT);
-        hoverT = setTimeout(function () { var d = dvEntry(b.getAttribute('data-dv-open')); if (d) showInView(d); }, 70);
+        var d = dvEntry(b.getAttribute('data-dv-open')); if (d) showInView(d);
+        var sv = (window.DVATONE || {}).scans; if (sv && sv.warm) sv.warm(b);
       };
       grid6.addEventListener('pointerover', function (e) {
         if (!wide() || !(fineMq && fineMq.matches) || e.pointerType === 'touch') return;
@@ -260,7 +263,7 @@
       });
       grid6.addEventListener('pointerleave', function () {
         clearTimeout(hoverT); clearTimeout(leaveT);
-        leaveT = setTimeout(function () { var d = dvEntry(pinned); if (d) showInView(d, viewK[d.code] || 0); }, 160);
+        leaveT = setTimeout(function () { var d = dvEntry(pinned); if (d) showInView(d, viewK[d.code] || 0); }, 120);
       });
       grid6.addEventListener('focusin', function (e) { if (!wide()) return; var b = e.target.closest('[data-dv-open]'); if (b) preview(b); });
       grid6.addEventListener('focusout', function (e) { if (!grid6.contains(e.relatedTarget)) { clearTimeout(hoverT); var d = dvEntry(pinned); if (d) showInView(d); } });
@@ -270,6 +273,12 @@
     var start = hm && tileOf(hcode(hm[1])) ? hcode(hm[1]) : (first && first.getAttribute('data-dv-open'));
     shown = (DVL[0] && DVL[0].code) || null;
     if (start) pin(start);
+    if (view && wide() && fineMq && fineMq.matches) {
+      var idle = window.requestIdleCallback || function (f) { return setTimeout(f, 200); };
+      var queue = visibleCodes().map(dvEntry).filter(Boolean), step6 = function () { var d = queue.shift(); if (!d) return; warm(d).then(function () { idle(step6); }); };
+      setTimeout(function () { idle(step6); }, 1200);
+    }
+    if (grid6) grid6.addEventListener('pointerdown', function (e) { var b = e.target.closest('[data-scan]'); var sv = (window.DVATONE || {}).scans; if (b && sv && sv.warm) sv.warm(b); }, { passive: true });
     window.addEventListener('hashchange', function () {
       var h = /^#dv-(\d{1,3}(?:\.\d)?)$/.exec(location.hash || ''); if (!h) return;
       var c = hcode(h[1]); if (!tileOf(c)) return;

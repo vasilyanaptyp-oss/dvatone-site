@@ -12,7 +12,24 @@
                  z1: 'Реальний розмір', z0: 'Вмістити в екран', of: '{n} з {total}', hint: '',
                  viewP: 'Перегляд фото', hintP: '' };
   var svg = function (d) { return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + d + '"/></svg>'; };
-  var dlg = null, img, capB, capS, capN, zoomB, fsB, stage, set = [], idx = 0, zoom = false, opener = null, ownFs = false;
+  var dlg = null, img, capB, capS, capN, capD, zoomB, fsB, stage, set = [], idx = 0, zoom = false, opener = null, ownFs = false;
+  
+  var cache = {}, fly = {};
+  function pick(it) {
+    var need = Math.max(window.innerWidth || 0, (window.innerHeight || 0) * 4 / 3) * (window.devicePixelRatio || 1);
+    return it.m && it.m !== it.full && need <= (it.mw || 1100) * 1.2 ? it.m : it.full;
+  }
+  function fetchSrc(u) {
+    if (!u || cache[u]) return Promise.resolve(u);
+    if (fly[u]) return fly[u];
+    var im = new Image(); im.decoding = 'async'; im.src = u;
+    fly[u] = (im.decode ? im.decode() : new Promise(function (r, j) { im.onload = r; im.onerror = j; })).then(function () { cache[u] = 1; delete fly[u]; return u; }, function () { delete fly[u]; return u; });
+    return fly[u];
+  }
+  function itemOf(el) {
+    return { full: el.getAttribute('href'), m: el.getAttribute('data-scan-m') || el.getAttribute('href'), mw: +el.getAttribute('data-scan-mw') || 0 };
+  }
+  function warm(el) { if (el && el.getAttribute && el.getAttribute('href')) fetchSrc(pick(itemOf(el))); }
   var pz = { s: 1, x: 0, y: 0 }, MAXZ = 5;
   var canFs = !!(document.documentElement.requestFullscreen && document.fullscreenEnabled !== false);
 
@@ -24,7 +41,7 @@
       var code = el.getAttribute('data-scan');
       var key = group === 'photo' ? (el.getAttribute('href') || code) : code;
       if (seen[key]) return; seen[key] = 1;
-      out.push({ code: code, key: key, name: el.getAttribute('data-scan-name') || '', alt: el.getAttribute('data-scan-alt') || '', full: el.getAttribute('href'), m: el.getAttribute('data-scan-m') || el.getAttribute('href'),
+      out.push({ code: code, key: key, name: el.getAttribute('data-scan-name') || '', desc: el.getAttribute('data-scan-desc') || '', alt: el.getAttribute('data-scan-alt') || '', full: el.getAttribute('href'), m: el.getAttribute('data-scan-m') || el.getAttribute('href'),
                  w: +el.getAttribute('data-w') || 0, h: +el.getAttribute('data-h') || 0, mw: +el.getAttribute('data-scan-mw') || 0, photo: group === 'photo' });
     });
     return out;
@@ -38,11 +55,12 @@
       (canFs ? '<button type="button" class="scv__b" data-scv-fs>' + svg('M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5') + '<span>' + T.fs + '</span></button>' : '') +
       '<button type="button" class="scv__b scv__x" data-scv-x aria-label="' + T.close + '">' + svg('M6 6l12 12M18 6L6 18') + '</button></div></div>' +
       '<div class="scv__stage" data-scv-stage><img class="scv__img" data-scv-img alt="" decoding="async" title="' + T.hint + '"></div>' +
+      '<p class="scv__desc" data-scv-desc hidden></p>' +
       '<button type="button" class="scv__nav scv__nav--p" data-scv-step="-1" aria-label="' + T.prev + '">' + svg('M15 6l-6 6 6 6') + '</button>' +
       '<button type="button" class="scv__nav scv__nav--n" data-scv-step="1" aria-label="' + T.next + '">' + svg('M9 6l6 6-6 6') + '</button>';
     document.body.appendChild(dlg);
     img = dlg.querySelector('[data-scv-img]'); stage = dlg.querySelector('[data-scv-stage]');
-    capB = dlg.querySelector('[data-scv-code]'); capS = dlg.querySelector('[data-scv-name]'); capN = dlg.querySelector('[data-scv-n]');
+    capB = dlg.querySelector('[data-scv-code]'); capS = dlg.querySelector('[data-scv-name]'); capN = dlg.querySelector('[data-scv-n]'); capD = dlg.querySelector('[data-scv-desc]');
     zoomB = null; fsB = dlg.querySelector('[data-scv-fs]');
     dlg.addEventListener('click', function (e) {
       var t = e.target;
@@ -131,7 +149,7 @@
   function dist(a, b) { var x = a.x - b.x, y = a.y - b.y; return Math.sqrt(x * x + y * y); }
   function overImg(e) { var r = img.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; }
   function full() {
-    var it = set[idx]; if (it && it.full && img.currentSrc && img.currentSrc.indexOf(it.full) < 0) { img.srcset = ''; img.src = it.full; }
+    var it = set[idx]; if (it && it.full && (img.currentSrc || img.src || '').indexOf(it.full) < 0) { img.srcset = ''; img.src = it.full; }
   }
   function centre() { var r = img.getBoundingClientRect(); return { x: r.left + r.width / 2 - pz.x, y: r.top + r.height / 2 - pz.y }; }
   function zoomTo(s, ax, ay, bx, by, from) {
@@ -161,17 +179,18 @@
     idx = (i + set.length) % set.length;
     var it = set[idx];
     setZoom(false); resetPz(false);
-    img.removeAttribute('src');
-    img.srcset = it.m && it.m !== it.full ? it.m + ' ' + (it.mw || 1100) + 'w, ' + it.full + ' ' + (it.w || 2000) + 'w' : '';
-    img.sizes = '100vw';
-    img.src = it.full;
+    var u = pick(it), cur = idx;
+    img.removeAttribute('srcset'); img.removeAttribute('sizes');
     if (it.w && it.h) { img.width = it.w; img.height = it.h; }
+    if (cache[u]) img.src = u;
+    else { img.style.visibility = 'hidden'; img.src = u; fetchSrc(u).then(function () { if (idx === cur) img.style.visibility = ''; }); }
+    if (capD) { capD.textContent = it.desc || ''; capD.hidden = !it.desc; }
     img.alt = it.alt || (it.code + (it.name ? ' ' + it.name : ''));
     dlg.setAttribute('aria-label', it.photo ? T.viewP : T.view); img.title = it.photo ? T.hintP : T.hint;
     capB.textContent = it.photo ? '' : it.code; capB.hidden = !!it.photo; capS.textContent = it.name; capS.hidden = !it.name;
     capN.textContent = set.length > 1 ? fmt(T.of, { n: idx + 1, total: set.length }) : '';
     Array.prototype.forEach.call(dlg.querySelectorAll('[data-scv-step]'), function (b) { b.hidden = set.length < 2; });
-    if (set.length > 1) { var nx = set[(idx + 1) % set.length]; var pre = new Image(); pre.src = nx.m || nx.full; }
+    if (set.length > 1) { fetchSrc(pick(set[(idx + 1) % set.length])); fetchSrc(pick(set[(idx - 1 + set.length) % set.length])); }
   }
   function step(d) { show(idx + d); }
   function setZoom(on, e) {
@@ -214,5 +233,10 @@
       if (open(cur.getAttribute('data-dvv-full') || 'dv', code, cur)) e.preventDefault();
     }
   });
-  NS.scans = { open: open };
+  NS.scans = { open: open, warm: warm };
+  document.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('[data-dvv-full][role="button"]')) { e.preventDefault(); e.target.click(); }
+  });
+  document.addEventListener('pointerover', function (e) { if (e.pointerType === 'mouse') { var a = e.target.closest && e.target.closest('[data-scan]'); if (a) warm(a); } }, { passive: true });
+  document.addEventListener('pointerdown', function (e) { var a = e.target.closest && e.target.closest('[data-scan]'); if (a) warm(a); }, { passive: true });
 })();

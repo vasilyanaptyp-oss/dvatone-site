@@ -5,7 +5,11 @@ const ASSET = new URL('./interior2/photo/', import.meta.url).href;
 const POSTER = new URL('./interior2/', import.meta.url).href;
 const CELL_M = 0.0021;
 
-const AMP_K = 0.36, AMP_MIN = 0.5, AMP_MAX = 2.8;
+const AMP_K = 0.36, AMP_MIN = 0.42, AMP_MAX = 2.8;
+
+const FLOOR_CSS = 0.40;
+const KLOW = 0.5;
+const SHARP = 0.8;
 function ampFor(colors) {
   const lin = x => (x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4));
   const ys = (colors || []).map(c => {
@@ -160,7 +164,7 @@ uniform sampler2D tCoatA; uniform sampler2D tCoatB;
 uniform vec4 uFit; uniform vec2 uFocus; uniform float uZoom; uniform vec2 uPhotoPx; uniform float uMinify;
 uniform mat3 uH; uniform float uRho0; uniform float uBleedScale;
 uniform float uMetresA; uniform float uMetresB; uniform float uFlatA; uniform float uFlatB; uniform float uAmpA; uniform float uAmpB;
-uniform float uWipe; uniform vec2 uWipeRange; uniform float uWipeMix; uniform float uCoatBias; uniform float uCells;
+uniform float uWipe; uniform vec2 uWipeRange; uniform float uWipeMix; uniform float uCoatBias; uniform float uCells; uniform float uFloor; uniform float uKLow; uniform float uSharp;
 uniform float uFade; uniform vec3 uBg;
 /*FX_DECL*/
 vec2 dvHash2( vec2 p ) { vec3 p3 = fract( p.xyx * vec3( 0.1031, 0.1030, 0.0973 ) ); p3 += dot( p3, p3.yzx + 33.33 ); return fract( ( p3.xx + p3.yz ) * p3.zy ); }
@@ -170,13 +174,13 @@ vec2 dvHash2( vec2 p ) { vec3 p3 = fract( p.xyx * vec3( 0.1031, 0.1030, 0.0973 )
    everywhere; explicit gradients keep the three reads at the same mip level */
 vec3 coat( sampler2D t, vec2 uv, float isFlat, float ampMin ) {
   vec2 dx = dFdx( uv ), dy = dFdy( uv );
-  const float DV_FLOOR = 0.8;
+  float DV_FLOOR = uFloor;                                /* 25.10: FLOOR_CSS x pixel ratio (CSS px based) */
   float px0 = 1.0 / max( max( length( dx ), length( dy ) ) * uCells, 1e-6 );
   float sf = min( 1.0, px0 / DV_FLOOR );
   uv *= sf; dx = dFdx( uv ); dy = dFdy( uv );
   float ee = smoothstep( 0.2, 1.0, sf );
   float amp = mix( ampMin, 1.0, ee );                     /* 21.10: ampMin follows the composition (ampFor) */
-  float kLow = mix( 0.25, 1.0, ee );
+  float kLow = mix( uKLow, 1.0, ee );
   float g = exp2( uCoatBias );
   vec2 gx = dx * g, gy = dy * g;
   vec3 mu = textureLod( t, vec2( 0.5 ), 16.0 ).rgb;
@@ -196,10 +200,11 @@ vec3 coat( sampler2D t, vec2 uv, float isFlat, float ampMin ) {
   vec3 c3 = textureGrad( t, o3, gx, gy ).rgb;
   float nrm = inversesqrt( dot( wt, wt ) );
   vec3 dev = ( wt.x * ( c1 - mu ) + wt.y * ( c2 - mu ) + wt.z * ( c3 - mu ) ) * nrm;
-  if ( kLow < 0.999 ) {                                   /* the clusters (low band) of an enlarged coating, eased */
-    vec2 hx = gx * 4.0, hy = gy * 4.0;
+  if ( uSharp > 0.0 || kLow < 0.999 ) {
+    vec2 hx = gx * 2.0, hy = gy * 2.0;
     vec3 l1 = textureGrad( t, o1, hx, hy ).rgb, l2 = textureGrad( t, o2, hx, hy ).rgb, l3 = textureGrad( t, o3, hx, hy ).rgb;
-    dev -= ( wt.x * ( l1 - mu ) + wt.y * ( l2 - mu ) + wt.z * ( l3 - mu ) ) * nrm * ( 1.0 - kLow );
+    vec3 devC = ( wt.x * ( l1 - mu ) + wt.y * ( l2 - mu ) + wt.z * ( l3 - mu ) ) * nrm;
+    dev = ( dev - devC ) * ( 1.0 + uSharp * ( 1.0 - ee ) ) + devC * kLow;
   }
   return max( mu + dev * amp, 0.0 );
 }
@@ -369,7 +374,9 @@ export function mountPhoto(el, opts = {}) {
     const pr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
     if (pr === curPR && stage.w === curW && stage.h === curH) return;
     curPR = pr; curW = stage.w; curH = stage.h; inner = true; setPR0(pr); setSize0(curW, curH, false); inner = false;
+    if (U) U.uFloor.value = floorPx();
   }
+  function floorPx() { return (+opts.floorCss > 0 ? +opts.floorCss : FLOOR_CSS) * (+opts.pxPerCss > 0 ? +opts.pxPerCss : (curPR || 1)); }
 
   async function build(st) {
     T = st.THREE; R = st.renderer;
@@ -384,10 +391,14 @@ export function mountPhoto(el, opts = {}) {
       uFit: { value: new T.Vector4(0, 0, 1, 1) }, uFocus: { value: new T.Vector2(0.5, 0.5) }, uZoom: { value: 1 }, uPhotoPx: { value: new T.Vector2(1920, 1080) },
       uMinify: { value: 1 }, uH: { value: new T.Matrix3() }, uRho0: { value: 0.42 }, uBleedScale: { value: 0 },
       uMetresA: { value: 0.27 }, uMetresB: { value: 0.27 }, uFlatA: { value: 0 }, uFlatB: { value: 0 }, uAmpA: { value: AMP_MIN }, uAmpB: { value: AMP_MIN },
-      uWipe: { value: 0 }, uWipeRange: { value: new T.Vector2(0, 6) }, uWipeMix: { value: 0 }, uCoatBias: { value: 0.15 }, uCells: { value: 128 },
+      uWipe: { value: 0 }, uWipeRange: { value: new T.Vector2(0, 6) }, uWipeMix: { value: 0 }, uCoatBias: { value: 0.15 }, uCells: { value: 128 }, uFloor: { value: FLOOR_CSS }, uKLow: { value: KLOW }, uSharp: { value: SHARP },
       uFade: { value: 0 }, uBg: { value: new T.Vector3(0.11, 0.105, 0.1) }
     };
     
+    U.uFloor.value = floorPx();
+    if (opts.coatBias != null && opts.coatBias !== '') U.uCoatBias.value = +opts.coatBias;
+    if (opts.kLow != null && opts.kLow !== '') U.uKLow.value = +opts.kLow;
+    if (opts.sharp != null && opts.sharp !== '') U.uSharp.value = +opts.sharp;
     const fx = opts.fx || null;
     if (fx && fx.uniforms) Object.assign(U, fx.uniforms(T));
     const frag = fx ? GLSL.replace('/*FX_DECL*/', fx.decl || '').replace('/*FX_UV*/', fx.uv || '').replace('/*FX_MASK*/', fx.mask || '')

@@ -125,3 +125,37 @@
 .ftr .ftr__soc a:hover .ftr__igi{opacity:1}
 .hproc p a{color:inherit;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
 .hproc p a:hover{text-decoration-color:var(--copper-lo)}
+
+.pie2__l--1{top:0}.pie2__l--2{top:15%}.pie2__l--3{top:30%}.pie2__l--4{top:45%}.pie2__l--5{top:60%}
+.pie2__txt,.pie2__l--4 .pie2__txt,.pie2__l--5 .pie2__txt{left:clamp(14px,2.4vw,36px);right:17%;top:clamp(10px,1.5vw,22px);max-width:none;
+  padding:0;background:none;border-radius:0;box-shadow:none;align-items:flex-start}
+.pie2__n{width:.62em;text-align:left;font-variant-numeric:tabular-nums lining-nums;line-height:.8}
+.pie2__l--4 .pie2__body h3,.pie2__l--4 .pie2__meta{text-shadow:0 0 14px rgba(250,247,242,.75),0 0 3px rgba(250,247,242,.6)}
+@media (max-width:560px){
+  .pie2__l--2{top:14.5%}.pie2__l--3{top:29%}.pie2__l--4{top:43.5%}.pie2__l--5{top:58%}
+  .pie2__txt,.pie2__l--4 .pie2__txt,.pie2__l--5 .pie2__txt{left:14px;right:13%;top:10px}
+}
+@media (max-width:430px){
+  .pie2__stack{aspect-ratio:10/14}
+  .pie2__l--2{top:16.5%}.pie2__l--3{top:33%}.pie2__l--4{top:49.5%}.pie2__l--5{top:66%}
+  .pie2__body h3{font-size:14.5px}
+  .pie2__meta{font-size:12.5px;gap:5px 10px;margin-top:5px}
+  .pie2__tool{width:26px;height:26px}
+}
+@media (max-width:370px){
+  .pie2__stack{aspect-ratio:10/17.2}
+  .pie2__l--2{top:17%}.pie2__l--3{top:34%}.pie2__l--4{top:51%}.pie2__l--5{top:68%}
+  .pie2__body h3{font-size:14px}
+}
+
+@media (min-width:1000px){
+  .specs.specs--icons.specs--10{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .specs.specs--icons.specs--10 .spec{border-left:1px solid var(--line-l)}
+  .specs.specs--icons.specs--10 .spec:nth-child(5n+1){border-left:0}
+  .specs.specs--icons.specs--10 .spec h3{max-width:19ch}
+}
+@media (min-width:701px) and (max-width:999.98px){
+  .specs.specs--icons.specs--10{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .specs.specs--icons.specs--10 .spec{border-left:1px solid var(--line-l)}
+  .specs.specs--icons.specs--10 .spec:nth-child(2n+1){border-left:0}
+}

@@ -4,7 +4,7 @@
 
 Facts from Dvatone (see the FAQ page):
 
-- The DVATONE collection is built on Dialcolor, a multicolour coating whose base components are made in Belgium by Trimetal, part of AkzoNobel; Dvatone is its own system for selecting and making multicolour compositions with fine granules.
+- The DVATONE collection is built on Dialcolor, the Belgian multicolour paint made by Trimetal (part of AkzoNobel), through an innovative paint preparation method that achieves the fine-granule result; Dvatone is its own system for selecting and making multicolour compositions.
 - Water-based and odour-free; VOC content below 30 g/l.
 - Highly wear-resistant and washable; it stands up to regular wet cleaning.
 - A damaged spot can be repaired locally; once dry it blends into the wall with no visible seams.
@@ -18,7 +18,7 @@ Facts from Dvatone (see the FAQ page):
 
 - [Home](https://vasylian.com/dvatone-site/en/): the coating, the catalogue, interiors, the Designer Box and the desktop app for architects
 - [Colour catalogue](https://vasylian.com/dvatone-site/en/catalogue.html): the colour fan and the DV collection
-- [Desktop app for architects](https://vasylian.com/dvatone-site/en/app.html): coming to macOS and Windows: palettes from the DVATONE collection, the colours of a composition, the try-on on a wall in a room; a download request (the link is sent when the app is released)
+- [Desktop app for architects](https://vasylian.com/dvatone-site/en/app.html): coming to macOS and Windows: build palettes from the DVATONE collection, choose the colours of a composition and visualize it on a room wall; a download request (the link is sent when the app is released)
 - [Technology](https://vasylian.com/dvatone-site/en/technology.html): properties, how to get the multicolour effect on the wall
 - [Designer Box](https://vasylian.com/dvatone-site/en/designer-box.html): the sample set for designers and architects
 - [Professional application](https://vasylian.com/dvatone-site/en/service.html)
