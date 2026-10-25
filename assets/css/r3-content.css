@@ -159,3 +159,5 @@
   .specs.specs--icons.specs--10 .spec{border-left:1px solid var(--line-l)}
   .specs.specs--icons.specs--10 .spec:nth-child(2n+1){border-left:0}
 }
+
+@media (max-width:374.98px){.fs__eyebrow{gap:10px;letter-spacing:.14em}.fs__eyebrow::before{width:22px}}
