@@ -1,7 +1,7 @@
 {
   "name": "Dvatone",
   "short_name": "Dvatone",
-  "lang": "uk",
+  "lang": "en",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

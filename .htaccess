@@ -6,7 +6,7 @@ DirectoryIndex index.html
 Options -Indexes
 AddDefaultCharset UTF-8
 
-# Own 404 pages (Ukrainian site and English site)
+# Own 404 pages (English site at the root, Ukrainian site in ua/ with its own ua/.htaccess)
 ErrorDocument 404 /404.html
 
 # Send everybody to the secure (https) address. Why: the contact forms carry names, phones and e-mails, and without https
@@ -23,7 +23,7 @@ ErrorDocument 404 /404.html
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteRule ^generator\.html$ https://%{HTTP_HOST}/app.html [L,R=301]
-  RewriteRule ^en/generator\.html$ https://%{HTTP_HOST}/en/app.html [L,R=301]
+  RewriteRule ^ua/generator\.html$ https://%{HTTP_HOST}/ua/app.html [L,R=301]
   RewriteCond %{HTTPS} off
   RewriteCond %{HTTP:X-Forwarded-Proto} !https
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]

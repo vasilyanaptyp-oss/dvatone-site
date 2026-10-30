@@ -12,7 +12,7 @@
 .fs--dv .fs__sample:hover b, .fs--dv .fs__sample:focus-visible b { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }
 .fs--dv .fs__sample:focus-visible { outline: 2px solid #dcba94; outline-offset: 4px; }
 @media (max-width: 760px), (max-aspect-ratio: 4/5) and (max-width: 1100px) {
-  .fs--dv .fs__img { object-position: 50% 0%; }
+  .fs--dv .fs__img { object-position: 50% 50%; }
   .fs--dv .fs__bg::after { background:
       linear-gradient(180deg, rgba(11,9,7,.66) 0%, rgba(11,9,7,.24) 10%, rgba(11,9,7,0) 20%),
       linear-gradient(0deg, #0f0d0b 0%, rgba(15,13,11,.95) 22%, rgba(15,13,11,.8) 38%, rgba(15,13,11,.48) 50%, rgba(15,13,11,.12) 62%, rgba(15,13,11,0) 70%); }

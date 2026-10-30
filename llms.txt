@@ -1,6 +1,6 @@
 # Dvatone
 
-> DVATONE is a Kyiv Architectural Multicolor Collection: a contemporary architectural collection of multicolour solutions, a water-based multicolour paint (multicolour decorative coating) for interiors. Its multicolour texture forms as the paint is sprayed on. The site is in Ukrainian at the root and in English under /en/.
+> DVATONE is a Kyiv Architectural Multicolor Collection: a contemporary architectural collection of multicolour solutions, a water-based multicolour paint (multicolour decorative coating) for interiors. Its multicolour texture forms as the paint is sprayed on. The site is in English at the root and in Ukrainian under /ua/.
 
 Facts from Dvatone (see the FAQ page):
 
@@ -16,27 +16,27 @@ Facts from Dvatone (see the FAQ page):
 
 ## Pages in English
 
-- [Home](https://vasylian.com/dvatone-site/en/): the coating, the catalogue, interiors, the Designer Box and the desktop app for architects
-- [Colour catalogue](https://vasylian.com/dvatone-site/en/catalogue.html): the colour fan and the DV collection
-- [Desktop app for architects](https://vasylian.com/dvatone-site/en/app.html): coming to macOS and Windows: build palettes from the DVATONE collection, choose the colours of a composition and visualize it on a room wall; a download request (the link is sent when the app is released)
-- [Technology](https://vasylian.com/dvatone-site/en/technology.html): properties, how to get the multicolour effect on the wall
-- [Designer Box](https://vasylian.com/dvatone-site/en/designer-box.html): the sample set for designers and architects
-- [Professional application](https://vasylian.com/dvatone-site/en/service.html)
-- [FAQ](https://vasylian.com/dvatone-site/en/faq.html)
-- [Contact](https://vasylian.com/dvatone-site/en/contacts.html)
+- [Home](https://vasylian.com/dvatone-site/): the coating, the catalogue, interiors, the Designer Box and the desktop app for architects
+- [Colour catalogue](https://vasylian.com/dvatone-site/catalogue.html): the colour fan and the DV collection
+- [Desktop app for architects](https://vasylian.com/dvatone-site/app.html): coming to macOS and Windows: build palettes from the DVATONE collection, choose the colours of a composition and visualize it on a room wall; a download request (the link is sent when the app is released)
+- [Technology](https://vasylian.com/dvatone-site/technology.html): properties, how to get the multicolour effect on the wall
+- [Designer Box](https://vasylian.com/dvatone-site/designer-box.html): the sample set for designers and architects
+- [Professional application](https://vasylian.com/dvatone-site/service.html)
+- [FAQ](https://vasylian.com/dvatone-site/faq.html)
+- [Contact](https://vasylian.com/dvatone-site/contacts.html)
 
 ## Сторінки українською
 
-- [Головна](https://vasylian.com/dvatone-site/): мультикольорове декоративне покриття, каталог, інтер’єри, Designer Box, десктопний додаток для архітекторів
-- [Каталог](https://vasylian.com/dvatone-site/catalogue.html): колірне віяло й колекція DV
-- [Десктопний додаток для архітекторів](https://vasylian.com/dvatone-site/app.html): скоро для macOS і Windows: палітри з колекції DVATONE, кольори композиції, примірка на стіні в інтер’єрі; заявка на завантаження (посилання надішлемо, коли додаток вийде)
-- [Технологія](https://vasylian.com/dvatone-site/technology.html): характеристики, як отримати мультикольоровий ефект на стіні
-- [Designer Box](https://vasylian.com/dvatone-site/designer-box.html): набір зразків для дизайнерів і архітекторів
-- [Професійне нанесення](https://vasylian.com/dvatone-site/service.html)
-- [Питання та відповіді](https://vasylian.com/dvatone-site/faq.html)
-- [Контакти](https://vasylian.com/dvatone-site/contacts.html)
+- [Головна](https://vasylian.com/dvatone-site/ua/): мультикольорове декоративне покриття, каталог, інтер’єри, Designer Box, десктопний додаток для архітекторів
+- [Каталог](https://vasylian.com/dvatone-site/ua/catalogue.html): колірне віяло й колекція DV
+- [Десктопний додаток для архітекторів](https://vasylian.com/dvatone-site/ua/app.html): скоро для macOS і Windows: палітри з колекції DVATONE, кольори композиції, примірка на стіні в інтер’єрі; заявка на завантаження (посилання надішлемо, коли додаток вийде)
+- [Технологія](https://vasylian.com/dvatone-site/ua/technology.html): характеристики, як отримати мультикольоровий ефект на стіні
+- [Designer Box](https://vasylian.com/dvatone-site/ua/designer-box.html): набір зразків для дизайнерів і архітекторів
+- [Професійне нанесення](https://vasylian.com/dvatone-site/ua/service.html)
+- [Питання та відповіді](https://vasylian.com/dvatone-site/ua/faq.html)
+- [Контакти](https://vasylian.com/dvatone-site/ua/contacts.html)
 
 ## Optional
 
-- [Privacy policy](https://vasylian.com/dvatone-site/en/privacy.html)
-- [Terms of use](https://vasylian.com/dvatone-site/en/terms.html)
+- [Privacy policy](https://vasylian.com/dvatone-site/privacy.html)
+- [Terms of use](https://vasylian.com/dvatone-site/terms.html)

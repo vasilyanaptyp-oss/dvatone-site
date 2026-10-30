@@ -1,0 +1,2 @@
+# Ukrainian site (ua/): its own 404 page
+ErrorDocument 404 /ua/404.html
